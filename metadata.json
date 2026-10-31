@@ -1,0 +1,6 @@
+{
+  "name": "Vilarejo",
+  "description": "Simulação econômica com painel sazonal, social e macroeconômico integrado, contas separadas, transações auditadas e sistema bancário.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
