@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vilarejo | Simulação econômica v2</title>
+<style>
+:root{--bg:#efe9dc;--ink:#1d2a2e;--muted:#68716d;--gold:#a87927;--red:#a4372d;--panel:#faf7f0;--line:#cfc6b1;--green:#416b50}
+@media(prefers-color-scheme:dark){:root{--bg:#161c1e;--ink:#e9e4d6;--muted:#a6afa7;--gold:#d9a94a;--red:#e0786b;--panel:#20292b;--line:#3a4745;--green:#8fbd9b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Georgia,serif;padding:env(safe-area-inset-top,0) 14px env(safe-area-inset-bottom,0)}
+main{max-width:980px;margin:auto;padding:22px 0 44px}h1{font-size:1.55rem;margin:0}h2{font-size:1rem;margin:0 0 10px}h3{font-size:.94rem;margin:12px 0 6px}.sub{color:var(--muted);margin:4px 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:12px}.k,.box{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:11px;margin-bottom:12px}.k{margin:0}.lab{font-size:.78rem;color:var(--muted)}.val{font-size:1.08rem;font-weight:bold;font-variant-numeric:tabular-nums}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}button,select,input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--ink);border-radius:5px;padding:7px 10px}button{cursor:pointer}button.primary{background:var(--ink);color:var(--bg)}button:disabled{opacity:.45;cursor:default}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.cols>.box{margin:0}.policy{display:grid;grid-template-columns:1fr auto;gap:2px 10px;margin:9px 0}.policy output{font-weight:bold;color:var(--gold)}.policy input,.policy select{grid-column:1/-1;width:100%}
+.hidden{display:none}.event{border:2px solid var(--red);background:var(--panel);border-radius:7px;padding:12px;margin:12px 0}.event .opts{display:grid;gap:7px;margin-top:9px}.event button{text-align:left}
+ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-bottom:1px dotted var(--line)}.small{font-size:.83rem;color:var(--muted)}.bad{color:var(--red)}.good{color:var(--green)}.table{width:100%;border-collapse:collapse;font-size:.86rem}.table td,.table th{text-align:left;padding:5px;border-bottom:1px solid var(--line)}.table td:last-child,.table th:last-child{text-align:right;font-variant-numeric:tabular-nums}.scroll{overflow:auto;max-height:270px}.status{font-weight:bold}.tag{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:4px;font-size:.75rem;color:var(--muted)}
+</style>
+</head>
+<body><main>
+<h1>Vilarejo | Simulação econômica</h1>
+<p class="sub">Versão 2: contas separadas, transações rastreáveis, produção com custos, mercado de consumo e obrigações registradas.</p>
+<div class="grid" id="stats"></div>
+<div class="event hidden" id="event"><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div></div>
+<div class="row">
+<button class="primary" id="start">Começar</button><button id="pause" disabled>Pausar</button><button id="speed">Acelerar</button><button id="reset">Reiniciar</button>
+</div>
+<div class="cols">
+<section class="box">
+<h2>Ações imediatas</h2><div class="row" id="actions"></div>
+<h3>Contas e patrimônio</h3><div id="accounts"></div>
+<h3>Obrigações pendentes</h3><div id="obligations"></div>
+</section>
+<section class="box">
+<h2>Políticas públicas</h2><div class="small">Alterações entram em vigor no próximo fechamento mensal.</div><div id="policies"></div>
+</section>
+<section class="box">
+<h2>Resultado do último mês</h2><div id="monthly"></div>
+<h3>Mercado local</h3><div id="market"></div>
+</section>
+<section class="box">
+<h2>Registro de decisões e eventos</h2><ul id="feed"></ul>
+</section>
+</div>
+<section class="box" style="margin-top:12px">
+<h2>Livro-caixa detalhado</h2><div class="small">Últimas 60 movimentações. Valores positivos entram na conta de destino; valores negativos saem da conta de origem.</div>
+<div class="scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div>
+</section>
+</main>
+<script>
+"use strict";
+const MONTH=30,YEAR=360;
+let S,timer=null,speed=1;
+const $=id=>document.getElementById(id);
+const money=v=>"R$ "+Math.round(v).toLocaleString("pt-BR");
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const accountNames={treasury:"Tesouro público",stateFarm:"Fazenda estatal",privateFarm:"Fazenda privada",commerce:"Comércio local",landlord:"Proprietário de imóveis",external:"Economia externa"};
+const accountKey=h=>"house:"+h.id;
+function householdName(id){const h=S.households.find(x=>x.id===id);return h?h.name:id.replace("house:","Morador ")}
+function nameOf(id){return accountNames[id]||householdName(id)}
+function balance(id){if(id==="external")return Infinity;if(id.startsWith("house:"))return S.households.find(h=>accountKey(h)===id)?.cash||0;return S.accounts[id]||0}
+function setBalance(id,v){if(id==="external")return;if(id.startsWith("house:")){const h=S.households.find(x=>accountKey(x)===id);if(h)h.cash=Math.max(0,v);return}S.accounts[id]=Math.max(0,v)}
+function log(from,to,amount,reason,mandatory=false){
+  amount=Math.max(0,Number(amount)||0);if(amount<0.005||from===to)return 0;
+  if(from!=="external"&&balance(from)+0.0001<amount&&!mandatory)return 0;
+  if(from!=="external"&&balance(from)<amount)amount=balance(from);
+  if(from!=="external")setBalance(from,balance(from)-amount);
+  if(to!=="external")setBalance(to,balance(to)+amount);
+  const type=from==="external"?"in":to==="external"?"out":"internal";
+  S.monthFlow[type]+=amount;
+  S.ledger.unshift({day:S.day,from,to,amount,reason});
+  S.ledger=S.ledger.slice(0,300);
+  return amount;
+}
+function feed(msg){S.feed.unshift("Dia "+S.day+": "+msg);S.feed=S.feed.slice(0,14)}
+function rand(){S.seed=(S.seed*1664525+1013904223)>>>0;return S.seed/4294967296}
+function adults(){return S.households.reduce((n,h)=>n+h.adults,0)}
+function population(){return S.households.reduce((n,h)=>n+h.adults+h.children,0)}
+function employed(){return S.households.reduce((n,h)=>n+h.jobs,0)}
+function assignJobs(){let left=S.jobsAvailable;S.households.forEach(h=>{h.jobs=Math.min(h.adults,left);left-=h.jobs})}
+function farmAccount(){return S.owner==="state"?"stateFarm":"privateFarm"}
+function farmLabel(){return S.owner==="state"?"Fazenda estatal":"Fazenda privada"}
+function salaryCalc(){
+ const p=S.policy;
+ S.reservation=Math.max(0,S.externalWage-p.migrationCost/12); // custo único amortizado em horizonte decisório de 12 meses
+ const scarcity=clamp((S.jobsAvailable-adults())/Math.max(1,S.jobsAvailable),0,1);
+ const market=S.externalWage*(1+0.35*scarcity);
+ S.wage=S.owner==="state"?p.publicWage:Math.max(S.reservation,market);
+ S.wage=Math.max(p.minimumWage,S.wage);
+}
+function settleWages(){
+ const farm=farmAccount(),p=S.policy;
+ // Primeiro quita obrigações salariais antigas, proporcionalmente aos trabalhadores credores.
+ for(const h of S.households){
+   if(h.wageDebt>0&&balance(farm)>0){
+     const paid=log(farm,accountKey(h),Math.min(h.wageDebt,balance(farm)),"Quitação de salário atrasado");
+     h.wageDebt-=paid;
+     const tax=paid*p.incomeTax/100;log(accountKey(h),"treasury",tax,"Imposto sobre salário");h.cashIncome+=paid-tax;
+   }
+ }
+ let totalDue=0,totalPaid=0;
+ for(const h of S.households){
+   const gross=h.jobs*S.wage;totalDue+=gross;
+   if(gross<=0)continue;
+   const paid=log(farm,accountKey(h),Math.min(gross,balance(farm)),"Salário mensal");
+   h.wageDebt+=gross-paid;totalPaid+=paid;
+   const tax=paid*p.incomeTax/100;log(accountKey(h),"treasury",tax,"Imposto sobre salário");h.cashIncome+=paid-tax;
+ }
+ const oldEmployerTaxPaid=log(farm,"treasury",Math.min(S.employerTaxDebt,balance(farm)),"Quitação de encargo patronal atrasado");
+ S.employerTaxDebt-=oldEmployerTaxPaid;
+ const charge=S.owner==="private"?totalDue*p.employerTax/100:0;
+ const charged=log(farm,"treasury",charge,"Encargo patronal");
+ S.employerTaxDebt+=charge-charged;
+ S.monthFarmCosts+=totalDue+charge;
+ S.farmWageDebt=S.households.reduce((n,h)=>n+h.wageDebt,0);
+ if(S.farmWageDebt>0)feed("A fazenda acumulou "+money(S.farmWageDebt)+" em salários pendentes.");
+ return {due:totalDue,paid:totalPaid,employerCharge:charged};
+}
+function buyInputsAndProduce(){
+ const farm=farmAccount(),doy=S.day%YEAR;
+ if(doy<150||doy>=210)return;
+ const workers=employed(),potential=workers*0.35;
+ if(potential<=0)return;
+ const inputCost=potential*150;
+ const paid=log(farm,"external",inputCost,"Insumos agrícolas da produção");
+ if(paid+0.001<inputCost){feed("Produção limitada: a fazenda não conseguiu pagar todos os insumos.");return}
+ S.monthFarmCosts+=inputCost;
+ const yieldQty=potential*S.weatherFactor;
+ S.coffeeStock+=yieldQty;S.productionThisSeason+=yieldQty;
+}
+function sellCoffee(){
+ if(S.coffeeStock<=0)return;
+ const revenue=S.coffeeStock*S.usdCoffee*S.fx;
+ log("external",farmAccount(),revenue,"Venda de café ao mercado externo");
+ S.monthFarmRevenue+=revenue;
+ S.coffeeSold+=S.coffeeStock;S.coffeeStock=0;
+}
+function marketConsumption(){
+ const demand=S.households.reduce((n,h)=>n+(h.adults+h.children*0.7)*S.policy.basketCost,0);
+ const units=demand/S.policy.basketPrice;
+ const need=Math.max(0,units-S.marketStock);
+ if(need>0){
+   const importCost=need*S.policy.basketCost*0.72;
+   log("external","commerce",importCost,"Importação de cesta básica");
+   S.marketStock+=need;
+ }
+ let spent=0,shortage=0;
+ for(const h of S.households){
+   const wanted=(h.adults+h.children*0.7)*S.policy.basketCost;
+   const affordable=Math.min(wanted,h.cash);
+   const qty=affordable/S.policy.basketPrice;
+   const available=Math.min(qty,S.marketStock);
+   const paid=available*S.policy.basketPrice;
+   if(paid>0){log(accountKey(h),"commerce",paid,"Compra de cesta básica");S.marketStock-=available;spent+=paid}
+   if(paid+0.01<wanted)shortage+=wanted-paid;
+   h.happiness=clamp(h.happiness+(paid>=wanted?1:-3),0,100);
+ }
+ S.lastShortage=shortage;S.lastConsumption=spent;
+}
+function housing(){
+ const mode=S.policy.housing;
+ for(const h of S.households){
+  if(h.adults+h.children===0)continue;
+  if(mode==="employer"&&h.jobs>0){
+    const paid=log(farmAccount(),"landlord",150,"Moradia fornecida pelo empregador");
+    S.monthFarmCosts+=paid;h.housingBenefit=paid>=150?300:0;
+  }else if(mode==="state"&&h.jobs>0){
+    const paid=log("treasury","landlord",150,"Moradia social");
+    h.housingBenefit=paid>=150?300:0;
+  }else if(mode==="rented"){
+    const due=300+h.rentDebt;
+    const paid=log(accountKey(h),"landlord",due,"Aluguel e quitação de atraso");
+    h.housingBenefit=0;h.rentDebt=due-paid;
+  }else h.housingBenefit=0;
+ }
+}
+function settleProfitTax(){
+ const profit=S.monthFarmRevenue-S.monthFarmCosts;
+ S.lastFarmProfit=profit;
+ if(S.owner==="state"){S.lastProfitTax=0;S.monthFarmRevenue=0;S.monthFarmCosts=0;return}
+ const due=Math.max(0,profit)*S.policy.profitTax/100+S.farmTaxDebt;
+ const paid=log(farmAccount(),"treasury",Math.min(due,balance(farmAccount())),"Imposto sobre lucro");
+ S.farmTaxDebt=due-paid;
+ S.lastProfitTax=paid;
+ S.monthFarmRevenue=0;S.monthFarmCosts=0;
+}
+function updateApproval(){
+ for(const h of S.households){
+  const perCap=(h.cashIncome+h.housingBenefit)/(h.adults+h.children||1);
+  const affordability=S.policy.basketCost*(h.adults+h.children*.7);
+  let delta=perCap>=affordability?1:-2;
+  if(h.wageDebt>0)delta-=3;
+  if(h.rentDebt>0)delta-=1;
+  if(S.lastShortage>0)delta-=1;
+  h.happiness=clamp(h.happiness+delta,0,100);
+  h.cashIncome=0;h.housingBenefit=0;
+ }
+}
+function approval(){const pop=population();return pop?S.households.reduce((n,h)=>n+h.happiness*(h.adults+h.children),0)/pop:0}
+function closeMonth(){
+ const p=S.policy;
+ Object.assign(p,S.pending);S.pending={};
+ S.usdCoffee=clamp(S.usdCoffee*(1+(rand()-.5)*.12+.04*(300-S.usdCoffee)/300),150,600);
+ S.fx=p.fxMode==="fixed"?5:clamp(S.fx*(1+(rand()-.5)*.08+.08*(5-S.fx)/5),3.5,7.5);
+ S.externalWage*=1+(rand()-.5)*.04;
+ assignJobs();salaryCalc();
+ const wage=settleWages();
+ housing();
+ marketConsumption();
+ settleProfitTax();
+ updateApproval();
+ // migração: indivíduos adultos, com decisão baseada em remuneração total e moradia disponível.
+ const effective=S.wage+(p.housing==="employer"?300:0);
+ if(effective<(S.externalWage-S.policy.migrationCost/12)*.9&&rand()<.25){
+   const i=S.households.findIndex(h=>h.type==="single");
+   if(i>=0){feed(S.households[i].name+" migrou por remuneração insuficiente.");S.households.splice(i,1)}
+ }else if(effective>(S.externalWage+S.policy.migrationCost/12)*1.05&&population()<S.housingCapacity&&adults()<S.jobsAvailable&&rand()<.3){
+   const id=++S.migrantCount;
+   S.households.push({id,name:"Migrante "+id,type:"single",adults:1,children:0,jobs:0,cash:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0});
+   feed("Um novo trabalhador migrou para o vilarejo.");
+ }
+ S.lastWage=wage;S.lastFlow={...S.monthFlow};S.monthFlow={in:0,internal:0,out:0};
+ S.monthNumber++;
+ if(S.farmWageDebt>0&&S.farmWageDebt>=S.wage*employed()*3)S.gameOver="Colapso fiscal: salários atrasados atingiram três folhas mensais.";
+ if(approval()<15)S.gameOver="Revolta: aprovação popular abaixo de 15.";
+ if(!S.households.length)S.gameOver="O vilarejo ficou vazio.";
+}
+function newGame(){
+ S={seed:42,day:150,monthNumber:0,accounts:{treasury:0,stateFarm:10000,privateFarm:0,commerce:0,landlord:0},
+ households:[
+ {id:1,name:"Família Silva",type:"family",adults:2,children:2,jobs:0,cash:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0},
+ {id:2,name:"Família Rocha",type:"family",adults:2,children:2,jobs:0,cash:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0},
+ {id:3,name:"Ana",type:"single",adults:1,children:0,jobs:0,cash:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0},
+ {id:4,name:"Caio",type:"single",adults:1,children:0,jobs:0,cash:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0}],
+ owner:"state",lots:10,jobsAvailable:8,housingCapacity:12,buildings:[],coffeeStock:0,productionThisSeason:0,coffeeSold:0,
+ usdCoffee:300,fx:5,externalWage:2200,wage:1800,reservation:1540,weatherFactor:1,weatherEventDone:false,
+ marketStock:80,lastShortage:0,lastConsumption:0,farmWageDebt:0,employerTaxDebt:0,farmTaxDebt:0,monthFarmRevenue:0,monthFarmCosts:0,lastFarmProfit:0,lastProfitTax:0,migrantCount:0,
+ policy:{publicWage:1800,minimumWage:1500,incomeTax:10,employerTax:15,profitTax:20,migrationCost:3000,housing:"employer",fxMode:"floating",basketCost:220,basketPrice:300},
+ pending:{},monthFlow:{in:0,internal:0,out:0},lastFlow:{in:0,internal:0,out:0},lastWage:{due:0,paid:0,employerCharge:0},
+ ledger:[],feed:[],event:null,gameOver:null};
+ // Capitalização inicial: os R$ 10 mil pertencem à fazenda estatal, não ao Tesouro.
+ assignJobs();salaryCalc();render();
+}
+const controls=[
+ ["publicWage","Salário público (R$/mês)",1000,4000,100,v=>money(v)],
+ ["minimumWage","Salário mínimo legal",1000,3500,100,v=>money(v)],
+ ["incomeTax","Imposto sobre salário",0,30,1,v=>v+"%"],
+ ["employerTax","Encargo patronal",0,40,1,v=>v+"%"],
+ ["profitTax","Imposto sobre lucro",0,50,1,v=>v+"%"],
+ ["migrationCost","Custo único de migração (R$)",0,6000,250,v=>money(v)],
+ ["basketCost","Custo mensal de referência da cesta por adulto",100,500,10,v=>money(v)]
+];
+function setPolicy(k,v,format){S.pending[k]=v;feed("Política "+k+" alterada para "+format(v)+"; vigência no próximo mês.");}
+function renderPolicies(){
+ $("policies").innerHTML=controls.map(([k,label,min,max,step,fmt])=>`<div class="policy"><label for="p_${k}">${label}</label><output id="o_${k}">${fmt(S.policy[k])}</output><input type="range" id="p_${k}" min="${min}" max="${max}" step="${step}" value="${S.pending[k]??S.policy[k]}"></div>`).join("")+
+ `<div class="policy"><label for="p_housing">Política de moradia</label><span></span><select id="p_housing"><option value="employer">Fornecida pelo empregador</option><option value="rented">Alugada</option><option value="state">Fornecida pelo Estado</option><option value="none">Sem subsídio</option></select></div>
+ <div class="policy"><label for="p_fxMode">Regime cambial</label><span></span><select id="p_fxMode"><option value="floating">Flutuante</option><option value="fixed">Fixo</option></select></div>`;
+ controls.forEach(([k,,,,,fmt])=>{const el=$("p_"+k);el.oninput=()=>{$("o_"+k).textContent=fmt(+el.value)};el.onchange=()=>setPolicy(k,+el.value,fmt)});
+ ["housing","fxMode"].forEach(k=>{const el=$("p_"+k);el.value=S.pending[k]??S.policy[k];el.onchange=()=>setPolicy(k,el.value,v=>v)});
+}
+function actions(){
+ $("actions").innerHTML=`<button id="sellLot">Vender lote (+R$ 8.000)</button><button id="build">Construir moradia (R$ 6.000)</button><button id="privatize">Privatizar fazenda (R$ 120.000)</button>`;
+ $("sellLot").onclick=()=>{if(S.lots<=0)return;S.lots--;log("external","treasury",8000,"Venda de terreno público");feed("Lote público vendido por R$ 8.000.");render()};
+ $("build").onclick=()=>{if(balance("treasury")<6000){feed("Tesouro sem recursos para iniciar a obra.");render();return}
+ log("treasury","external",6000,"Construção de moradia");S.buildings.push(S.day+30);feed("Obra iniciada; conclusão prevista para o dia "+(S.day+30)+".");render()};
+ $("privatize").onclick=()=>{if(S.owner!=="state")return;
+ log("external","treasury",120000,"Alienação da fazenda estatal");
+ const cash=balance("stateFarm");if(cash>0)log("stateFarm","privateFarm",cash,"Transferência do caixa junto com a privatização");
+ // A venda transfere o controle e os ativos; não cria um aporte fictício adicional.
+ S.owner="private";feed("Fazenda privatizada por R$ 120.000. O caixa operacional foi transferido ao novo proprietário.");render()};
+}
+function render(){
+ const employedNow=employed(),ad=adults(),unemp=ad?Math.round((ad-employedNow)/ad*100):0;
+ const stats=[
+ ["Dia",S.day+" (ano "+(Math.floor(S.day/YEAR)+1)+")"],["Tesouro",money(balance("treasury"))],
+ ["Caixa da fazenda",money(balance(farmAccount()))],["Proprietário",farmLabel()],
+ ["Preço da saca",money(S.usdCoffee*S.fx)],["Salário mensal",money(S.wage)],
+ ["Salário externo de referência",money(S.externalWage)],["Aprovação",Math.round(approval())],
+ ["População",population()+" / "+S.housingCapacity],["Desemprego",unemp+"%"],["Estoque de café",S.coffeeStock.toFixed(1)+" sacas"]
+ ];
+ $("stats").innerHTML=stats.map(([a,b])=>`<div class="k"><div class="lab">${a}</div><div class="val">${b}</div></div>`).join("");
+ $("accounts").innerHTML=Object.entries(accountNames).filter(([k])=>k!=="external").map(([k,n])=>`<div>${n}: <b>${money(balance(k))}</b></div>`).join("")+
+ `<div class="small">Dinheiro das famílias: ${money(S.households.reduce((n,h)=>n+h.cash,0))}</div>`;
+ const wageDebt=S.households.reduce((n,h)=>n+h.wageDebt,0),rentDebt=S.households.reduce((n,h)=>n+h.rentDebt,0);
+ $("obligations").innerHTML=`Salários atrasados: <b class="${wageDebt?"bad":"good"}">${money(wageDebt)}</b><br>Aluguéis pendentes: <b>${money(rentDebt)}</b><br>Encargos patronais pendentes: <b>${money(S.employerTaxDebt)}</b><br>Impostos sobre lucro pendentes: <b>${money(S.farmTaxDebt)}</b>`;
+ $("monthly").innerHTML=`Entradas externas: <b>${money(S.lastFlow.in)}</b><br>Circulação interna: <b>${money(S.lastFlow.internal)}</b><br>Saídas externas: <b>${money(S.lastFlow.out)}</b><br>Folha devida: <b>${money(S.lastWage.due)}</b><br>Salários pagos: <b>${money(S.lastWage.paid)}</b><br>Encargos pagos: <b>${money(S.lastWage.employerCharge)}</b><br>Consumo local: <b>${money(S.lastConsumption)}</b><br>Demanda não atendida: <b class="${S.lastShortage?"bad":""}">${money(S.lastShortage)}</b><br>Resultado operacional da fazenda: <b>${money(S.lastFarmProfit)}</b><br>Imposto sobre lucro pago: <b>${money(S.lastProfitTax)}</b>`;
+ $("market").innerHTML=`Estoque do comércio: ${S.marketStock.toFixed(1)} unidades de cesta básica<br>Preço de venda: ${money(S.policy.basketPrice)} por unidade de referência<br>Importação de reposição: custo de 72% do preço de venda.`;
+ $("feed").innerHTML=S.feed.map(x=>`<li>${x}</li>`).join("");
+ $("ledger").innerHTML=S.ledger.slice(0,60).map(x=>`<tr><td>${x.day}</td><td>${nameOf(x.from)} → ${nameOf(x.to)}</td><td>${x.reason}</td><td>${money(x.amount)}</td></tr>`).join("");
+ const ev=$("event");
+ if(S.event){ev.classList.remove("hidden");$("eventTitle").textContent=S.event.title;$("eventText").textContent=S.event.text;$("eventOptions").innerHTML=S.event.options.map((o,i)=>`<button data-choice="${i}">${o.label}</button>`).join("")}
+ else ev.classList.add("hidden");
+ $("eventOptions").onclick=e=>{const b=e.target.closest("button");if(!b||!S.event)return;S.event.options[+b.dataset.choice].run();S.event=null;render()};
+ if(S.gameOver){$("eventTitle").textContent="Fim de jogo";$("eventText").textContent=S.gameOver;ev.classList.remove("hidden");$("eventOptions").innerHTML="";pause()}
+ renderPolicies();
+}
+function tick(){
+ if(S.event||S.gameOver){pause();return}
+ S.day++;
+ const doy=S.day%YEAR;
+ if(doy===0){S.weatherFactor=1;S.weatherEventDone=false;S.productionThisSeason=0}
+ // Evento de geada: a decisão ocorre antes da produção daquele dia.
+ if(doy===170&&!S.weatherEventDone){
+  S.weatherEventDone=true;
+  S.event={title:"Risco de geada tardia",text:"A lavoura pode perder 35% da produção restante. A fazenda pode pagar R$ 8.000 por proteção. O pagamento só é confirmado se houver saldo integral.",
+   options:[
+    {label:"Contratar proteção (R$ 8.000)",run:()=>{const paid=log(farmAccount(),"external",8000,"Proteção contra geada");if(paid>=8000){S.weatherFactor=1;feed("Proteção contra geada contratada e integralmente paga.")}else{S.weatherFactor=.65;feed("Caixa insuficiente; proteção não contratada. A safra restante sofreu redução de 35%.")}}},
+    {label:"Aceitar a perda de 35%",run:()=>{S.weatherFactor=.65;feed("A fazenda aceitou a perda de 35% da produção restante.")}}
+   ]};
+  render();pause();return;
+ }
+ buyInputsAndProduce();
+ if(S.day%10===0)sellCoffee();
+ // Conclusão de obra ocorre exatamente no dia previsto, não apenas no fechamento mensal.
+ S.buildings=S.buildings.filter(due=>{if(S.day>=due){S.housingCapacity+=2;feed("Moradia concluída: capacidade ampliada em duas pessoas.");return false}return true});
+ if(S.day%MONTH===0)closeMonth();
+ render();
+}
+function start(){if(timer||S.gameOver||S.event)return;timer=setInterval(tick,650/speed);$("start").textContent="Continuar";$("pause").disabled=false}
+function pause(){clearInterval(timer);timer=null;$("pause").disabled=true}
+$("start").onclick=start;$("pause").onclick=pause;
+$("speed").onclick=()=>{speed=speed===1?4:1;$("speed").textContent=speed===4?"Velocidade normal":"Acelerar";if(timer){pause();start()}};
+$("reset").onclick=()=>{pause();newGame();actions()};
+newGame();actions();
+</script>
+</body></html>
