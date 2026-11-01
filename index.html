@@ -88,7 +88,7 @@ ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-b
 <div class="scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div>
 </section>
 </main>
-<script>"use strict";
+<script>console.log("Script starting"); "use strict";
 const MONTH=30,YEAR=360,HOUSING_VALUE=150,FROST_DAILY_RISK=0.0037;
 const USD_INPUT=30,USD_IMPORT=42,BASE_MARKUP=0.35,CREDIT_SPREAD=1.0;
 let S,timer=null,speed=1,policiesBuilt=false;
@@ -277,96 +277,73 @@ function settleConcessionOutorga(){
  }
  return 0;
 }
+function createFirm(id, name, sector, account, config = {}) {
+  return {
+    id,
+    name,
+    sector,
+    account,
+    // Institutional Contract
+    assets: 0,
+    liabilities: 0,
+    netWorth: 0,
+    ownership: { treasury: 1.0, private: 0.0 },
+    operator: "state",
+    contract: { type: "statutory", terms: "" },
+    // Operational State
+    status: "active",
+    cash: 0,
+    capitalStock: 0,
+    loans: 0,
+    activeWorkers: 0,
+    openVacancies: 0,
+    offeredWage: 1500,
+    payables: { wages: 0, taxes: 0 },
+    // Behavior and Production
+    behavior: {
+      plan: () => {},
+      produce: () => {},
+      settle: () => {}
+    },
+    config: {
+      depreciationRate: 0.0025,
+      baseCapacity: 2,
+      ...config
+    }
+  };
+}
+
 function initFirms(){
- const fAcc=farmAccount();
- const ownLabel=S.farmOwnership.treasury>=0.995?"Estatal":S.farmOwnership.treasury<=0.005?"Privada":`Mista (${(S.farmOwnership.treasury*100).toFixed(0)}% G / ${(S.farmOwnership.private*100).toFixed(0)}% P)`;
- const tfp=S?.urbanInfra?.tfpFactor||1.0;
- S.firms=[
-  {
-   id:"farm",
-   name:S.farmOwnership.treasury>=0.995?"Fazenda Estatal de Café":S.farmOwnership.treasury<=0.005?"Fazenda Privada de Café":"Fazenda de Economia Mista",
-   sector:"agriculture",
-   sectorLabel:"Agropecuária",
-   ownership:{...S.farmOwnership},
-   operator:S.owner,
-   governanceLabel:ownLabel,
-   contract:{type:"statutory",terms:"Operação pública direta sob governança estatal e exportação de café"},
-   account:fAcc,
-   cash:balance(fAcc),
-   capitalStock:40000,
-   depreciationRate:0.0025,
-   inventory:{name:"Café em grão",unit:"sacas",quantity:S.coffeeStock||0,unitValue:round2(S.usdCoffee*S.fx)},
-   baseCapacity:S.baseJobsAvailable||8,
-   openVacancies:S.jobsAvailable||8,
-   activeWorkers:0,
-   offeredWage:S.wage||1800,
-   productivityFactor:tfp,
-   revenue:0,
-   costs:0,
-   profit:0,
-   loans:totalLoans(fAcc),
-   payables:{wages:totalWageDebt(),taxes:round2(S.employerTaxDebt+S.farmTaxDebt)},
-   taxDebt:round2(S.employerTaxDebt+S.farmTaxDebt),
-   wageDebt:totalWageDebt(),
-   status:"active"
-  },
-  {
-   id:"commerce",
-   name:"Comércio e Abastecimento Local",
-   sector:"retail",
-   sectorLabel:"Comércio varejista",
-   ownership:{treasury:0.0,private:1.0},
-   operator:"private",
-   governanceLabel:"Privada",
-   contract:{type:"private_license",terms:"Alvará comercial privado para importação e varejo de alimentos"},
-   account:"commerce",
-   cash:balance("commerce"),
-   capitalStock:15000,
-   depreciationRate:0.0025,
-   inventory:{name:"Cesta básica",unit:"cestas",quantity:S.marketStock||0,unitValue:round2(S.marketPrice)},
-   baseCapacity:2,
-   openVacancies:S.sectorVacancies?.commerce??1,
-   activeWorkers:0,
-   offeredWage:S.commerceWage||1710,
-   productivityFactor:tfp,
-   revenue:0,
-   costs:0,
-   profit:0,
-   loans:totalLoans("commerce"),
-   payables:{wages:0,taxes:round2(S.commerceTaxDebt||0)},
-   taxDebt:round2(S.commerceTaxDebt||0),
-   wageDebt:0,
-   status:"active"
-  },
-  {
-   id:"workshop",
-   name:"Oficina de Obras e Serviços Locais",
-   sector:"construction_services",
-   sectorLabel:"Construção e Serviços",
-   ownership:{treasury:0.0,private:1.0},
-   operator:"private",
-   governanceLabel:"Privada",
-   contract:{type:"private_license",terms:"Oficina mecânica, marcenaria e prestação de serviços locais"},
-   account:"workshop",
-   cash:balance("workshop"),
-   capitalStock:12000,
-   depreciationRate:0.0025,
-   inventory:{name:"Kits de ferramentas e peças",unit:"lotes",quantity:S.workshopMaterials||5,unitValue:round2(S.servicePrice||180)},
-   baseCapacity:2,
-   openVacancies:S.sectorVacancies?.workshop??1,
-   activeWorkers:0,
-   offeredWage:S.workshopWage||1836,
-   productivityFactor:tfp,
-   revenue:0,
-   costs:0,
-   profit:0,
-   loans:totalLoans("workshop"),
-   payables:{wages:0,taxes:round2(S.workshopTaxDebt||0)},
-   taxDebt:round2(S.workshopTaxDebt||0),
-   wageDebt:0,
-   status:"active"
-  }
- ];
+  const fAcc=farmAccount();
+  const tfp=S?.urbanInfra?.tfpFactor||1.0;
+  const farm=createFirm("farm", "Fazenda", "agriculture", fAcc, {baseCapacity:S.baseJobsAvailable||8});
+  farm.name=S.farmOwnership.treasury>=0.995?"Fazenda Estatal de Café":S.farmOwnership.treasury<=0.005?"Fazenda Privada de Café":"Fazenda de Economia Mista";
+  farm.ownership={...S.farmOwnership}; farm.operator=S.owner; farm.contract={type:"statutory",terms:"Operação pública direta"};
+  farm.cash=balance(fAcc); farm.capitalStock=40000;
+  farm.inventory={name:"Café em grão",unit:"sacas",quantity:S.coffeeStock||0,unitValue:round2(S.usdCoffee*S.fx)};
+  farm.openVacancies=S.jobsAvailable||8; farm.offeredWage=S.wage||1800; farm.productivityFactor=tfp;
+  farm.loans=totalLoans(fAcc); farm.payables={wages:totalWageDebt(),taxes:round2(S.employerTaxDebt+S.farmTaxDebt)};
+  farm.taxDebt=round2(S.employerTaxDebt+S.farmTaxDebt); farm.wageDebt=totalWageDebt();
+
+  const commerce=createFirm("commerce", "Comércio e Abastecimento Local", "retail", "commerce");
+  commerce.ownership={treasury:0.0,private:1.0}; commerce.operator="private";
+  commerce.contract={type:"private_license",terms:"Alvará comercial privado"};
+  commerce.cash=balance("commerce"); commerce.capitalStock=15000;
+  commerce.inventory={name:"Cesta básica",unit:"cestas",quantity:S.marketStock||0,unitValue:round2(S.marketPrice)};
+  commerce.openVacancies=S.sectorVacancies?.commerce??1; commerce.offeredWage=S.commerceWage||1710; commerce.productivityFactor=tfp;
+  commerce.loans=totalLoans("commerce"); commerce.payables={wages:0,taxes:round2(S.commerceTaxDebt||0)};
+  commerce.taxDebt=round2(S.commerceTaxDebt||0);
+
+  const workshop=createFirm("workshop", "Oficina de Obras e Serviços Locais", "construction_services", "workshop");
+  workshop.ownership={treasury:0.0,private:1.0}; workshop.operator="private";
+  workshop.contract={type:"private_license",terms:"Oficina mecânica e serviços"};
+  workshop.cash=balance("workshop"); workshop.capitalStock=12000;
+  workshop.inventory={name:"Kits de ferramentas e peças",unit:"lotes",quantity:S.workshopMaterials||5,unitValue:round2(S.servicePrice||180)};
+  workshop.openVacancies=S.sectorVacancies?.workshop??1; workshop.offeredWage=S.workshopWage||1836; workshop.productivityFactor=tfp;
+  workshop.loans=totalLoans("workshop"); workshop.payables={wages:0,taxes:round2(S.workshopTaxDebt||0)};
+  workshop.taxDebt=round2(S.workshopTaxDebt||0);
+
+  S.firms=[farm, commerce, workshop];
 }
 function syncFirmState(){
  if(!S.firms||!S.firms.length)initFirms();
@@ -1104,7 +1081,7 @@ function closeMonth(){const p=S.policy;Object.assign(p,S.pending);S.pending={};S
  if(S.marketStock<0.1&&S.marketFundingFailure&&S.lastShortageUnits>0.1&&balance("commerce")<1000)S.commerceEmptyMonths++;else S.commerceEmptyMonths=0;
  S.lastWage=wage;S.lastFlow={...S.monthFlow};S.monthFlow={in:0,internal:0,out:0};S.monthNumber++;const debt=totalWageDebt();if(debt>0&&debt>=Math.max(1,S.wage*Math.max(1,employed())*3))S.gameOver=S.owner==="state"?"Colapso fiscal: a fazenda estatal acumulou três folhas mensais de salários atrasados.":"Falência da fazenda privada: salários atrasados atingiram três folhas mensais.";if(approval()<15)S.gameOver="Revolta: aprovação popular abaixo de 15.";if(!S.households.length)S.gameOver="O vilarejo ficou vazio.";
  if(S.commerceEmptyMonths>=2&&!S.event&&!S.gameOver){S.event={title:"Falência do comércio local",text:"O comércio ficou sem estoque por dois meses consecutivos e não conseguiu financiar novas importações. Escolha uma solução para restabelecer o abastecimento.",options:[{label:"Socorro estatal: injetar R$ 10.000",run:()=>resolveCommerceFailure("state")},{label:"Novo comerciante: capital externo de R$ 10.000 e reestruturação da dívida",run:()=>resolveCommerceFailure("private")}]};feed("Crise institucional: comércio insolvente por dois meses consecutivos.");S.lastBalanceSheet = generateBalanceSheets();}
-function newGame(){S={seed:42,day:149,monthNumber:0,loanSeq:0,accounts:{treasury:0,stateFarm:0,privateFarm:0,commerce:0,workshop:0,landlord:0,bank:0},households:[{id:1,name:"Família Silva",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:2,name:"Família Rocha",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:3,name:"Ana",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:4,name:"Caio",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0}],owner:"state",farmOwnership:{treasury:1.0,private:0.0},concessionActive:false,lastDividends:{treasury:0,private:0,total:0},lastProjectNPV:null,lastNationalAccounts:null,lastFiscalReport:null,lots:10,baseJobsAvailable:8,jobsAvailable:8,sectorVacancies:{farm:8,commerce:1,workshop:1},totalJobsAvailable:10,housingCapacity:12,infrastructureCapacity:20,infrastructureStock:10000,urbanInfra:null,lastHarrisTodaro:null,extraFirms:[],baseMarkup:0.35,buildings:[],coffeeStock:0,productionThisSeason:0,coffeeSold:0,usdCoffee:300,fx:5,externalWage:2200,wage:1800,commerceWage:1710,workshopWage:1836,reservation:1540,weatherFactor:1,weatherEventDone:false,weatherDecisionDone:false,weatherProtection:false,marketStock:0,marketPrice:USD_IMPORT*5*(1+BASE_MARKUP),servicePrice:180,costOfLivingIndex:100,monthlyInflation:0,marketPressure:1,marketTargetPrice:USD_IMPORT*5*(1+BASE_MARKUP),lastShortage:0,lastShortageUnits:0,lastFoodConsumption:0,lastServiceConsumption:0,lastConsumption:0,lastDemandUnits:0,lastUnmetHouseholds:0,marketFundingFailure:false,importedUnits:0,commerceEmptyMonths:0,commerceMarkupExtra:0,commerceMarkupMonths:0,bankLoans:[],bankInterestIncome:0,bankAccruedInterest:0,lastDepositInterest:0,effectiveDepositRate:0,lastBankCreditLosses:0,cumulativeBankWriteDowns:0,cumulativeDebtorRelief:0,lastLoanSettlement:{byBorrower:{},totalInterestPaid:0,totalPrincipalPaid:0,totalAccruedInterest:0},farmInvestmentCooldown:0,landlordInvestmentCooldown:0,farmWageDebt:0,migratedClaims:[],assumedLiabilities:null,nextPayrollEstimate:0,cumulativeExternalIn:0,cumulativeExternalOut:0,cashAudit:null,lastDRE:null,workshopMaterials:5,workshopTaxDebt:0,commerceTaxDebt:0,unemploymentHistory:[0],currentMonthTracking:{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,workshopRevenue:0,workshopCosts:0,dividendsReceived:0,concessionOutorga:0},employerTaxDebt:0,farmTaxDebt:0,monthFarmRevenue:0,monthFarmCosts:0,lastFarmEBITDA:0,lastFarmDepreciation:0,lastFarmInterestPaid:0,lastFarmProfit:0,lastProfitTax:0,migrantCount:0,policy:{publicWage:1800,minimumWage:1500,incomeTax:10,employerTax:15,profitTax:20,dividendPayoutRatio:50,migrationCost:3000,monthlyStateSupport:5000,housing:"employer",fxMode:"floating",basketCost:220,baseRate:1.5},pending:{},monthFlow:{in:0,internal:0,out:0},lastFlow:{in:0,internal:0,out:0},lastWage:{due:0,paid:0,employerCharge:0},ledger:[],feed:[],event:null,gameOver:null};S.externalSector={id:"external",name:"Setor Externo",account:"external",sector:"external",patrimony:{assets:0,liabilities:0,netWorth:0},flow:{revenue:0,costs:0,netProfit:0}};S.externalSector={id:"external",name:"Setor Externo",account:"external",sector:"external",patrimony:{assets:0,liabilities:0,netWorth:0},flow:{revenue:0,costs:0,netProfit:0}};
+function newGame(){S={seed:42,day:149,monthNumber:0,loanSeq:0,accounts:{treasury:0,stateFarm:0,privateFarm:0,commerce:0,workshop:0,landlord:0,bank:0},households:[{id:1,name:"Família Silva",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:2,name:"Família Rocha",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:3,name:"Ana",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:4,name:"Caio",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0}],owner:"state",farmOwnership:{treasury:1.0,private:0.0},concessionActive:false,lastDividends:{treasury:0,private:0,total:0},lastProjectNPV:null,lastNationalAccounts:null,lastFiscalReport:null,lots:10,baseJobsAvailable:8,jobsAvailable:8,sectorVacancies:{farm:8,commerce:1,workshop:1},totalJobsAvailable:10,housingCapacity:12,infrastructureCapacity:20,infrastructureStock:10000,urbanInfra:null,lastHarrisTodaro:null,extraFirms:[],baseMarkup:0.35,buildings:[],coffeeStock:0,productionThisSeason:0,coffeeSold:0,usdCoffee:300,fx:5,externalWage:2200,wage:1800,commerceWage:1710,workshopWage:1836,reservation:1540,weatherFactor:1,weatherEventDone:false,weatherDecisionDone:false,weatherProtection:false,marketStock:0,marketPrice:USD_IMPORT*5*(1+BASE_MARKUP),servicePrice:180,costOfLivingIndex:100,monthlyInflation:0,marketPressure:1,marketTargetPrice:USD_IMPORT*5*(1+BASE_MARKUP),lastShortage:0,lastShortageUnits:0,lastFoodConsumption:0,lastServiceConsumption:0,lastConsumption:0,lastDemandUnits:0,lastUnmetHouseholds:0,marketFundingFailure:false,importedUnits:0,commerceEmptyMonths:0,commerceMarkupExtra:0,commerceMarkupMonths:0,bankLoans:[],bankInterestIncome:0,bankAccruedInterest:0,lastDepositInterest:0,effectiveDepositRate:0,lastBankCreditLosses:0,cumulativeBankWriteDowns:0,cumulativeDebtorRelief:0,lastLoanSettlement:{byBorrower:{},totalInterestPaid:0,totalPrincipalPaid:0,totalAccruedInterest:0},farmInvestmentCooldown:0,landlordInvestmentCooldown:0,farmWageDebt:0,migratedClaims:[],assumedLiabilities:null,nextPayrollEstimate:0,cumulativeExternalIn:0,cumulativeExternalOut:0,cashAudit:null,lastDRE:null,workshopMaterials:5,workshopTaxDebt:0,commerceTaxDebt:0,unemploymentHistory:[0],currentMonthTracking:{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,workshopRevenue:0,workshopCosts:0,dividendsReceived:0,concessionOutorga:0},employerTaxDebt:0,farmTaxDebt:0,monthFarmRevenue:0,monthFarmCosts:0,lastFarmEBITDA:0,lastFarmDepreciation:0,lastFarmInterestPaid:0,lastFarmProfit:0,lastProfitTax:0,migrantCount:0,policy:{publicWage:1800,minimumWage:1500,incomeTax:10,employerTax:15,profitTax:20,dividendPayoutRatio:50,migrationCost:3000,monthlyStateSupport:5000,housing:"employer",fxMode:"floating",basketCost:220,baseRate:1.5},pending:{},monthFlow:{in:0,internal:0,out:0},lastFlow:{in:0,internal:0,out:0},lastWage:{due:0,paid:0,employerCharge:0},ledger:[],feed:[],event:null,gameOver:null};S.externalSector={id:"external",name:"Setor Externo",account:"external",sector:"external",patrimony:{assets:0,liabilities:0,netWorth:0},flow:{revenue:0,costs:0,netProfit:0}};
  log("external","stateFarm",50000,"Capitalização inicial e capital de giro da fazenda estatal");log("external","commerce",20000,"Capital de giro inicial do comércio");log("external","workshop",10000,"Capital de giro inicial da oficina de obras e serviços");initFirms();salaryCalc();updateEmploymentCapacity();matchLaborMarket();updateUrbanInfrastructure();syncFirmState();auditCashConservation();render()}
 const controls=[["publicWage","Salário público (R$/mês)",1000,4000,100,v=>money(v)],["minimumWage","Salário mínimo legal",1000,3500,100,v=>money(v)],["incomeTax","Imposto sobre salário",0,30,1,v=>v+"%"],["employerTax","Encargo patronal",0,40,1,v=>v+"%"],["profitTax","Imposto sobre lucro",0,50,1,v=>v+"%"],["dividendPayoutRatio","Taxa de dividendos societários",20,80,5,v=>v+"%"],["migrationCost","Custo único de migração (R$)",0,6000,250,v=>money(v)],["monthlyStateSupport","Limite mensal de aporte do Tesouro à fazenda",0,12000,500,v=>money(v)],["basketCost","Cesta básica de referência por adulto",100,500,10,v=>money(v)],["baseRate","Juros básicos mensais",0.5,3,0.25,v=>v.toFixed(2)+"% a.m."]];
 function setPolicy(k,v,format){S.pending[k]=v;feed("Política "+k+" alterada para "+format(v)+"; vigência no próximo mês.")}
@@ -1359,8 +1336,8 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  newGame();simulateMonths(12,true);const bs88=generateBalanceSheets();test("8.8 Simulação macroeconômica de 12 meses com conservação SFC estrita",()=>({pass:bs88.audit.allPass&&bs88.audit.cashOk&&Math.abs(bs88.audit.cashAudit.difference)<0.01,months:12,allPass:bs88.audit.allPass,difference:bs88.audit.cashAudit.difference}));
  newGame();simulateMonths(24,true);const bs89=generateBalanceSheets();test("8.9 Simulação macroeconômica de 24 meses com conservação SFC estrita",()=>({pass:bs89.audit.allPass&&bs89.audit.cashOk&&Math.abs(bs89.audit.cashAudit.difference)<0.01,months:24,allPass:bs89.audit.allPass,difference:bs89.audit.cashAudit.difference}));
  newGame();simulateMonths(60,true);const bs810=generateBalanceSheets();test("8.10 Simulação macroeconômica de 60 meses com conservação SFC estrita",()=>({pass:bs810.audit.allPass&&bs810.audit.cashOk&&Math.abs(bs810.audit.cashAudit.difference)<0.01,months:60,allPass:bs810.audit.allPass,difference:bs810.audit.cashAudit.difference}));
- return{passed:results.filter(r=>r.passed).length,total:results.length,results}}
-window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,migrateLoan,migrateLoans,commerceLoanWriteDown,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},setPolicy:(k,v)=>{S.policy[k]=v},simulateMonths,availableCredit};
-newGame();actions();
+ return{passed:results.filter(r=>r.passed).length,total:results.length,results};}
+console.log("Defining VilarejoTest"); console.log("Window keys:", Object.keys(window)); window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,migrateLoan,migrateLoans,commerceLoanWriteDown,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},setPolicy:(k,v)=>{S.policy[k]=v},simulateMonths,availableCredit};
+newGame();actions(); }
 </script>
 </body></html>

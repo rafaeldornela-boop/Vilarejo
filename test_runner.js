@@ -4,6 +4,7 @@ const html = fs.readFileSync('index.html', 'utf8');
 const dom = new JSDOM(html, { runScripts: 'dangerously', resources: 'usable', url: 'http://localhost:3000' });
 setTimeout(() => {
   const win = dom.window;
+  console.log("Window is", !!win);
   const res = win.VilarejoTest.runStressTests();
   console.log(`\n=== SUÍTE DE TESTES ECONÔMICOS E BANCÁRIOS (Vilarejo - index.html) ===\n`);
   res.results.forEach(r => {
@@ -17,5 +18,5 @@ setTimeout(() => {
   if (res.passed !== res.total) {
     process.exit(1);
   }
-}, 500);
+}, 2000);
 
