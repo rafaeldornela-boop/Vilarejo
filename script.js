@@ -9,10 +9,8 @@ const accountNames={treasury:"Tesouro público",stateFarm:"Fazenda estatal",priv
 const accountKey=h=>"house:"+h.id;
 function householdName(id){const h=S.households.find(x=>x.id===id);return h?h.name:id.replace("house:","Morador ")}
 function nameOf(id){
- if(id==="bakery"||id.startsWith("extra_")){
-  const ef=(S?.extraFirms||[]).find(f=>f.account===id||f.id===id);
-  if(ef)return ef.name;
- }
+ const firm=(S?.firms||[]).find(f=>f.account===id||f.id===id);
+ if(firm)return firm.name;
  return accountNames[id]||householdName(id);
 }
 function balance(id){if(id==="external")return Infinity;if(id.startsWith("house:"))return S.households.find(h=>accountKey(h)===id)?.cash||0;return S.accounts[id]||0}
@@ -109,15 +107,32 @@ function getLaborStats(){
  return{pit,laborForce,occupied,unemployedSeeking,outOfLaborForce:outOfForce,unemploymentRate,participationRate,movingAvgUnemployment,sectorWorkers:{farm:farmWorkers,commerce:commerceWorkers,workshop:workshopWorkers}};
 }
 function calculateFirmValuation(firmId="farm"){
- const fAcc=farmAccount();
- const fCapital=Math.max(0,(S.baseJobsAvailable||8)-8)*8000+40000;
- const coffeeVal=S.coffeeStock*(S.usdCoffee*S.fx);
- const fCash=balance(fAcc);
- const fLiabilities=totalWageDebt()+S.employerTaxDebt+S.farmTaxDebt+totalLoans(fAcc);
- const tangibleAssets=fCapital+coffeeVal+fCash;
- const nav=Math.max(1000,round2(tangibleAssets-fLiabilities));
- const estimatedMonthlyNet=Math.max(0,(monthlyContributionPerWorker()-S.wage*(1+S.policy.employerTax/100))*Math.max(1,employed()));
- const annualNet=round2(estimatedMonthlyNet*12);
+ if(firmId==="farm"||!firmId){
+  const fAcc=farmAccount();
+  const farmFirm=S?.firms?.find(f=>f.id==="farm");
+  const fCapital=farmFirm?.capitalStock!==undefined?farmFirm.capitalStock:(Math.max(0,(S.baseJobsAvailable||8)-8)*8000+40000);
+  const coffeeVal=farmFirm?.inventory?.quantity!==undefined?(farmFirm.inventory.quantity*(farmFirm.inventory.unitValue||(S.usdCoffee*S.fx))):(S.coffeeStock*(S.usdCoffee*S.fx));
+  const fCash=balance(fAcc);
+  const fLiabilities=totalWageDebt()+S.employerTaxDebt+S.farmTaxDebt+totalLoans(fAcc);
+  const tangibleAssets=fCapital+coffeeVal+fCash;
+  const nav=Math.max(1000,round2(tangibleAssets-fLiabilities));
+  const estimatedMonthlyNet=Math.max(0,(monthlyContributionPerWorker()-S.wage*(1+S.policy.employerTax/100))*Math.max(1,employed()));
+  const annualNet=round2(estimatedMonthlyNet*12);
+  const discountRate=Math.max(0.08,round2(((S.policy.baseRate*12)/100)+0.05));
+  const dcfValuation=round2(annualNet/discountRate);
+  const economicValuation=round2(Math.max(nav,0.55*nav+0.45*dcfValuation));
+  return{tangibleAssets,liabilities:fLiabilities,nav,annualNet,discountRate,dcfValuation,valuation:economicValuation};
+ }
+ const firm=S?.firms?.find(f=>f.id===firmId||f.account===firmId);
+ if(!firm)return{tangibleAssets:0,liabilities:0,nav:0,annualNet:0,discountRate:0.1,dcfValuation:0,valuation:0};
+ const acc=firm.account;
+ const fCapital=firm.capitalStock||0;
+ const invVal=firm.inventory?(firm.inventory.quantity*(firm.inventory.unitValue||0)):0;
+ const fCash=balance(acc);
+ const fLiabilities=(firm.wageDebt||0)+(firm.taxDebt||0)+totalLoans(acc);
+ const tangibleAssets=fCapital+invVal+fCash;
+ const nav=Math.max(500,round2(tangibleAssets-fLiabilities));
+ const annualNet=round2(Math.max(0,firm.profit||0)*12);
  const discountRate=Math.max(0.08,round2(((S.policy.baseRate*12)/100)+0.05));
  const dcfValuation=round2(annualNet/discountRate);
  const economicValuation=round2(Math.max(nav,0.55*nav+0.45*dcfValuation));
@@ -187,213 +202,749 @@ function settleConcessionOutorga(){
  }
  return 0;
 }
-function createFirm(id, name, sector, account, config = {}) {
-  return {
+// ============================================================================
+// CONTRATO GENÉRICO DE EMPRESA (Firm) E MOTOR EMPRESARIAL - ETAPA A
+// ============================================================================
+// CONTRATO GENÉRICO DE EMPRESA (Firm) E MOTOR EMPRESARIAL - ETAPA B
+// ============================================================================
+
+const farmBehavior = {
+  plan(f, ctx = {}) {
+    f.offeredWage = S.wage;
+    const base = f.baseCapacity || S.baseJobsAvailable || 8;
+    const housingCost = S.policy.housing === "employer" ? HOUSING_VALUE : 0;
+    const fullCost = f.offeredWage * (1 + S.policy.employerTax / 100) + housingCost;
+    const viability = clamp(monthlyContributionPerWorker() / Math.max(1, fullCost), 0, 1);
+    f.openVacancies = Math.floor(base * viability + 1e-9);
+    S.jobsAvailable = f.openVacancies;
+  },
+
+  produce(f, ctx = {}) {
+    f.account = farmAccount();
+    const doy = S.day % YEAR;
+    if (doy < 150 || doy >= 210) return;
+    const potential = (f.activeWorkers !== undefined ? f.activeWorkers : employed()) * 0.35;
+    if (potential <= 0) return;
+    const unitInput = USD_INPUT * S.fx;
+    const paid = log(f.account, "external", potential * unitInput, "Insumos agrícolas importados");
+    const financedUnits = unitInput > 0 ? Math.min(potential, paid / unitInput) : potential;
+    if (paid > 0) {
+      S.monthFarmCosts += paid;
+      if (S.currentMonthTracking) S.currentMonthTracking.farmInputs += paid;
+    }
+    const tfp = f.productivityFactor || S?.urbanInfra?.tfpFactor || 1.0;
+    const yieldQty = financedUnits * (S.weatherFactor || 1) * tfp;
+    if (!f.inventory) f.inventory = { name: "Café em grão", unit: "sacas", quantity: 0, unitValue: 1500 };
+    f.inventory.quantity = round2((f.inventory.quantity || 0) + yieldQty);
+    f.inventory.unitValue = round2(S.usdCoffee * S.fx);
+    S.coffeeStock = f.inventory.quantity;
+    S.productionThisSeason += yieldQty;
+    if (financedUnits + 0.001 < potential) feed("Produção limitada: faltou capital para comprar todos os insumos agrícolas.");
+    return { potential, financedUnits, yieldQty };
+  },
+
+  market(f, ctx = {}) {
+    f.account = farmAccount();
+    const qty = f.inventory?.quantity !== undefined ? f.inventory.quantity : (S.coffeeStock || 0);
+    if (qty <= 0) return 0;
+    const revenue = round2(qty * S.usdCoffee * S.fx);
+    log("external", f.account, revenue, "Venda de café ao mercado externo");
+    S.monthFarmRevenue += revenue;
+    if (S.currentMonthTracking) S.currentMonthTracking.farmRevenue += revenue;
+    S.coffeeSold += qty;
+    if (!f.inventory) f.inventory = { name: "Café em grão", unit: "sacas", quantity: 0, unitValue: 1500 };
+    f.inventory.quantity = 0;
+    f.inventory.unitValue = round2(S.usdCoffee * S.fx);
+    S.coffeeStock = 0;
+    f.revenue = (f.revenue || 0) + revenue;
+    return revenue;
+  },
+
+  settle(f, ctx = {}) {
+    f.account = farmAccount();
+    f.operator = S.owner;
+    const fAcc = f.account;
+    const interestPaid = S.lastLoanSettlement?.byBorrower?.[fAcc]?.interestPaid || 0;
+    const farmCapital = f.capitalStock !== undefined ? f.capitalStock : (Math.max(0, (S.baseJobsAvailable || 8) - 8) * 8000 + 40000);
+    const depr = (S.monthFarmRevenue > 0 || S.monthFarmCosts > 0) ? round2(farmCapital * (f.depreciationRate || 0.0025)) : 0;
+    if (depr > 0) {
+      f.capitalStock = round2(Math.max(0, f.capitalStock - depr));
+    }
+    const ebitda = S.monthFarmRevenue - S.monthFarmCosts;
+    const ebit = ebitda - depr;
+    const lair = ebit - interestPaid;
+    S.lastFarmEBITDA = ebitda;
+    S.lastFarmDepreciation = depr;
+    S.lastFarmInterestPaid = interestPaid;
+    S.lastFarmProfit = lair;
+    f.revenue = S.monthFarmRevenue;
+    f.costs = S.monthFarmCosts + depr + interestPaid;
+    f.profit = lair;
+
+    if (f.operator === "state" || S.owner === "state") {
+      S.lastProfitTax = 0;
+      S.monthFarmRevenue = 0;
+      S.monthFarmCosts = 0;
+      return;
+    }
+    const due = Math.max(0, lair) * S.policy.profitTax / 100 + S.farmTaxDebt;
+    const paid = log(fAcc, "treasury", Math.min(due, balance(fAcc)), "Imposto sobre lucro");
+    S.farmTaxDebt = due - paid;
+    S.lastProfitTax = paid;
+    S.monthFarmRevenue = 0;
+    S.monthFarmCosts = 0;
+    f.profit = lair - paid;
+  },
+
+  sync(f, { ls, tfp }) {
+    f.account = farmAccount();
+    f.operator = S.owner;
+    f.ownership = { ...S.farmOwnership };
+    f.name = S.farmOwnership.treasury >= 0.995 ? "Fazenda Estatal de Café" : S.farmOwnership.treasury <= 0.005 ? "Fazenda Privada de Café" : "Fazenda de Economia Mista";
+    f.governanceLabel = S.farmOwnership.treasury >= 0.995 ? "Estatal" : S.farmOwnership.treasury <= 0.005 ? "Privada" : `Mista (${(S.farmOwnership.treasury * 100).toFixed(0)}% G / ${(S.farmOwnership.private * 100).toFixed(0)}% P)`;
+    f.valuation = calculateFirmValuation("farm").valuation;
+    if (ls && ls.sectorWorkers) f.activeWorkers = ls.sectorWorkers.farm;
+    f.baseCapacity = S.baseJobsAvailable || 8;
+    f.openVacancies = S.jobsAvailable || 0;
+    f.offeredWage = S.wage;
+    f.taxDebt = round2(S.employerTaxDebt + S.farmTaxDebt);
+    f.wageDebt = totalWageDebt();
+    if (!f.inventory) f.inventory = { name: "Café em grão", unit: "sacas", quantity: 0, unitValue: 1500 };
+    f.inventory.quantity = S.coffeeStock;
+    f.inventory.unitValue = round2(S.usdCoffee * S.fx);
+  }
+};
+
+const commerceBehavior = {
+  plan(f, ctx = {}) {
+    const minFullCost = S.policy.minimumWage * (1 + S.policy.employerTax / 100);
+    const commViable = balance(f.account) >= minFullCost * 2 && !S.marketFundingFailure ? 1 : 0;
+    f.openVacancies = commViable;
+    f.offeredWage = S.commerceWage || S.policy.minimumWage;
+  },
+
+  produce(f, ctx = {}) {
+    const demand = ctx.demand || 0;
+    const targetStock = demand * 1.1;
+    const currentStock = f.inventory?.quantity !== undefined ? f.inventory.quantity : (S.marketStock || 0);
+    const need = Math.max(0, targetStock - currentStock);
+    const importUnitCost = USD_IMPORT * S.fx;
+    const importCost = need * importUnitCost;
+    if (importCost > balance(f.account)) {
+      const short = importCost - balance(f.account);
+      issueLoan(f.account, short, "capital de giro para importação de alimentos");
+    }
+    const paidImport = log(f.account, "external", importCost, "Importação de cesta básica");
+    if (S.currentMonthTracking) S.currentMonthTracking.commerceImports += paidImport;
+    const imported = importUnitCost > 0 ? paidImport / importUnitCost : 0;
+    if (!f.inventory) f.inventory = { name: "Cesta básica", unit: "cestas", quantity: 0, unitValue: round2(S.marketPrice) };
+    f.inventory.quantity = currentStock + imported;
+    f.inventory.unitValue = round2(S.marketPrice);
+    S.marketStock = f.inventory.quantity;
+    S.importedUnits = imported;
+    S.marketFundingFailure = (imported + 0.001 < need);
+    return { demand, targetStock, need, imported, importCost: paidImport };
+  },
+
+  market(f, ctx = {}) {
+    const plans = ctx.plans || [];
+    const totalAffordable = plans.reduce((n, p) => n + p.affordable, 0);
+    const available = f.inventory?.quantity !== undefined ? f.inventory.quantity : (S.marketStock || 0);
+    const soldTotal = Math.min(totalAffordable, available);
+    for (const p of plans) {
+      p.bought = totalAffordable > 0 ? soldTotal * (p.affordable / totalAffordable) : 0;
+      const paid = p.bought * S.marketPrice;
+      if (paid > 0) {
+        log(accountKey(p.h), f.account, paid, "Compra de cesta básica (LES essencial/discricionário)");
+      }
+      p.h.shortageUnits = Math.max(0, p.essential - p.bought);
+    }
+    if (!f.inventory) f.inventory = { name: "Cesta básica", unit: "cestas", quantity: 0, unitValue: round2(S.marketPrice) };
+    f.inventory.quantity = Math.max(0, available - soldTotal);
+    f.inventory.unitValue = round2(S.marketPrice);
+    S.marketStock = f.inventory.quantity;
+    f.lastSales = soldTotal * S.marketPrice;
+    f.revenue = (f.revenue || 0) + f.lastSales;
+    return { soldTotal, salesRevenue: f.lastSales };
+  },
+
+  settle(f, ctx = {}) {
+    const tr = S.currentMonthTracking || {};
+    const commInterestPaid = S.lastLoanSettlement?.byBorrower?.[f.account]?.interestPaid || 0;
+    const foodSales = f.lastSales !== undefined ? f.lastSales : (S.lastFoodConsumption || 0);
+    const commDepreciation = (foodSales > 0 || (tr.commerceImports || 0) > 0) ? round2((f.capitalStock || 15000) * (f.depreciationRate || 0.0025)) : 0;
+    if (commDepreciation > 0) {
+      f.capitalStock = round2(Math.max(0, f.capitalStock - commDepreciation));
+    }
+    const commGrossMargin = foodSales - (tr.commerceImports || 0);
+    const commEBIT = commGrossMargin - commDepreciation;
+    const commLAIR = commEBIT - commInterestPaid;
+    f.revenue = foodSales;
+    f.costs = (tr.commerceImports || 0) + commDepreciation + commInterestPaid;
+    f.profit = commLAIR;
+    f.ebitda = commGrossMargin;
+    f.depreciation = commDepreciation;
+    f.interestPaid = commInterestPaid;
+  },
+
+  sync(f, { ls, tfp }) {
+    if (ls && ls.sectorWorkers) f.activeWorkers = ls.sectorWorkers.commerce || (balance("commerce") > 1000 ? 1 : 0);
+    f.openVacancies = S.sectorVacancies?.commerce ?? 1;
+    f.offeredWage = S.commerceWage || S.policy.minimumWage;
+    f.taxDebt = round2(S.commerceTaxDebt || 0);
+    f.wageDebt = 0;
+    if (!f.inventory) f.inventory = { name: "Cesta básica", unit: "cestas", quantity: 0, unitValue: 283.5 };
+    f.inventory.quantity = S.marketStock;
+    f.inventory.unitValue = round2(S.marketPrice);
+  }
+};
+
+const workshopBehavior = {
+  plan(f, ctx = {}) {
+    const minFullCost = S.policy.minimumWage * (1 + S.policy.employerTax / 100);
+    const workViable = balance(f.account) >= minFullCost * 2 ? 1 : 0;
+    f.openVacancies = workViable;
+    f.offeredWage = S.workshopWage || S.policy.minimumWage;
+  },
+
+  produce(f, ctx = {}) {
+    const tfp = f.productivityFactor || S?.urbanInfra?.tfpFactor || 1.0;
+    const availableCapacity = (f.activeWorkers || 1) * 3 * tfp;
+    if (!f.inventory) f.inventory = { name: "Kits de ferramentas e peças", unit: "lotes", quantity: 5, unitValue: round2(S.servicePrice || 180) };
+    f.inventory.quantity = Math.round(availableCapacity);
+    f.inventory.unitValue = round2(S.servicePrice || 180);
+    S.workshopMaterials = f.inventory.quantity;
+    return { capacity: availableCapacity, inventory: f.inventory.quantity };
+  },
+
+  market(f, ctx = {}) {
+    const plans = ctx.plans || [];
+    const sPrice = ctx.servicePrice || S.servicePrice || 180;
+    let serviceConsumptionVal = 0;
+    for (const p of plans) {
+      if (p.h.shortageUnits <= 0.01 && p.desiredServiceUnits > 0.01) {
+        const minReserve = p.essential * S.marketPrice * 0.5;
+        const spendable = Math.max(0, p.h.cash - minReserve);
+        const sCost = Math.min(spendable, p.desiredServiceUnits * sPrice);
+        if (sCost >= 5) {
+          const paidS = log(accountKey(p.h), f.account, sCost, "Serviços locais e reparos domiciliares (LES)");
+          p.serviceBought = paidS / sPrice;
+          serviceConsumptionVal += paidS;
+          if (S.currentMonthTracking) S.currentMonthTracking.workshopRevenue = (S.currentMonthTracking.workshopRevenue || 0) + paidS;
+        }
+      }
+    }
+    f.lastServiceRevenue = serviceConsumptionVal;
+    f.revenue = (f.revenue || 0) + serviceConsumptionVal;
+    return { serviceConsumptionVal };
+  },
+
+  settle(f, ctx = {}) {
+    const tr = S.currentMonthTracking || {};
+    const p = S.policy || {};
+    const wsInterestPaid = S.lastLoanSettlement?.byBorrower?.[f.account]?.interestPaid || 0;
+    const wsRev = (f.revenue !== undefined && f.revenue > 0) ? f.revenue : (tr.workshopRevenue || 0);
+    const wsCosts = tr.workshopCosts || 0;
+    const wsDepreciation = wsRev > 0 ? round2((f.capitalStock || 12000) * (f.depreciationRate || 0.0025)) : 0;
+    if (wsDepreciation > 0) {
+      f.capitalStock = round2(Math.max(0, f.capitalStock - wsDepreciation));
+    }
+    const wsEBITDA = wsRev - wsCosts;
+    const wsEBIT = wsEBITDA - wsDepreciation;
+    const wsLAIR = wsEBIT - wsInterestPaid;
+    const wsProfit = Math.max(0, wsLAIR);
+    let wsProfitTaxPaid = 0;
+    if (wsProfit > 0 && balance(f.account) > 0) {
+      const wsDue = wsProfit * (p.profitTax || 20) / 100 + (S.workshopTaxDebt || 0);
+      wsProfitTaxPaid = log(f.account, "treasury", Math.min(wsDue, balance(f.account)), "Imposto sobre lucro da oficina");
+      S.workshopTaxDebt = wsDue - wsProfitTaxPaid;
+    }
+    f.revenue = wsRev;
+    f.costs = wsCosts + wsDepreciation + wsInterestPaid;
+    f.profit = wsLAIR - wsProfitTaxPaid;
+    f.ebitda = wsEBITDA;
+    f.depreciation = wsDepreciation;
+    f.interestPaid = wsInterestPaid;
+    if (ctx) ctx.wsProfitTaxPaid = wsProfitTaxPaid;
+  },
+
+  sync(f, { ls, tfp }) {
+    if (ls && ls.sectorWorkers) f.activeWorkers = ls.sectorWorkers.workshop || (balance(f.account) > 1000 ? 1 : 0);
+    f.openVacancies = S.sectorVacancies?.workshop ?? 1;
+    f.offeredWage = S.workshopWage || S.policy.minimumWage;
+    f.taxDebt = round2(S.workshopTaxDebt || 0);
+    f.wageDebt = 0;
+    if (!f.inventory) f.inventory = { name: "Kits de ferramentas e peças", unit: "lotes", quantity: 5, unitValue: 180 };
+    f.inventory.quantity = S.workshopMaterials || 5;
+    f.inventory.unitValue = round2(S.servicePrice || 180);
+  }
+};
+
+const bakeryBehavior = {
+  plan(f, ctx = {}) {
+    if (f.status === "active") {
+      const minFullCost = (f.offeredWage || S.policy.minimumWage) * (1 + (S.policy.employerTax || 15) / 100);
+      f.openVacancies = balance(f.account) >= minFullCost ? (f.baseCapacity || 1) : 0;
+      f.offeredWage = Math.max(S.policy.minimumWage, Math.round(S.wage * 0.96));
+    } else {
+      f.openVacancies = 0;
+    }
+  },
+
+  produce(f, ctx = {}) {
+    if (f.status !== "active") return { batchYield: 0, totalStock: 0 };
+    const workers = Math.max(1, f.activeWorkers || 1);
+    const tfp = f.productivityFactor || S?.urbanInfra?.tfpFactor || 1.0;
+    const batchYield = round2(workers * 20 * tfp);
+    if (!f.inventory) f.inventory = { name: "Pães e mantimentos", unit: "unid", quantity: 20, unitValue: 80 };
+    f.inventory.quantity = round2((f.inventory.quantity || 0) + batchYield);
+    f.inventory.unitValue = round2(S.marketPrice * 0.35);
+    return { batchYield, totalStock: f.inventory.quantity };
+  },
+
+  market(f, ctx = {}) {
+    if (f.status !== "active") return { sales: 0 };
+    const plans = ctx.plans || [];
+    let bakerySales = 0;
+    const pricePerUnit = round2((S.marketPrice || 280) * 0.35);
+    const available = f.inventory?.quantity || 0;
+    if (available > 0) {
+      for (const p of plans) {
+        if (p.h.cash >= pricePerUnit && f.inventory.quantity >= 1) {
+          const buyUnits = Math.min(Math.floor(p.h.cash / (pricePerUnit * 2)), Math.floor(f.inventory.quantity));
+          if (buyUnits >= 1) {
+            const paid = log(accountKey(p.h), f.account, buyUnits * pricePerUnit, "Compra de pães e mantimentos artesanais");
+            f.inventory.quantity -= buyUnits;
+            bakerySales += paid;
+            if (p.h.shortageUnits > 0) {
+              p.h.shortageUnits = Math.max(0, p.h.shortageUnits - buyUnits * 0.1);
+            }
+          }
+        }
+      }
+    }
+    f.revenue = (f.revenue || 0) + bakerySales;
+    return { sales: bakerySales };
+  },
+
+  settle(f, ctx = {}) {
+    const interestPaid = S.lastLoanSettlement?.byBorrower?.[f.account]?.interestPaid || 0;
+    const depr = (f.revenue > 0) ? round2((f.capitalStock || 10000) * (f.depreciationRate || 0.0025)) : 0;
+    if (depr > 0) {
+      f.capitalStock = round2(Math.max(0, f.capitalStock - depr));
+    }
+    const grossMargin = (f.revenue || 0) - (f.costs || 0);
+    const ebit = grossMargin - depr;
+    const lair = ebit - interestPaid;
+    const p = S.policy || {};
+    let taxPaid = 0;
+    if (lair > 0 && balance(f.account) > 0) {
+      const taxDue = lair * (p.profitTax || 20) / 100 + (f.taxDebt || 0);
+      taxPaid = log(f.account, "treasury", Math.min(taxDue, balance(f.account)), "Imposto sobre lucro da padaria");
+      f.taxDebt = round2(taxDue - taxPaid);
+    }
+    f.costs = (f.costs || 0) + depr + interestPaid + taxPaid;
+    f.profit = lair - taxPaid;
+    f.ebitda = grossMargin;
+    f.depreciation = depr;
+    f.interestPaid = interestPaid;
+  },
+
+  sync(f, { ls, tfp }) {
+    f.productivityFactor = tfp;
+    f.activeWorkers = S.households ? S.households.reduce((acc, h) => acc + (h.sectorJobs?.[f.id] || 0), 0) : (f.activeWorkers || 0);
+    f.offeredWage = f.offeredWage || S.policy.minimumWage;
+    f.taxDebt = round2(f.taxDebt || 0);
+    f.wageDebt = round2(f.wageDebt || 0);
+    if (!f.inventory) f.inventory = { name: "Pães e mantimentos", unit: "unid", quantity: 20, unitValue: 80 };
+  }
+};
+
+const defaultFirmBehavior = {
+  plan(f, ctx = {}) {
+    if (f.status === "active") {
+      const minFullCost = (f.offeredWage || S.policy.minimumWage) * (1 + (S.policy.employerTax || 15) / 100);
+      f.openVacancies = balance(f.account) >= minFullCost ? (f.baseCapacity || 1) : 0;
+    } else {
+      f.openVacancies = 0;
+    }
+  },
+
+  produce(f, ctx = {}) {},
+
+  market(f, ctx = {}) {},
+
+  settle(f, ctx = {}) {
+    const interestPaid = S.lastLoanSettlement?.byBorrower?.[f.account]?.interestPaid || 0;
+    const depr = round2((f.capitalStock || 0) * (f.depreciationRate || 0.0025));
+    if (depr > 0) {
+      f.capitalStock = round2(Math.max(0, f.capitalStock - depr));
+    }
+    const ebit = (f.revenue || 0) - (f.costs || 0) - depr;
+    const lair = ebit - interestPaid;
+    f.profit = lair;
+  },
+
+  sync(f, { ls, tfp }) {
+    f.activeWorkers = f.activeWorkers || 0;
+    f.openVacancies = f.openVacancies !== undefined ? f.openVacancies : 1;
+    f.offeredWage = f.offeredWage || S.policy.minimumWage;
+    f.taxDebt = round2(f.taxDebt || 0);
+    f.wageDebt = round2(f.wageDebt || 0);
+  }
+};
+
+function createFirm(id, name, sector, account, config = {}, behavior = {}) {
+  const firm = {
+    // 1. Identificação institucional e contrato
     id,
     name,
     sector,
+    sectorLabel: config.sectorLabel || sector,
     account,
-    // Institutional Contract
-    assets: 0,
-    liabilities: 0,
-    netWorth: 0,
-    ownership: { treasury: 1.0, private: 0.0 },
-    operator: "state",
-    contract: { type: "statutory", terms: "" },
-    // Operational State
-    status: "active",
-    cash: 0,
-    capitalStock: 0,
-    loans: 0,
-    activeWorkers: 0,
-    openVacancies: 0,
-    offeredWage: 1500,
-    payables: { wages: 0, taxes: 0 },
-    // Behavior and Production
-    behavior: {
-      plan: () => {},
-      produce: () => {},
-      settle: () => {}
-    },
+    ownership: config.ownership || { treasury: 0.0, private: 1.0 },
+    operator: config.operator || "private",
+    governanceLabel: config.governanceLabel || (config.operator === "state" ? "Estatal" : "Privada"),
+    contract: config.contract || { type: "private_license", terms: "Registro municipal de atividade econômica" },
+
+    // 2. Situação operacional e física (sem duplicação de saldos contábeis oficiais)
+    status: config.status || "active",
+    capitalStock: config.capitalStock !== undefined ? config.capitalStock : 0,
+    depreciationRate: config.depreciationRate !== undefined ? config.depreciationRate : 0.0025,
+    baseCapacity: config.baseCapacity !== undefined ? config.baseCapacity : 2,
+    productivityFactor: config.productivityFactor !== undefined ? config.productivityFactor : 1.0,
+    openVacancies: config.openVacancies !== undefined ? config.openVacancies : 0,
+    offeredWage: config.offeredWage !== undefined ? config.offeredWage : 1500,
+    activeWorkers: config.activeWorkers || 0,
+    wageDebt: config.wageDebt || 0,
+    taxDebt: config.taxDebt || 0,
+    inventory: config.inventory || { name: "Estoque", unit: "unidades", quantity: 0, unitValue: 0 },
+    valuation: config.valuation || 0,
+
+    // 3. Configuração
     config: {
       depreciationRate: 0.0025,
       baseCapacity: 2,
       ...config
-    }
+    },
+
+    // 4. Módulo de comportamento produtivo (polimórfico)
+    behavior: {
+      plan: () => {},
+      produce: () => {},
+      settle: () => {},
+      sync: () => {},
+      ...behavior
+    },
+
+    // 5. Getters para saldos derivados das fontes contábeis oficiais (Stock-Flow Consistent)
+    get cash() { return balance(this.account); },
+    set cash(v) { /* fonte de verdade é S.accounts via log/balance */ },
+    get loans() { return totalLoans(this.account); },
+    set loans(v) { /* fonte de verdade é S.bankLoans */ },
+    get payables() { return { wages: this.wageDebt || 0, taxes: this.taxDebt || 0 }; },
+    set payables(v) { if (v) { if (v.wages !== undefined) this.wageDebt = v.wages; if (v.taxes !== undefined) this.taxDebt = v.taxes; } }
   };
+  return firm;
 }
 
 function initFirms(){
-  const fAcc=farmAccount();
-  const tfp=S?.urbanInfra?.tfpFactor||1.0;
-  const farm=createFirm("farm", "Fazenda", "agriculture", fAcc, {baseCapacity:S.baseJobsAvailable||8});
-  farm.name=S.farmOwnership.treasury>=0.995?"Fazenda Estatal de Café":S.farmOwnership.treasury<=0.005?"Fazenda Privada de Café":"Fazenda de Economia Mista";
-  farm.ownership={...S.farmOwnership}; farm.operator=S.owner; farm.contract={type:"statutory",terms:"Operação pública direta"};
-  farm.cash=balance(fAcc); farm.capitalStock=40000;
-  farm.inventory={name:"Café em grão",unit:"sacas",quantity:S.coffeeStock||0,unitValue:round2(S.usdCoffee*S.fx)};
-  farm.openVacancies=S.jobsAvailable||8; farm.offeredWage=S.wage||1800; farm.productivityFactor=tfp;
-  farm.loans=totalLoans(fAcc); farm.payables={wages:totalWageDebt(),taxes:round2(S.employerTaxDebt+S.farmTaxDebt)};
-  farm.taxDebt=round2(S.employerTaxDebt+S.farmTaxDebt); farm.wageDebt=totalWageDebt();
+  const fAcc = farmAccount();
+  const tfp = S?.urbanInfra?.tfpFactor || 1.0;
 
-  const commerce=createFirm("commerce", "Comércio e Abastecimento Local", "retail", "commerce");
-  commerce.ownership={treasury:0.0,private:1.0}; commerce.operator="private";
-  commerce.contract={type:"private_license",terms:"Alvará comercial privado"};
-  commerce.cash=balance("commerce"); commerce.capitalStock=15000;
-  commerce.inventory={name:"Cesta básica",unit:"cestas",quantity:S.marketStock||0,unitValue:round2(S.marketPrice)};
-  commerce.openVacancies=S.sectorVacancies?.commerce??1; commerce.offeredWage=S.commerceWage||1710; commerce.productivityFactor=tfp;
-  commerce.loans=totalLoans("commerce"); commerce.payables={wages:0,taxes:round2(S.commerceTaxDebt||0)};
-  commerce.taxDebt=round2(S.commerceTaxDebt||0);
+  const farm = createFirm("farm", "Fazenda", "agriculture", fAcc, {
+    baseCapacity: S.baseJobsAvailable || 8,
+    capitalStock: 40000,
+    depreciationRate: 0.0025,
+    ownership: { ...S.farmOwnership },
+    operator: S.owner,
+    contract: { type: "statutory", terms: "Operação pública direta" },
+    inventory: { name: "Café em grão", unit: "sacas", quantity: S.coffeeStock || 0, unitValue: round2(S.usdCoffee * S.fx) },
+    openVacancies: S.jobsAvailable || 8,
+    offeredWage: S.wage || 1800,
+    productivityFactor: tfp
+  }, farmBehavior);
 
-  const workshop=createFirm("workshop", "Oficina de Obras e Serviços Locais", "construction_services", "workshop");
-  workshop.ownership={treasury:0.0,private:1.0}; workshop.operator="private";
-  workshop.contract={type:"private_license",terms:"Oficina mecânica e serviços"};
-  workshop.cash=balance("workshop"); workshop.capitalStock=12000;
-  workshop.inventory={name:"Kits de ferramentas e peças",unit:"lotes",quantity:S.workshopMaterials||5,unitValue:round2(S.servicePrice||180)};
-  workshop.openVacancies=S.sectorVacancies?.workshop??1; workshop.offeredWage=S.workshopWage||1836; workshop.productivityFactor=tfp;
-  workshop.loans=totalLoans("workshop"); workshop.payables={wages:0,taxes:round2(S.workshopTaxDebt||0)};
-  workshop.taxDebt=round2(S.workshopTaxDebt||0);
+  const commerce = createFirm("commerce", "Comércio e Abastecimento Local", "retail", "commerce", {
+    baseCapacity: 2,
+    capitalStock: 15000,
+    depreciationRate: 0.0025,
+    ownership: { treasury: 0.0, private: 1.0 },
+    operator: "private",
+    contract: { type: "private_license", terms: "Alvará comercial privado" },
+    inventory: { name: "Cesta básica", unit: "cestas", quantity: S.marketStock || 0, unitValue: round2(S.marketPrice) },
+    openVacancies: S.sectorVacancies?.commerce ?? 1,
+    offeredWage: S.commerceWage || 1710,
+    productivityFactor: tfp
+  }, commerceBehavior);
 
-  S.firms=[farm, commerce, workshop];
+  const workshop = createFirm("workshop", "Oficina de Obras e Serviços Locais", "construction_services", "workshop", {
+    baseCapacity: 2,
+    capitalStock: 12000,
+    depreciationRate: 0.0025,
+    ownership: { treasury: 0.0, private: 1.0 },
+    operator: "private",
+    contract: { type: "private_license", terms: "Oficina mecânica e serviços" },
+    inventory: { name: "Kits de ferramentas e peças", unit: "lotes", quantity: S.workshopMaterials || 5, unitValue: round2(S.servicePrice || 180) },
+    openVacancies: S.sectorVacancies?.workshop ?? 1,
+    offeredWage: S.workshopWage || 1836,
+    productivityFactor: tfp
+  }, workshopBehavior);
+
+  S.firms = [farm, commerce, workshop];
+  syncFirmState();
 }
+
 function syncFirmState(){
- if(!S.firms||!S.firms.length)initFirms();
- if(S.extraFirms&&S.extraFirms.length){
-  for(const ef of S.extraFirms){
-   if(!S.firms.some(f=>f.id===ef.id)){
-    S.firms.push(ef);
-   }
+  if (!S.firms || !S.firms.length) initFirms();
+  const ls = getLaborStats();
+  const tfp = S?.urbanInfra?.tfpFactor || 1.0;
+  for (const f of S.firms) {
+    f.productivityFactor = tfp;
+    if (f.behavior && typeof f.behavior.sync === "function") {
+      f.behavior.sync(f, { ls, tfp });
+    }
   }
- }
- const ls=getLaborStats();
- const farmVal=calculateFirmValuation("farm");
- const ownLabel=S.farmOwnership.treasury>=0.995?"Estatal":S.farmOwnership.treasury<=0.005?"Privada":`Mista (${(S.farmOwnership.treasury*100).toFixed(0)}% G / ${(S.farmOwnership.private*100).toFixed(0)}% P)`;
- const tfp=S?.urbanInfra?.tfpFactor||1.0;
- for(const f of S.firms){
-  f.cash=balance(f.account);
-  f.loans=totalLoans(f.account);
-  f.productivityFactor=tfp;
-  if(f.id==="farm"){
-   f.account=farmAccount();
-   f.operator=S.owner;
-   f.ownership={...S.farmOwnership};
-   f.name=S.farmOwnership.treasury>=0.995?"Fazenda Estatal de Café":S.farmOwnership.treasury<=0.005?"Fazenda Privada de Café":"Fazenda de Economia Mista";
-   f.governanceLabel=ownLabel;
-   f.valuation=farmVal.valuation;
-   f.activeWorkers=ls.sectorWorkers.farm;
-   f.baseCapacity=S.baseJobsAvailable||8;
-   f.openVacancies=S.jobsAvailable||0;
-   f.offeredWage=S.wage;
-   f.taxDebt=round2(S.employerTaxDebt+S.farmTaxDebt);
-   f.wageDebt=totalWageDebt();
-   f.payables={wages:f.wageDebt,taxes:f.taxDebt};
-   if(!f.inventory)f.inventory={name:"Café em grão",unit:"sacas",quantity:0,unitValue:1500};
-   f.inventory.quantity=S.coffeeStock;
-   f.inventory.unitValue=round2(S.usdCoffee*S.fx);
-  }else if(f.id==="commerce"){
-   f.activeWorkers=ls.sectorWorkers.commerce||(balance("commerce")>1000?1:0);
-   f.openVacancies=S.sectorVacancies?.commerce??1;
-   f.offeredWage=S.commerceWage||S.policy.minimumWage;
-   f.taxDebt=round2(S.commerceTaxDebt||0);
-   f.wageDebt=0;
-   f.payables={wages:0,taxes:f.taxDebt};
-   if(!f.inventory)f.inventory={name:"Cesta básica",unit:"cestas",quantity:0,unitValue:283.5};
-   f.inventory.quantity=S.marketStock;
-   f.inventory.unitValue=round2(S.marketPrice);
-  }else if(f.id==="workshop"){
-   f.activeWorkers=ls.sectorWorkers.workshop||(balance("workshop")>1000?1:0);
-   f.openVacancies=S.sectorVacancies?.workshop??1;
-   f.offeredWage=S.workshopWage||S.policy.minimumWage;
-   f.taxDebt=round2(S.workshopTaxDebt||0);
-   f.wageDebt=0;
-   f.payables={wages:0,taxes:f.taxDebt};
-   if(!f.inventory)f.inventory={name:"Kits de ferramentas e peças",unit:"lotes",quantity:5,unitValue:180};
-   f.inventory.quantity=S.workshopMaterials||5;
-   f.inventory.unitValue=round2(S.servicePrice||180);
-  }else{
-   f.payables={wages:f.wageDebt||0,taxes:f.taxDebt||0};
-  }
- }
 }
 function getFirms(){
  syncFirmState();
  return S.firms;
 }
-function matchLaborMarket(){
- const totalOpen=Math.max(0,Number(S.jobsAvailable)||0);
- const cOpen=Math.max(0,Number(S.sectorVacancies?.commerce)||0);
- const wOpen=Math.max(0,Number(S.sectorVacancies?.workshop)||0);
- S.households.forEach(h=>{
-  if(h.outOfLaborForce===undefined)h.outOfLaborForce=0;
-  const activeAdults=Math.max(0,h.adults-clamp(h.outOfLaborForce,0,h.adults));
-  h.activeAdults=activeAdults;
-  h.jobs=0;
-  h.sectorJobs={farm:0,commerce:0,workshop:0};
-  h.unemployedSeeking=activeAdults;
- });
- let left=totalOpen;
- const eligible=[...S.households].sort((a,b)=>{
-  const eqA=Math.max(1,a.adults+a.children*0.7),eqB=Math.max(1,b.adults+b.children*0.7);
-  const liqA=(a.cash+a.deposit-a.wageDebt)/eqA,liqB=(b.cash+b.deposit-b.wageDebt)/eqB;
-  if(Math.abs(liqA-liqB)>1)return liqA-liqB;
-  return a.id-b.id;
- });
- let progress=true;
- while(left>0&&progress){
-  progress=false;
-  for(const h of eligible){
-   if(left<=0)break;
-   if(h.jobs<h.activeAdults){
-    h.jobs++;
-    h.unemployedSeeking=Math.max(0,h.activeAdults-h.jobs);
-    left--;
-    progress=true;
-   }
+function runFirmPlanningPhase(ctx = {}) {
+  if (!S.firms || !S.firms.length) initFirms();
+  salaryCalc();
+  for (const f of S.firms) {
+    if (f.behavior && typeof f.behavior.plan === "function") {
+      f.behavior.plan(f, ctx);
+    }
   }
- }
- let cLeft=cOpen,wLeft=wOpen;
- for(const h of S.households){
-  let rem=h.jobs;
-  const toW=Math.min(rem,wLeft>0&&rem>1?1:0);
-  const toC=Math.min(rem-toW,cLeft>0&&rem-toW>1?1:0);
-  const toF=Math.max(0,rem-toW-toC);
-  h.sectorJobs={farm:toF,commerce:toC,workshop:toW};
-  wLeft-=toW;cLeft-=toC;
- }
- return getLaborStats();
+  const farmF = S.firms.find(f => f.id === "farm");
+  const commF = S.firms.find(f => f.id === "commerce");
+  const workF = S.firms.find(f => f.id === "workshop");
+  if (farmF) S.jobsAvailable = farmF.openVacancies;
+  const commViable = commF ? commF.openVacancies : 1;
+  const workViable = workF ? workF.openVacancies : 1;
+  S.sectorVacancies = {
+    farm: S.jobsAvailable,
+    commerce: commViable,
+    workshop: workViable
+  };
+  S.totalJobsAvailable = S.firms.reduce((sum, f) => sum + (f.openVacancies || 0), 0) || (S.jobsAvailable + commViable + workViable);
 }
-function assignJobs(){return matchLaborMarket()}
-function monthlyContributionPerWorker(){return (0.35*60*(S.usdCoffee-USD_INPUT)*S.fx)/12}
-function updateEmploymentCapacity(){
- const base=S.baseJobsAvailable||8,housingCost=S.policy.housing==="employer"?HOUSING_VALUE:0,fullCost=S.wage*(1+S.policy.employerTax/100)+housingCost,viability=clamp(monthlyContributionPerWorker()/Math.max(1,fullCost),0,1);
- S.jobsAvailable=Math.floor(base*viability+1e-9);
- const minFullCost=S.policy.minimumWage*(1+S.policy.employerTax/100);
- const commViable=balance("commerce")>=minFullCost*2&&!S.marketFundingFailure?1:0;
- const workViable=balance("workshop")>=minFullCost*2?1:0;
- S.sectorVacancies={farm:S.jobsAvailable,commerce:commViable,workshop:workViable};
- S.totalJobsAvailable=S.jobsAvailable+commViable+workViable;
+
+function matchCollectiveLaborMarket(ctx = {}) {
+  if (!S.firms || !S.firms.length) initFirms();
+
+  const farmF = S.firms.find(f => f.id === "farm");
+  if (farmF && S.jobsAvailable !== undefined && farmF.openVacancies !== S.jobsAvailable) {
+    farmF.openVacancies = S.jobsAvailable;
+  }
+
+  const primaryFirms = S.firms.filter(f => (f.config?.role === "primary" || f.id === "farm" || f.sector === "agriculture") && f.status === "active");
+  const secondaryFirms = S.firms.filter(f => !primaryFirms.includes(f) && f.status === "active");
+
+  const totalPrimaryOpen = primaryFirms.reduce((sum, f) => sum + Math.max(0, Number(f.openVacancies) || 0), 0);
+  const secondaryOpen = secondaryFirms.map(f => ({ firm: f, left: Math.max(0, Number(f.openVacancies) || 0) }));
+
+  S.households.forEach(h => {
+    if (h.outOfLaborForce === undefined) h.outOfLaborForce = 0;
+    const activeAdults = Math.max(0, h.adults - clamp(h.outOfLaborForce, 0, h.adults));
+    h.activeAdults = activeAdults;
+    h.jobs = 0;
+    h.sectorJobs = { farm: 0, commerce: 0, workshop: 0 };
+    for (const f of S.firms) {
+      h.sectorJobs[f.id] = 0;
+    }
+    h.unemployedSeeking = activeAdults;
+  });
+
+  let left = totalPrimaryOpen;
+  const eligible = [...S.households].sort((a, b) => {
+    const eqA = Math.max(1, a.adults + a.children * 0.7), eqB = Math.max(1, b.adults + b.children * 0.7);
+    const liqA = (a.cash + a.deposit - a.wageDebt) / eqA, liqB = (b.cash + b.deposit - b.wageDebt) / eqB;
+    if (Math.abs(liqA - liqB) > 1) return liqA - liqB;
+    return a.id - b.id;
+  });
+
+  let progress = true;
+  while (left > 0 && progress) {
+    progress = false;
+    for (const h of eligible) {
+      if (left <= 0) break;
+      if (h.jobs < h.activeAdults) {
+        h.jobs++;
+        h.unemployedSeeking = Math.max(0, h.activeAdults - h.jobs);
+        left--;
+        progress = true;
+      }
+    }
+  }
+
+  for (const h of S.households) {
+    let rem = h.jobs;
+    for (const sEntry of secondaryOpen) {
+      if (sEntry.left > 0 && rem > 1) {
+        const toS = 1;
+        h.sectorJobs[sEntry.firm.id] = (h.sectorJobs[sEntry.firm.id] || 0) + toS;
+        if (sEntry.firm.id === "commerce") h.sectorJobs.commerce = (h.sectorJobs.commerce || 0) + toS;
+        if (sEntry.firm.id === "workshop") h.sectorJobs.workshop = (h.sectorJobs.workshop || 0) + toS;
+        sEntry.left -= toS;
+        rem -= toS;
+      }
+    }
+    if (rem > 0) {
+      const pFirm = primaryFirms[0] || farmF;
+      if (pFirm) {
+        h.sectorJobs[pFirm.id] = (h.sectorJobs[pFirm.id] || 0) + rem;
+        h.sectorJobs.farm = (h.sectorJobs.farm || 0) + rem;
+      }
+    }
+  }
+
+  const ls = getLaborStats();
+  for (const f of S.firms) {
+    if (f.id === "farm") f.activeWorkers = ls.sectorWorkers.farm;
+    else if (f.id === "commerce") f.activeWorkers = ls.sectorWorkers.commerce;
+    else if (f.id === "workshop") f.activeWorkers = ls.sectorWorkers.workshop;
+    else {
+      f.activeWorkers = S.households.reduce((acc, h) => acc + (h.sectorJobs[f.id] || 0), 0);
+    }
+  }
+
+  return ls;
 }
-function farmAccount(){return S.owner==="state"?"stateFarm":"privateFarm"}
-function farmLabel(){return S.owner==="state"?"Fazenda estatal":"Fazenda privada"}
-function salaryCalc(){
- const p=S.policy;
- S.reservation=Math.max(0,S.externalWage-p.migrationCost/12);
- const ls=getLaborStats(),activeLF=Math.max(1,ls.laborForce);
- const scarcity=clamp((S.jobsAvailable-activeLF)/Math.max(1,S.jobsAvailable),0,1),market=S.externalWage*(1+0.35*scarcity);
- if(S.owner==="state")S.wage=Math.max(p.publicWage,p.minimumWage);
- else{
-  const housingCost=p.housing==="employer"?HOUSING_VALUE:0,sustainable=Math.max(0,monthlyContributionPerWorker()-housingCost)/Math.max(1,1+p.employerTax/100);
-  S.wage=Math.min(market,sustainable);
-  S.wage=Math.max(p.minimumWage,S.wage);
- }
- S.commerceWage=Math.max(p.minimumWage,Math.round(S.wage*0.95));
- S.workshopWage=Math.max(p.minimumWage,Math.round(S.wage*1.02));
+
+function matchLaborMarket() {
+  return matchCollectiveLaborMarket();
 }
-function settleMigratedClaims(){for(const c of S.migratedClaims){if(c.wageDebt<=0)continue;const debtor=c.debtorAccount||farmAccount(),paid=log(debtor,"external",Math.min(c.wageDebt,balance(debtor)),"Quitação de crédito salarial de ex-morador");c.wageDebt-=paid}}
-function settleWages(){const farm=farmAccount(),p=S.policy;settleMigratedClaims();for(const h of S.households){if(h.wageDebt>0&&balance(farm)>0){const paid=log(farm,accountKey(h),Math.min(h.wageDebt,balance(farm)),"Quitação de salário atrasado");h.wageDebt-=paid;const tax=paid*p.incomeTax/100;log(accountKey(h),"treasury",tax,"Imposto sobre salário");if(S.currentMonthTracking)S.currentMonthTracking.wageSalaryTax+=tax;h.cashIncome+=paid-tax}}
- let totalDue=0,totalPaid=0;for(const h of S.households){const gross=h.jobs*S.wage;totalDue+=gross;if(gross<=0)continue;const paid=log(farm,accountKey(h),Math.min(gross,balance(farm)),"Salário mensal");h.wageDebt+=gross-paid;totalPaid+=paid;const tax=paid*p.incomeTax/100;log(accountKey(h),"treasury",tax,"Imposto sobre salário");if(S.currentMonthTracking)S.currentMonthTracking.wageSalaryTax+=tax;h.cashIncome+=paid-tax}
- const oldPaid=log(farm,"treasury",Math.min(S.employerTaxDebt,balance(farm)),"Quitação de encargo patronal atrasado");S.employerTaxDebt-=oldPaid;const charge=totalDue*p.employerTax/100,charged=log(farm,"treasury",charge,"Encargo patronal");S.employerTaxDebt+=charge-charged;S.monthFarmCosts+=totalDue+charge;S.farmWageDebt=totalWageDebt();if(S.farmWageDebt>0)feed("A fazenda acumulou "+money(S.farmWageDebt)+" em salários pendentes.");return{due:totalDue,paid:totalPaid,employerCharge:charged}}
-function buyInputsAndProduce(){const doy=S.day%YEAR;if(doy<150||doy>=210)return;const potential=employed()*0.35;if(potential<=0)return;const unitInput=USD_INPUT*S.fx,paid=log(farmAccount(),"external",potential*unitInput,"Insumos agrícolas importados");const financedUnits=unitInput>0?Math.min(potential,paid/unitInput):potential;if(paid>0){S.monthFarmCosts+=paid;if(S.currentMonthTracking)S.currentMonthTracking.farmInputs+=paid;}const yieldQty=financedUnits*S.weatherFactor;S.coffeeStock+=yieldQty;S.productionThisSeason+=yieldQty;if(financedUnits+0.001<potential)feed("Produção limitada: faltou capital para comprar todos os insumos agrícolas.")}
-function sellCoffee(){if(S.coffeeStock<=0)return;const revenue=S.coffeeStock*S.usdCoffee*S.fx;log("external",farmAccount(),revenue,"Venda de café ao mercado externo");S.monthFarmRevenue+=revenue;if(S.currentMonthTracking)S.currentMonthTracking.farmRevenue+=revenue;S.coffeeSold+=S.coffeeStock;S.coffeeStock=0}
+
+function assignJobs() {
+  return matchCollectiveLaborMarket();
+}
+
+function monthlyContributionPerWorker() {
+  return (0.35 * 60 * (S.usdCoffee - USD_INPUT) * S.fx) / 12;
+}
+
+function updateEmploymentCapacity() {
+  runFirmPlanningPhase();
+}
+
+function farmAccount() {
+  return S.owner === "state" ? "stateFarm" : "privateFarm";
+}
+
+function farmLabel() {
+  return S.owner === "state" ? "Fazenda estatal" : "Fazenda privada";
+}
+
+function salaryCalc() {
+  const p = S.policy;
+  S.reservation = Math.max(0, S.externalWage - p.migrationCost / 12);
+  const ls = getLaborStats(), activeLF = Math.max(1, ls.laborForce);
+  const scarcity = clamp((S.jobsAvailable - activeLF) / Math.max(1, S.jobsAvailable), 0, 1), market = S.externalWage * (1 + 0.35 * scarcity);
+  if (S.owner === "state") S.wage = Math.max(p.publicWage, p.minimumWage);
+  else {
+    const housingCost = p.housing === "employer" ? HOUSING_VALUE : 0, sustainable = Math.max(0, monthlyContributionPerWorker() - housingCost) / Math.max(1, 1 + p.employerTax / 100);
+    S.wage = Math.min(market, sustainable);
+    S.wage = Math.max(p.minimumWage, S.wage);
+  }
+  S.commerceWage = Math.max(p.minimumWage, Math.round(S.wage * 0.95));
+  S.workshopWage = Math.max(p.minimumWage, Math.round(S.wage * 1.02));
+}
+
+function settleMigratedClaims() {
+  for (const c of S.migratedClaims) {
+    if (c.wageDebt <= 0) continue;
+    const debtor = c.debtorAccount || farmAccount(), paid = log(debtor, "external", Math.min(c.wageDebt, balance(debtor)), "Quitação de crédito salarial de ex-morador");
+    c.wageDebt -= paid;
+  }
+}
+
+function settleAllFirmWages(ctx = {}) {
+  const farm = farmAccount();
+  const p = S.policy;
+  settleMigratedClaims();
+
+  for (const h of S.households) {
+    if (h.wageDebt > 0 && balance(farm) > 0) {
+      const paid = log(farm, accountKey(h), Math.min(h.wageDebt, balance(farm)), `Quitação de salário atrasado (${nameOf(farm)} - Mês ${S.monthNumber})`);
+      h.wageDebt -= paid;
+      const tax = paid * p.incomeTax / 100;
+      log(accountKey(h), "treasury", tax, `Imposto sobre salário retido na fonte (${nameOf(farm)})`);
+      if (S.currentMonthTracking) S.currentMonthTracking.wageSalaryTax += tax;
+      h.cashIncome += paid - tax;
+    }
+  }
+
+  let totalDue = 0, totalPaid = 0;
+  for (const h of S.households) {
+    const gross = h.jobs * S.wage;
+    totalDue += gross;
+    if (gross <= 0) continue;
+    const paid = log(farm, accountKey(h), Math.min(gross, balance(farm)), `Salário mensal (${nameOf(farm)} - Mês ${S.monthNumber})`);
+    h.wageDebt += gross - paid;
+    totalPaid += paid;
+    const tax = paid * p.incomeTax / 100;
+    log(accountKey(h), "treasury", tax, `Imposto sobre salário retido na fonte (${nameOf(farm)})`);
+    if (S.currentMonthTracking) S.currentMonthTracking.wageSalaryTax += tax;
+    h.cashIncome += paid - tax;
+  }
+
+  const oldPaid = log(farm, "treasury", Math.min(S.employerTaxDebt, balance(farm)), `Quitação de encargo patronal atrasado (${nameOf(farm)})`);
+  S.employerTaxDebt -= oldPaid;
+  const charge = totalDue * p.employerTax / 100;
+  const charged = log(farm, "treasury", charge, `Encargo patronal sobre folha (${nameOf(farm)} - Mês ${S.monthNumber})`);
+  S.employerTaxDebt += charge - charged;
+  S.monthFarmCosts += totalDue + charge;
+  S.farmWageDebt = totalWageDebt();
+  if (S.farmWageDebt > 0) feed("A fazenda acumulou " + money(S.farmWageDebt) + " em salários pendentes.");
+  return { due: totalDue, paid: totalPaid, employerCharge: charged };
+}
+
+function settleWages() {
+  return settleAllFirmWages();
+}
+
+function runFirmProductionPhase(ctx = {}) {
+  if (!S.firms) return;
+  for (const f of S.firms) {
+    if (f.behavior && typeof f.behavior.produce === "function") {
+      f.behavior.produce(f, ctx);
+    }
+  }
+}
+
+function buyInputsAndProduce() {
+  runFirmProductionPhase({ day: S.day, fx: S.fx, weatherFactor: S.weatherFactor });
+}
+
+function runFirmCommercializationPhase(ctx = {}) {
+  if (!S.firms) return;
+  for (const f of S.firms) {
+    if (f.behavior && typeof f.behavior.market === "function") {
+      f.behavior.market(f, ctx);
+    }
+  }
+}
+
+function sellCoffee() {
+  const farmF = S.firms?.find(f => f.id === "farm");
+  if (farmF && farmF.behavior && typeof farmF.behavior.market === "function") {
+    farmF.behavior.market(farmF, { day: S.day });
+  } else {
+    runFirmCommercializationPhase({ day: S.day });
+  }
+}
+
+function runFirmSettlementPhase(ctx = {}) {
+  if (!S.firms || !S.firms.length) initFirms();
+  for (const f of S.firms) {
+    if (f.behavior && typeof f.behavior.settle === "function") {
+      f.behavior.settle(f, ctx);
+    }
+  }
+}
 function bankReserveFloor(){return totalDeposits()*0.2}
 function availableCredit(){return Math.max(0,balance("bank")-bankReserveFloor())}
 function borrowerRiskPremium(borrower){
@@ -496,11 +1047,17 @@ function marketConsumption(){
   const desiredServiceUnits=surplus>150?clamp((surplus*0.10)/Math.max(1,S.servicePrice||180),0,persons*0.4):0;
   return{h,essential,desired:essential+discretionaryFood,desiredServiceUnits,affordable:0,bought:0,serviceBought:0};
  });
- const demand=plans.reduce((n,p)=>n+p.desired,0),targetStock=demand*1.1,need=Math.max(0,targetStock-S.marketStock),importUnitCost=USD_IMPORT*S.fx,importCost=need*importUnitCost;
- if(importCost>balance("commerce")){const short=importCost-balance("commerce");issueLoan("commerce",short,"capital de giro para importação de alimentos")}
- const paidImport=log("commerce","external",importCost,"Importação de cesta básica");
- if(S.currentMonthTracking)S.currentMonthTracking.commerceImports+=paidImport;
- const imported=importUnitCost>0?paidImport/importUnitCost:0;S.marketStock+=imported;S.importedUnits=imported;S.marketFundingFailure=imported+0.001<need;
+ const demand=plans.reduce((n,p)=>n+p.desired,0);
+ const commFirm=S.firms?.find(f=>f.id==="commerce");
+ if(commFirm&&commFirm.behavior&&typeof commFirm.behavior.produce==="function"){
+  commFirm.behavior.produce(commFirm,{demand,plans});
+ }else{
+  const targetStock=demand*1.1,need=Math.max(0,targetStock-S.marketStock),importUnitCost=USD_IMPORT*S.fx,importCost=need*importUnitCost;
+  if(importCost>balance("commerce")){const short=importCost-balance("commerce");issueLoan("commerce",short,"capital de giro para importação de alimentos")}
+  const paidImport=log("commerce","external",importCost,"Importação de cesta básica");
+  if(S.currentMonthTracking)S.currentMonthTracking.commerceImports+=paidImport;
+  const imported=importUnitCost>0?paidImport/importUnitCost:0;S.marketStock+=imported;S.importedUnits=imported;S.marketFundingFailure=imported+0.001<need;
+ }
  let bankLiquidity=balance("bank");
  for(const p of plans){
   const required=Math.max(0,p.desired*S.marketPrice-p.h.cash);
@@ -510,27 +1067,44 @@ function marketConsumption(){
   }
  }
  for(const p of plans)p.affordable=Math.min(p.desired,p.h.cash/S.marketPrice);
- const totalAffordable=plans.reduce((n,p)=>n+p.affordable,0),available=S.marketStock,soldTotal=Math.min(totalAffordable,available);
- for(const p of plans){
-  p.bought=totalAffordable>0?soldTotal*(p.affordable/totalAffordable):0;
-  const paid=p.bought*S.marketPrice;
-  if(paid>0){log(accountKey(p.h),"commerce",paid,"Compra de cesta básica (LES essencial/discricionário)");S.marketStock-=p.bought}
-  p.h.shortageUnits=Math.max(0,p.essential-p.bought);
+ let soldTotal=0;
+ if(commFirm&&commFirm.behavior&&typeof commFirm.behavior.market==="function"){
+  const mRes=commFirm.behavior.market(commFirm,{plans});
+  soldTotal=mRes.soldTotal||0;
+ }else{
+  const totalAffordable=plans.reduce((n,p)=>n+p.affordable,0),available=S.marketStock;
+  soldTotal=Math.min(totalAffordable,available);
+  for(const p of plans){
+   p.bought=totalAffordable>0?soldTotal*(p.affordable/totalAffordable):0;
+   const paid=p.bought*S.marketPrice;
+   if(paid>0){log(accountKey(p.h),"commerce",paid,"Compra de cesta básica (LES essencial/discricionário)");S.marketStock-=p.bought}
+   p.h.shortageUnits=Math.max(0,p.essential-p.bought);
+  }
  }
  let serviceConsumptionVal=0;
  const sPrice=S.servicePrice||180;
- for(const p of plans){
-  if(p.h.shortageUnits<=0.01&&p.desiredServiceUnits>0.01){
-   const minReserve=p.essential*S.marketPrice*0.5;
-   const spendable=Math.max(0,p.h.cash-minReserve);
-   const sCost=Math.min(spendable,p.desiredServiceUnits*sPrice);
-   if(sCost>=5){
-    const paidS=log(accountKey(p.h),"workshop",sCost,"Serviços locais e reparos domiciliares (LES)");
-    p.serviceBought=paidS/sPrice;
-    serviceConsumptionVal+=paidS;
-    if(S.currentMonthTracking)S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+paidS;
+ const wsFirm=S.firms?.find(f=>f.id==="workshop");
+ if(wsFirm&&wsFirm.behavior&&typeof wsFirm.behavior.market==="function"){
+  const wsRes=wsFirm.behavior.market(wsFirm,{plans,servicePrice:sPrice});
+  serviceConsumptionVal=wsRes.serviceConsumptionVal||0;
+ }else{
+  for(const p of plans){
+   if(p.h.shortageUnits<=0.01&&p.desiredServiceUnits>0.01){
+    const minReserve=p.essential*S.marketPrice*0.5;
+    const spendable=Math.max(0,p.h.cash-minReserve);
+    const sCost=Math.min(spendable,p.desiredServiceUnits*sPrice);
+    if(sCost>=5){
+     const paidS=log(accountKey(p.h),"workshop",sCost,"Serviços locais e reparos domiciliares (LES)");
+     p.serviceBought=paidS/sPrice;
+     serviceConsumptionVal+=paidS;
+     if(S.currentMonthTracking)S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+paidS;
+    }
    }
   }
+ }
+ const bakeryFirm=S.firms?.find(f=>f.id==="bakery"&&f.status==="active");
+ if(bakeryFirm&&bakeryFirm.behavior&&typeof bakeryFirm.behavior.market==="function"){
+  bakeryFirm.behavior.market(bakeryFirm,{plans});
  }
  S.lastShortageUnits=plans.reduce((n,p)=>n+p.h.shortageUnits,0);
  S.lastShortage=S.lastShortageUnits*S.marketPrice;
@@ -543,8 +1117,12 @@ function marketConsumption(){
 }
 function housing(){const mode=S.policy.housing;for(const h of S.households){if(h.adults+h.children===0)continue;if(mode==="employer"&&h.jobs>0){const paid=log(farmAccount(),"landlord",HOUSING_VALUE,"Moradia fornecida pelo empregador");S.monthFarmCosts+=paid;if(S.currentMonthTracking)S.currentMonthTracking.farmHousing+=paid;h.housingBenefit=paid>=HOUSING_VALUE?HOUSING_VALUE:0}else if(mode==="state"&&h.jobs>0){const paid=log("treasury","landlord",HOUSING_VALUE,"Moradia social");if(S.currentMonthTracking)S.currentMonthTracking.socialHousing+=paid;h.housingBenefit=paid>=HOUSING_VALUE?HOUSING_VALUE:0}else if(mode==="rented"){const due=300+h.rentDebt,paid=log(accountKey(h),"landlord",due,"Aluguel e quitação de atraso");h.housingBenefit=0;h.rentDebt=due-paid}else h.housingBenefit=0}}
 function settleProfitTax(){
- const fAcc=farmAccount();
  const farmFirm=S.firms?.find(f=>f.id==="farm");
+ if(farmFirm&&farmFirm.behavior&&typeof farmFirm.behavior.settle==="function"){
+  farmFirm.behavior.settle(farmFirm,{policy:S.policy,monthNumber:S.monthNumber});
+  return;
+ }
+ const fAcc=farmAccount();
  const farmInterestPaid=S.lastLoanSettlement?.byBorrower?.[fAcc]?.interestPaid||0;
  const farmCapital=farmFirm?farmFirm.capitalStock:(Math.max(0,(S.baseJobsAvailable||8)-8)*8000+40000);
  const farmDepreciation=(S.monthFarmRevenue>0||S.monthFarmCosts>0)?round2(farmCapital*(farmFirm?.depreciationRate||0.0025)):0;
@@ -776,25 +1354,19 @@ function processHarrisTodaroMigration(){
  return {uLocal,uExt,deltaU,emigrated,immigrated,realWageLocal,realWageExt};
 }
 function checkFirmEntryAndExit(force=false){
- if(!S.extraFirms)S.extraFirms=[];
- const hasBakery=S.extraFirms.some(f=>f.id==="bakery");
+ const hasBakery=(S.firms||[]).some(f=>f.id==="bakery");
  const sustainedShortage=S.lastShortageUnits>0.2||S.commerceEmptyMonths>0;
  const highMarkup=S.baseMarkup>=0.30;
  if(force||(!hasBakery&&(sustainedShortage||(S.monthNumber>=3&&highMarkup)))){
   const entryCapital=10000;
   S.accounts["bakery"]=0;
   log("external","bakery",entryCapital,"Capitalização inicial de nova firma: Padaria e Empório");
-  const newFirm={
-   id:"bakery",
-   name:"Padaria e Empório do Vilarejo",
-   sector:"retail",
+  const newFirm=createFirm("bakery", "Padaria e Empório do Vilarejo", "retail", "bakery", {
    sectorLabel:"Comércio Alimentar Secundário",
    ownership:{treasury:0.0,private:1.0},
    operator:"private",
    governanceLabel:"Privada",
    contract:{type:"private_license",terms:"Alvará comercial para panificação e mantimentos"},
-   account:"bakery",
-   cash:balance("bakery"),
    capitalStock:entryCapital,
    depreciationRate:0.0025,
    baseCapacity:2,
@@ -802,17 +1374,9 @@ function checkFirmEntryAndExit(force=false){
    activeWorkers:1,
    offeredWage:S.policy.minimumWage,
    productivityFactor:S?.urbanInfra?.tfpFactor||1.0,
-   revenue:0,
-   costs:0,
-   profit:0,
-   loans:0,
-   taxDebt:0,
-   wageDebt:0,
-   payables:{wages:0,taxes:0},
    inventory:{name:"Pães e mantimentos",unit:"unid",quantity:20,unitValue:80},
    status:"active"
-  };
-  S.extraFirms.push(newFirm);
+  }, bakeryBehavior);
   if(!S.firms)S.firms=[];
   if(!S.firms.some(f=>f.id==="bakery"))S.firms.push(newFirm);
   S.baseMarkup=0.25;
@@ -854,10 +1418,10 @@ function liquidateInsolventFirm(firmId){
  if(taxDebt>0&&balance(acc)>0){
   const payTax=Math.min(balance(acc),taxDebt);
   taxSettled=log(acc,"treasury",payTax,"Liquidação concursal: Crédito fiscal prioritário");
+  firm.taxDebt=Math.max(0,(firm.taxDebt||0)-taxSettled);
   if(firm.id==="farm"){S.farmTaxDebt=Math.max(0,S.farmTaxDebt-taxSettled);S.employerTaxDebt=Math.max(0,S.employerTaxDebt-(taxDebt-S.farmTaxDebt));}
   else if(firm.id==="commerce"){S.commerceTaxDebt=Math.max(0,(S.commerceTaxDebt||0)-taxSettled);}
   else if(firm.id==="workshop"){S.workshopTaxDebt=Math.max(0,(S.workshopTaxDebt||0)-taxSettled);}
-  else if(firm.id==="bakery"){const ef=S.extraFirms.find(e=>e.id==="bakery");if(ef)ef.taxDebt=Math.max(0,ef.taxDebt-taxSettled);}
  }
 
  let bankSettled=0;
@@ -911,9 +1475,6 @@ function liquidateInsolventFirm(firmId){
  }
 
  firm.status="liquidated";
- if(S.extraFirms&&S.extraFirms.some(e=>e.id===firmId)){
-  S.extraFirms=S.extraFirms.filter(e=>e.id!==firmId);
- }
  if(S.firms&&S.firms.some(f=>f.id===firmId)){
   S.firms=S.firms.filter(f=>f.id!==firmId);
  }
@@ -946,27 +1507,58 @@ function commerceLoanWriteDown(fraction){
  return totalWrittenOff;
 }
 function resolveCommerceFailure(choice){if(choice==="state"){const paid=log("treasury","commerce",10000,"Socorro estatal para recomposição do capital de giro");if(paid<9999){feed("Tesouro sem recursos suficientes para o socorro integral.");return false}feed("Tesouro recapitalizou o comércio em R$ 10.000.")}else{log("external","commerce",10000,"Entrada de novo comerciante e capitalização");commerceLoanWriteDown(0.5);S.commerceMarkupExtra=0.10;S.commerceMarkupMonths=6;feed("Novo comerciante assumiu o ponto, recebeu deságio de 50% na dívida bancária e elevou o markup em 10 p.p. por seis meses.")}S.commerceEmptyMonths=0;S.marketFundingFailure=false;S.event=null;render();return true}
-function closeMonth(){const p=S.policy;Object.assign(p,S.pending);S.pending={};S.usdCoffee=clamp(S.usdCoffee*(1+(rand()-.5)*.12+.04*(300-S.usdCoffee)/300),150,600);if(p.fxMode==="fixed")S.fx=5;else{const shock=(rand()-.5)*.08,meanReversion=.08*(5-S.fx)/5,rateEffect=-.008*(p.baseRate-1.5);S.fx=clamp(S.fx*(1+shock+meanReversion+rateEffect),3.5,7.5)}S.externalWage*=1+(rand()-.5)*.04;salaryCalc();updateEmploymentCapacity();matchLaborMarket();const stateSupport=supportStateFarm();if(stateSupport>0)feed("Tesouro transferiu "+money(stateSupport)+" para a fazenda estatal.");const wage=settleWages();housing();updateMarketPrice();marketConsumption();settleBankLoans();payDepositInterest();settleProfitTax();distributeFirmDividends();settleConcessionOutorga();updateApproval();
+function closeMonth(){
+ const p=S.policy;Object.assign(p,S.pending);S.pending={};
+ S.usdCoffee=clamp(S.usdCoffee*(1+(rand()-.5)*.12+.04*(300-S.usdCoffee)/300),150,600);
+ if(p.fxMode==="fixed")S.fx=5;
+ else{const shock=(rand()-.5)*.08,meanReversion=.08*(5-S.fx)/5,rateEffect=-.008*(p.baseRate-1.5);S.fx=clamp(S.fx*(1+shock+meanReversion+rateEffect),3.5,7.5)}
+ S.externalWage*=1+(rand()-.5)*.04;
+
+ // 1. Ciclo de Planejamento Operacional e Mercado Coletivo de Trabalho
+ runFirmPlanningPhase({ day: S.day, month: S.monthNumber, policy: p });
+ matchCollectiveLaborMarket();
+
+ const stateSupport=supportStateFarm();
+ if(stateSupport>0)feed("Tesouro transferiu "+money(stateSupport)+" para a fazenda estatal.");
+
+ // 2. Liquidação Salarial Centralizada
+ const wage=settleAllFirmWages();
+ housing();
+ updateMarketPrice();
+
+ // 3. Comercialização e Consumo
+ marketConsumption();
+
+ // 4. Liquidação Bancária, Apuração de Resultados e Tributos
+ settleBankLoans();
+ payDepositInterest();
+ const settlementCtx={ policy: p, monthNumber: S.monthNumber };
+ runFirmSettlementPhase(settlementCtx);
+ distributeFirmDividends();
+ settleConcessionOutorga();
+ updateApproval();
+
  const lsNow=getLaborStats();
  S.unemploymentHistory=(S.unemploymentHistory||[]).concat([lsNow.unemploymentRate]).slice(-12);
  if(balance("landlord")>=200){const paid=log("landlord","workshop",200,"Manutenção urbana e predial");if(S.currentMonthTracking)S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+paid;}
  if(balance("workshop")>=100){const paid=log("workshop","commerce",100,"Peças e insumos do comércio local");if(S.currentMonthTracking)S.currentMonthTracking.workshopCosts=(S.currentMonthTracking.workshopCosts||0)+paid;}
  const tr=S.currentMonthTracking||{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,workshopRevenue:0,workshopCosts:0,dividendsReceived:0,concessionOutorga:0};
  const commFirm=S.firms?.find(f=>f.id==="commerce");
- const commInterestPaid=S.lastLoanSettlement?.byBorrower?.commerce?.interestPaid||0;
- const commDepreciation=(S.lastFoodConsumption>0||tr.commerceImports>0)?round2((commFirm?.capitalStock||15000)*(commFirm?.depreciationRate||0.0025)):0;
- if(commFirm&&commDepreciation>0){commFirm.capitalStock=round2(Math.max(0,commFirm.capitalStock-commDepreciation));}
- const commGrossMargin=(S.lastFoodConsumption||0)-tr.commerceImports;
+ const commInterestPaid=commFirm?.interestPaid!==undefined?commFirm.interestPaid:(S.lastLoanSettlement?.byBorrower?.commerce?.interestPaid||0);
+ const commDepreciation=commFirm?.depreciation!==undefined?commFirm.depreciation:((commFirm?.costs!==undefined&&commFirm.costs>0)?round2((commFirm?.capitalStock||15000)*(commFirm?.depreciationRate||0.0025)):((S.lastFoodConsumption>0||tr.commerceImports>0)?round2((commFirm?.capitalStock||15000)*(commFirm?.depreciationRate||0.0025)):0));
+ const commGrossMargin=commFirm?.ebitda!==undefined?commFirm.ebitda:((S.lastFoodConsumption||0)-tr.commerceImports);
  const commEBIT=commGrossMargin-commDepreciation;
- const commLAIR=commEBIT-commInterestPaid;
+ const commLAIR=commFirm?.profit!==undefined?commFirm.profit:(commEBIT-commInterestPaid);
  if(commFirm){commFirm.revenue=S.lastFoodConsumption||0;commFirm.costs=tr.commerceImports+commDepreciation+commInterestPaid;commFirm.profit=commLAIR;}
  const wsFirm=S.firms?.find(f=>f.id==="workshop");
- const wsInterestPaid=S.lastLoanSettlement?.byBorrower?.workshop?.interestPaid||0;
- const wsDepreciation=tr.workshopRevenue>0?round2((wsFirm?.capitalStock||12000)*(wsFirm?.depreciationRate||0.0025)):0;
- if(wsFirm&&wsDepreciation>0){wsFirm.capitalStock=round2(Math.max(0,wsFirm.capitalStock-wsDepreciation));}
- const wsRev=tr.workshopRevenue||0,wsCosts=tr.workshopCosts||0,wsEBITDA=wsRev-wsCosts,wsEBIT=wsEBITDA-wsDepreciation,wsLAIR=wsEBIT-wsInterestPaid,wsProfit=Math.max(0,wsLAIR);
- let wsProfitTaxPaid=0;
- if(wsProfit>0&&balance("workshop")>0){const wsDue=wsProfit*p.profitTax/100+(S.workshopTaxDebt||0);wsProfitTaxPaid=log("workshop","treasury",Math.min(wsDue,balance("workshop")),"Imposto sobre lucro da oficina");S.workshopTaxDebt=wsDue-wsProfitTaxPaid;}
+ const wsInterestPaid=wsFirm?.interestPaid!==undefined?wsFirm.interestPaid:(S.lastLoanSettlement?.byBorrower?.workshop?.interestPaid||0);
+ const wsDepreciation=wsFirm?.depreciation!==undefined?wsFirm.depreciation:((wsFirm?.costs!==undefined&&wsFirm.costs>0)?round2((wsFirm?.capitalStock||12000)*(wsFirm?.depreciationRate||0.0025)):(tr.workshopRevenue>0?round2((wsFirm?.capitalStock||12000)*(wsFirm?.depreciationRate||0.0025)):0));
+ const wsRev=wsFirm?.revenue!==undefined&&wsFirm.revenue>0?wsFirm.revenue:(tr.workshopRevenue||0);
+ const wsCosts=tr.workshopCosts||0;
+ const wsEBITDA=wsFirm?.ebitda!==undefined?wsFirm.ebitda:(wsRev-wsCosts);
+ const wsEBIT=wsEBITDA-wsDepreciation;
+ const wsLAIR=wsFirm?.profit!==undefined?wsFirm.profit:(wsEBIT-wsInterestPaid);
+ const wsProfitTaxPaid=settlementCtx.wsProfitTaxPaid||0;
  if(wsFirm){wsFirm.revenue=wsRev;wsFirm.costs=wsCosts+wsDepreciation+wsInterestPaid;wsFirm.profit=wsLAIR-wsProfitTaxPaid;}
  const bankStats=getBankPortfolioStats();
  const farmValObj=calculateFirmValuation("farm");
@@ -979,6 +1571,19 @@ function closeMonth(){const p=S.policy;Object.assign(p,S.pending);S.pending={};S
   treasury:{salaryTax:tr.wageSalaryTax,employerTax:wage.employerCharge,profitTax:(S.lastProfitTax||0)+wsProfitTaxPaid,dividendsReceived:tr.dividendsReceived||0,concessionOutorga:tr.concessionOutorga||0,totalTaxRevenue:tr.wageSalaryTax+wage.employerCharge+(S.lastProfitTax||0)+wsProfitTaxPaid,assetSales:tr.assetSales,socialHousing:tr.socialHousing,publicWorks:tr.publicWorks,stateFarmSupport:tr.stateSupport,primaryResult:(tr.wageSalaryTax+wage.employerCharge+(S.lastProfitTax||0)+wsProfitTaxPaid+(tr.dividendsReceived||0)+(tr.concessionOutorga||0)+tr.assetSales)-(tr.socialHousing+tr.publicWorks+tr.stateSupport)}
  };
  S.lastDRE.firms={farm:S.lastDRE.farm,commerce:S.lastDRE.commerce,workshop:S.lastDRE.workshop};
+ for(const f of (S.firms||[])){
+  if(!S.lastDRE.firms[f.id]){
+   S.lastDRE.firms[f.id]={
+    revenue:f.revenue||0,
+    costs:f.costs||0,
+    grossMargin:f.ebitda||round2((f.revenue||0)-(f.costs||0)),
+    depreciation:f.depreciation||0,
+    interestPaid:f.interestPaid||0,
+    profitTax:f.taxPaid||0,
+    netProfit:f.profit||0
+   };
+  }
+ }
  S.lastBankCreditLosses=0;
  S.firms=getFirms();
  S.lastNationalAccounts=calculateNationalAccounts();
@@ -990,8 +1595,22 @@ function closeMonth(){const p=S.policy;Object.assign(p,S.pending);S.pending={};S
  if(S.farmInvestmentCooldown>0)S.farmInvestmentCooldown--;if(S.landlordInvestmentCooldown>0)S.landlordInvestmentCooldown--;autoInvestAtLowRates();depositHouseholdSavings();if(S.commerceMarkupMonths>0){S.commerceMarkupMonths--;if(S.commerceMarkupMonths===0)S.commerceMarkupExtra=0}
  if(S.marketStock<0.1&&S.marketFundingFailure&&S.lastShortageUnits>0.1&&balance("commerce")<1000)S.commerceEmptyMonths++;else S.commerceEmptyMonths=0;
  S.lastWage=wage;S.lastFlow={...S.monthFlow};S.monthFlow={in:0,internal:0,out:0};S.monthNumber++;const debt=totalWageDebt();if(debt>0&&debt>=Math.max(1,S.wage*Math.max(1,employed())*3))S.gameOver=S.owner==="state"?"Colapso fiscal: a fazenda estatal acumulou três folhas mensais de salários atrasados.":"Falência da fazenda privada: salários atrasados atingiram três folhas mensais.";if(approval()<15)S.gameOver="Revolta: aprovação popular abaixo de 15.";if(!S.households.length)S.gameOver="O vilarejo ficou vazio.";
- if(S.commerceEmptyMonths>=2&&!S.event&&!S.gameOver){S.event={title:"Falência do comércio local",text:"O comércio ficou sem estoque por dois meses consecutivos e não conseguiu financiar novas importações. Escolha uma solução para restabelecer o abastecimento.",options:[{label:"Socorro estatal: injetar R$ 10.000",run:()=>resolveCommerceFailure("state")},{label:"Novo comerciante: capital externo de R$ 10.000 e reestruturação da dívida",run:()=>resolveCommerceFailure("private")}]};feed("Crise institucional: comércio insolvente por dois meses consecutivos.");S.lastBalanceSheet = generateBalanceSheets();}
-function newGame(){S={seed:42,day:149,monthNumber:0,loanSeq:0,accounts:{treasury:0,stateFarm:0,privateFarm:0,commerce:0,workshop:0,landlord:0,bank:0},households:[{id:1,name:"Família Silva",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:2,name:"Família Rocha",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:3,name:"Ana",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:4,name:"Caio",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0}],owner:"state",farmOwnership:{treasury:1.0,private:0.0},concessionActive:false,lastDividends:{treasury:0,private:0,total:0},lastProjectNPV:null,lastNationalAccounts:null,lastFiscalReport:null,lots:10,baseJobsAvailable:8,jobsAvailable:8,sectorVacancies:{farm:8,commerce:1,workshop:1},totalJobsAvailable:10,housingCapacity:12,infrastructureCapacity:20,infrastructureStock:10000,urbanInfra:null,lastHarrisTodaro:null,extraFirms:[],baseMarkup:0.35,buildings:[],coffeeStock:0,productionThisSeason:0,coffeeSold:0,usdCoffee:300,fx:5,externalWage:2200,wage:1800,commerceWage:1710,workshopWage:1836,reservation:1540,weatherFactor:1,weatherEventDone:false,weatherDecisionDone:false,weatherProtection:false,marketStock:0,marketPrice:USD_IMPORT*5*(1+BASE_MARKUP),servicePrice:180,costOfLivingIndex:100,monthlyInflation:0,marketPressure:1,marketTargetPrice:USD_IMPORT*5*(1+BASE_MARKUP),lastShortage:0,lastShortageUnits:0,lastFoodConsumption:0,lastServiceConsumption:0,lastConsumption:0,lastDemandUnits:0,lastUnmetHouseholds:0,marketFundingFailure:false,importedUnits:0,commerceEmptyMonths:0,commerceMarkupExtra:0,commerceMarkupMonths:0,bankLoans:[],bankInterestIncome:0,bankAccruedInterest:0,lastDepositInterest:0,effectiveDepositRate:0,lastBankCreditLosses:0,cumulativeBankWriteDowns:0,cumulativeDebtorRelief:0,lastLoanSettlement:{byBorrower:{},totalInterestPaid:0,totalPrincipalPaid:0,totalAccruedInterest:0},farmInvestmentCooldown:0,landlordInvestmentCooldown:0,farmWageDebt:0,migratedClaims:[],assumedLiabilities:null,nextPayrollEstimate:0,cumulativeExternalIn:0,cumulativeExternalOut:0,cashAudit:null,lastDRE:null,workshopMaterials:5,workshopTaxDebt:0,commerceTaxDebt:0,unemploymentHistory:[0],currentMonthTracking:{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,workshopRevenue:0,workshopCosts:0,dividendsReceived:0,concessionOutorga:0},employerTaxDebt:0,farmTaxDebt:0,monthFarmRevenue:0,monthFarmCosts:0,lastFarmEBITDA:0,lastFarmDepreciation:0,lastFarmInterestPaid:0,lastFarmProfit:0,lastProfitTax:0,migrantCount:0,policy:{publicWage:1800,minimumWage:1500,incomeTax:10,employerTax:15,profitTax:20,dividendPayoutRatio:50,migrationCost:3000,monthlyStateSupport:5000,housing:"employer",fxMode:"floating",basketCost:220,baseRate:1.5},pending:{},monthFlow:{in:0,internal:0,out:0},lastFlow:{in:0,internal:0,out:0},lastWage:{due:0,paid:0,employerCharge:0},ledger:[],feed:[],event:null,gameOver:null};S.externalSector={id:"external",name:"Setor Externo",account:"external",sector:"external",patrimony:{assets:0,liabilities:0,netWorth:0},flow:{revenue:0,costs:0,netProfit:0}};
+  if(S.commerceEmptyMonths>=2&&!S.event&&!S.gameOver){S.event={title:"Falência do comércio local",text:"O comércio ficou sem estoque por dois meses consecutivos e não conseguiu financiar novas importações. Escolha uma solução para restabelecer o abastecimento.",options:[{label:"Socorro estatal: injetar R$ 10.000",run:()=>resolveCommerceFailure("state")},{label:"Novo comerciante: capital externo de R$ 10.000 e reestruturação da dívida",run:()=>resolveCommerceFailure("private")}]};feed("Crise institucional: comércio insolvente por dois meses consecutivos.");S.lastBalanceSheet = generateBalanceSheets();}
+}
+function newGame(){S={seed:42,day:149,monthNumber:0,loanSeq:0,accounts:{treasury:0,stateFarm:0,privateFarm:0,commerce:0,workshop:0,landlord:0,bank:0},households:[{id:1,name:"Família Silva",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:2,name:"Família Rocha",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:3,name:"Ana",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:4,name:"Caio",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0}],owner:"state",farmOwnership:{treasury:1.0,private:0.0},concessionActive:false,lastDividends:{treasury:0,private:0,total:0},lastProjectNPV:null,lastNationalAccounts:null,lastFiscalReport:null,lots:10,baseJobsAvailable:8,jobsAvailable:8,sectorVacancies:{farm:8,commerce:1,workshop:1},totalJobsAvailable:10,housingCapacity:12,infrastructureCapacity:20,infrastructureStock:10000,urbanInfra:null,lastHarrisTodaro:null,baseMarkup:0.35,buildings:[],coffeeStock:0,productionThisSeason:0,coffeeSold:0,usdCoffee:300,fx:5,externalWage:2200,wage:1800,commerceWage:1710,workshopWage:1836,reservation:1540,weatherFactor:1,weatherEventDone:false,weatherDecisionDone:false,weatherProtection:false,marketStock:0,marketPrice:USD_IMPORT*5*(1+BASE_MARKUP),servicePrice:180,costOfLivingIndex:100,monthlyInflation:0,marketPressure:1,marketTargetPrice:USD_IMPORT*5*(1+BASE_MARKUP),lastShortage:0,lastShortageUnits:0,lastFoodConsumption:0,lastServiceConsumption:0,lastConsumption:0,lastDemandUnits:0,lastUnmetHouseholds:0,marketFundingFailure:false,importedUnits:0,commerceEmptyMonths:0,commerceMarkupExtra:0,commerceMarkupMonths:0,bankLoans:[],bankInterestIncome:0,bankAccruedInterest:0,lastDepositInterest:0,effectiveDepositRate:0,lastBankCreditLosses:0,cumulativeBankWriteDowns:0,cumulativeDebtorRelief:0,lastLoanSettlement:{byBorrower:{},totalInterestPaid:0,totalPrincipalPaid:0,totalAccruedInterest:0},farmInvestmentCooldown:0,landlordInvestmentCooldown:0,farmWageDebt:0,migratedClaims:[],assumedLiabilities:null,nextPayrollEstimate:0,cumulativeExternalIn:0,cumulativeExternalOut:0,cashAudit:null,lastDRE:null,workshopMaterials:5,workshopTaxDebt:0,commerceTaxDebt:0,unemploymentHistory:[0],currentMonthTracking:{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,workshopRevenue:0,workshopCosts:0,dividendsReceived:0,concessionOutorga:0},employerTaxDebt:0,farmTaxDebt:0,monthFarmRevenue:0,monthFarmCosts:0,lastFarmEBITDA:0,lastFarmDepreciation:0,lastFarmInterestPaid:0,lastFarmProfit:0,lastProfitTax:0,migrantCount:0,policy:{publicWage:1800,minimumWage:1500,incomeTax:10,employerTax:15,profitTax:20,dividendPayoutRatio:50,migrationCost:3000,monthlyStateSupport:5000,housing:"employer",fxMode:"floating",basketCost:220,baseRate:1.5},pending:{},monthFlow:{in:0,internal:0,out:0},lastFlow:{in:0,internal:0,out:0},lastWage:{due:0,paid:0,employerCharge:0},ledger:[],feed:[],event:null,gameOver:null};S.externalSector={id:"external",name:"Setor Externo",account:"external",sector:"external",patrimony:{assets:0,liabilities:0,netWorth:0},flow:{revenue:0,costs:0,netProfit:0}};
+ S.firms=[];
+ Object.defineProperty(S, "extraFirms", {
+  get() { return (S.firms||[]).filter(f => f.id !== "farm" && f.id !== "commerce" && f.id !== "workshop"); },
+  set(val) {
+   if(Array.isArray(val)) {
+    for(const ef of val){
+     if(!S.firms.some(f=>f.id===ef.id)) S.firms.push(ef);
+    }
+   }
+  },
+  configurable: true,
+  enumerable: true
+ });
  log("external","stateFarm",50000,"Capitalização inicial e capital de giro da fazenda estatal");log("external","commerce",20000,"Capital de giro inicial do comércio");log("external","workshop",10000,"Capital de giro inicial da oficina de obras e serviços");initFirms();salaryCalc();updateEmploymentCapacity();matchLaborMarket();updateUrbanInfrastructure();syncFirmState();auditCashConservation();render()}
 const controls=[["publicWage","Salário público (R$/mês)",1000,4000,100,v=>money(v)],["minimumWage","Salário mínimo legal",1000,3500,100,v=>money(v)],["incomeTax","Imposto sobre salário",0,30,1,v=>v+"%"],["employerTax","Encargo patronal",0,40,1,v=>v+"%"],["profitTax","Imposto sobre lucro",0,50,1,v=>v+"%"],["dividendPayoutRatio","Taxa de dividendos societários",20,80,5,v=>v+"%"],["migrationCost","Custo único de migração (R$)",0,6000,250,v=>money(v)],["monthlyStateSupport","Limite mensal de aporte do Tesouro à fazenda",0,12000,500,v=>money(v)],["basketCost","Cesta básica de referência por adulto",100,500,10,v=>money(v)],["baseRate","Juros básicos mensais",0.5,3,0.25,v=>v.toFixed(2)+"% a.m."]];
 function setPolicy(k,v,format){S.pending[k]=v;feed("Política "+k+" alterada para "+format(v)+"; vigência no próximo mês.")}
@@ -1246,6 +1865,176 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  newGame();simulateMonths(12,true);const bs88=generateBalanceSheets();test("8.8 Simulação macroeconômica de 12 meses com conservação SFC estrita",()=>({pass:bs88.audit.allPass&&bs88.audit.cashOk&&Math.abs(bs88.audit.cashAudit.difference)<0.01,months:12,allPass:bs88.audit.allPass,difference:bs88.audit.cashAudit.difference}));
  newGame();simulateMonths(24,true);const bs89=generateBalanceSheets();test("8.9 Simulação macroeconômica de 24 meses com conservação SFC estrita",()=>({pass:bs89.audit.allPass&&bs89.audit.cashOk&&Math.abs(bs89.audit.cashAudit.difference)<0.01,months:24,allPass:bs89.audit.allPass,difference:bs89.audit.cashAudit.difference}));
  newGame();simulateMonths(60,true);const bs810=generateBalanceSheets();test("8.10 Simulação macroeconômica de 60 meses com conservação SFC estrita",()=>({pass:bs810.audit.allPass&&bs810.audit.cashOk&&Math.abs(bs810.audit.cashAudit.difference)<0.01,months:60,allPass:bs810.audit.allPass,difference:bs810.audit.cashAudit.difference}));
+
+ // ETAPA B - CICLO OPERACIONAL COMUM E MERCADO DE TRABALHO COLETIVO
+ newGame();
+ const firms811=S.firms;
+ const allHaveLifecycle=firms811.every(f=>f.behavior&&typeof f.behavior.plan==="function"&&typeof f.behavior.produce==="function"&&typeof f.behavior.market==="function"&&typeof f.behavior.settle==="function"&&typeof f.behavior.sync==="function");
+ runFirmPlanningPhase();
+ const vacanciesPlanned=S.firms.every(f=>typeof f.openVacancies==="number");
+ const ls811=matchCollectiveLaborMarket();
+ const workersAssigned=S.firms.every(f=>typeof f.activeWorkers==="number");
+ runFirmProductionPhase({day:160,fx:5,weatherFactor:1});
+ runFirmCommercializationPhase({day:160});
+ const settleCtx811={policy:S.policy,monthNumber:1};
+ runFirmSettlementPhase(settleCtx811);
+ const bs811=generateBalanceSheets();
+ test("8.11 Ciclo Operacional Comum: Planejamento, Produção, Mercado e Liquidação Centralizada (Etapa B)",()=>({pass:allHaveLifecycle&&vacanciesPlanned&&workersAssigned&&ls811.occupied>0&&bs811.audit.allPass&&auditCashConservation().ok,allHaveLifecycle,vacanciesPlanned,workersAssigned,occupied:ls811.occupied,balanceSheetOk:bs811.audit.allPass,cashOk:auditCashConservation().ok}));
+
+ newGame();
+ const dynamicFirm=createFirm("coop","Cooperativa de Artesãos","crafts","workshop",{status:"active",baseCapacity:1,openVacancies:1,offeredWage:1600,capitalStock:5000,depreciationRate:0.0025,role:"secondary"},{plan(f){f.openVacancies=1;},produce(){},market(){},settle(f){f.profit=100;},sync(f){}});
+ S.firms.push(dynamicFirm);
+ runFirmPlanningPhase();
+ matchCollectiveLaborMarket();
+ const hasDynamicWorkers=typeof dynamicFirm.activeWorkers==="number";
+ const bs812=generateBalanceSheets();
+ test("8.12 Mercado de Trabalho Coletivo e Dinâmico sem viés setorial (Etapa B)",()=>({pass:hasDynamicWorkers&&S.firms.length===4&&bs812.audit.allPass&&auditCashConservation().ok,firmCount:S.firms.length,dynamicWorkers:dynamicFirm.activeWorkers,balanceSheetOk:bs812.audit.allPass,cashOk:auditCashConservation().ok}));
+
+ // ETAPA C - MIGRAÇÃO DE FAZENDA E COMÉRCIO PARA O MOTOR GENÉRICO FIRM
+ newGame();
+ const farmFirm813=S.firms.find(f=>f.id==="farm");
+ S.day=160;
+ runFirmPlanningPhase();
+ matchCollectiveLaborMarket();
+ const prodRes813=farmFirm813.behavior.produce(farmFirm813,{day:S.day,fx:S.fx,weatherFactor:S.weatherFactor});
+ const stockAfterProduce=farmFirm813.inventory.quantity;
+ const cashBeforeMarket=balance(farmFirm813.account);
+ const mktRevenue813=farmFirm813.behavior.market(farmFirm813,{day:S.day});
+ const cashAfterMarket=balance(farmFirm813.account);
+ const settleCtx813={policy:S.policy,monthNumber:S.monthNumber};
+ farmFirm813.behavior.settle(farmFirm813,settleCtx813);
+ const bs813=generateBalanceSheets();
+ test("8.13 Migração da Fazenda para Firm e Ciclo Produtivo/Comercial Integrado (Etapa C)",()=>({
+  pass:farmFirm813&&farmFirm813.behavior&&typeof farmFirm813.behavior.produce==="function"&&
+       prodRes813.yieldQty>0&&stockAfterProduce>0&&
+       mktRevenue813>0&&cashAfterMarket-cashBeforeMarket===mktRevenue813&&
+       farmFirm813.inventory.quantity===0&&farmFirm813.revenue===mktRevenue813&&
+       bs813.audit.allPass&&auditCashConservation().ok,
+  yieldQty:prodRes813.yieldQty,
+  stockAfterProduce,
+  mktRevenue:mktRevenue813,
+  cashGained:cashAfterMarket-cashBeforeMarket,
+  stockFinal:farmFirm813.inventory.quantity,
+  balanceSheetOk:bs813.audit.allPass,
+  cashOk:auditCashConservation().ok
+ }));
+
+ newGame();
+ const commFirm814=S.firms.find(f=>f.id==="commerce");
+ runFirmPlanningPhase();
+ matchCollectiveLaborMarket();
+ settleAllFirmWages();
+ housing();
+ updateMarketPrice();
+ const unitNeed814=S.policy.basketCost/(USD_IMPORT*5*(1+BASE_MARKUP));
+ const plans814=S.households.map(h=>({
+  h,
+  essential:(h.adults+h.children*0.7)*unitNeed814,
+  desired:(h.adults+h.children*0.7)*unitNeed814,
+  desiredServiceUnits:0,
+  affordable:0,
+  bought:0,
+  serviceBought:0
+ }));
+ const demand814=plans814.reduce((n,p)=>n+p.desired,0);
+ const prodRes814=commFirm814.behavior.produce(commFirm814,{demand:demand814,plans:plans814});
+ const stockAfterProduce814=commFirm814.inventory.quantity;
+ for(const p of plans814)p.affordable=Math.min(p.desired,p.h.cash/S.marketPrice);
+ const commCashBeforeMkt=balance("commerce");
+ const mktRes814=commFirm814.behavior.market(commFirm814,{plans:plans814});
+ const commCashAfterMkt=balance("commerce");
+ const settleCtx814={policy:S.policy,monthNumber:S.monthNumber};
+ commFirm814.behavior.settle(commFirm814,settleCtx814);
+ const bs814=generateBalanceSheets();
+ test("8.14 Migração do Comércio para Firm e Abastecimento LES Integrado (Etapa C)",()=>({
+  pass:commFirm814&&commFirm814.behavior&&typeof commFirm814.behavior.produce==="function"&&
+       prodRes814.imported>0&&stockAfterProduce814>0&&
+       mktRes814.soldTotal>0&&commCashAfterMkt>commCashBeforeMkt&&
+       Math.abs(commFirm814.inventory.quantity-S.marketStock)<0.0001&&
+       commFirm814.revenue===mktRes814.salesRevenue&&
+       bs814.audit.allPass&&auditCashConservation().ok,
+  imported:prodRes814.imported,
+  stockAfterProduce:stockAfterProduce814,
+  soldTotal:mktRes814.soldTotal,
+  salesRevenue:mktRes814.salesRevenue,
+  cashGained:commCashAfterMkt-commCashBeforeMkt,
+  stockFinal:commFirm814.inventory.quantity,
+  balanceSheetOk:bs814.audit.allPass,
+  cashOk:auditCashConservation().ok
+ }));
+
+ // ETAPA D - MIGRAÇÃO DA OFICINA E INTEGRAÇÃO DEFINITIVA DA PADARIA
+ newGame();
+ const wsFirm815=S.firms.find(f=>f.id==="workshop");
+ runFirmPlanningPhase();
+ matchCollectiveLaborMarket();
+ const prodRes815=wsFirm815.behavior.produce(wsFirm815);
+ const plans815=S.households.map(h=>({
+  h,
+  essential:2,
+  desired:2,
+  desiredServiceUnits:0.5,
+  affordable:2,
+  bought:2,
+  serviceBought:0
+ }));
+ S.households.forEach(h=>{log("external",accountKey(h),2000,"Injeção de liquidez teste serviços");});
+ const mktRes815=wsFirm815.behavior.market(wsFirm815,{plans:plans815,servicePrice:180});
+ const settleCtx815={policy:S.policy,monthNumber:S.monthNumber};
+ wsFirm815.behavior.settle(wsFirm815,settleCtx815);
+ const bs815=generateBalanceSheets();
+ test("8.15 Migração da Oficina para Firm e Prestação de Serviços (Etapa D)",()=>({
+  pass:wsFirm815&&wsFirm815.behavior&&typeof wsFirm815.behavior.produce==="function"&&
+       prodRes815.capacity>0&&
+       mktRes815.serviceConsumptionVal>0&&wsFirm815.revenue>=mktRes815.serviceConsumptionVal&&
+       wsFirm815.ebitda!==undefined&&wsFirm815.profit!==undefined&&
+       bs815.audit.allPass&&auditCashConservation().ok,
+  capacity:prodRes815.capacity,
+  serviceRevenue:mktRes815.serviceConsumptionVal,
+  firmRevenue:wsFirm815.revenue,
+  ebitda:wsFirm815.ebitda,
+  profit:wsFirm815.profit,
+  balanceSheetOk:bs815.audit.allPass,
+  cashOk:auditCashConservation().ok
+ }));
+
+ newGame();
+ const entryDone816=checkFirmEntryAndExit(true);
+ const bakeryFirm816=S.firms.find(f=>f.id==="bakery");
+ runFirmPlanningPhase();
+ matchCollectiveLaborMarket();
+ const prodRes816=bakeryFirm816.behavior.produce(bakeryFirm816);
+ const plans816=S.households.map(h=>({
+  h,
+  essential:1,
+  desired:1,
+  desiredServiceUnits:0,
+  affordable:1,
+  bought:1,
+  serviceBought:0
+ }));
+ S.households.forEach(h=>{log("external",accountKey(h),1000,"Injeção de liquidez teste panificação");});
+ const mktRes816=bakeryFirm816.behavior.market(bakeryFirm816,{plans:plans816});
+ const settleCtx816={policy:S.policy,monthNumber:S.monthNumber};
+ bakeryFirm816.behavior.settle(bakeryFirm816,settleCtx816);
+ closeMonth();
+ const bs816=generateBalanceSheets();
+ test("8.16 Integração da Padaria como Atividade Permanente no Motor Genérico (Etapa D)",()=>({
+  pass:entryDone816&&bakeryFirm816&&bakeryFirm816.behavior&&
+       prodRes816.batchYield>0&&
+       mktRes816.sales>0&&bakeryFirm816.revenue>=mktRes816.sales&&
+       S.firms.length===4&&
+       S.lastDRE.firms.bakery!==undefined&&
+       bs816.audit.allPass&&auditCashConservation().ok,
+  firmCount:S.firms.length,
+  batchYield:prodRes816.batchYield,
+  sales:mktRes816.sales,
+  revenue:bakeryFirm816.revenue,
+  profit:bakeryFirm816.profit,
+  balanceSheetOk:bs816.audit.allPass,
+  cashOk:auditCashConservation().ok
+ }));
+
  return{passed:results.filter(r=>r.passed).length,total:results.length,results};}
-window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,migrateLoan,migrateLoans,commerceLoanWriteDown,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},setPolicy:(k,v)=>{S.policy[k]=v},simulateMonths,availableCredit};
+window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},setPolicy:(k,v)=>{S.policy[k]=v},simulateMonths,availableCredit};
 newGame();actions();
