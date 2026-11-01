@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Vilarejo | Simulação econômica v2.4</title>
-<meta name="description" content="Vilarejo - Simulação econômica v2.4: reforma contábil, auditoria patrimonial SFC, cadastro operacional de empresas e matemática rigorosa de crédito.">
-<meta property="og:title" content="Vilarejo | Simulação econômica v2.4">
-<meta property="og:description" content="Vilarejo - Simulação econômica v2.4: reforma contábil, auditoria patrimonial SFC, cadastro operacional de empresas e matemática rigorosa de crédito.">
+<title>Vilarejo | Simulação econômica v3.0</title>
+<meta name="description" content="Vilarejo v3.0: simulação econômica multissetorial com mercado de trabalho por empresa, contas nacionais e auditoria patrimonial.">
+<meta property="og:title" content="Vilarejo | Simulação econômica v3.0">
+<meta property="og:description" content="Simulação econômica multissetorial com mercado de trabalho por empresa, contas nacionais e auditoria patrimonial.">
 <style>
 :root{--bg:#efe9dc;--ink:#1d2a2e;--muted:#68716d;--gold:#a87927;--red:#a4372d;--panel:#faf7f0;--line:#cfc6b1;--green:#416b50}
 @media(prefers-color-scheme:dark){:root{--bg:#161c1e;--ink:#e9e4d6;--muted:#a6afa7;--gold:#d9a94a;--red:#e0786b;--panel:#20292b;--line:#3a4745;--green:#8fbd9b}}
@@ -45,7 +45,7 @@ ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-b
 </head>
 <body><main>
 <h1>Vilarejo | Simulação econômica</h1>
-<p class="sub">Versão 2.4 (Reforma Contábil e Arquitetura Empresarial): crédito com partidas dobradas, apuração DRE/depreciação, auditoria SFC dos 5 setores e cadastro operacional S.firms.</p>
+<p class="sub">Versão 2.5 (Estabilização Econômica): mercado de trabalho multissetorial, folha rastreada por empresa, contas nacionais conciliadas e auditoria patrimonial.</p>
 <section class="cycle-box" id="cycleBar" aria-label="Calendário sazonal"></section>
 <section class="pillars" id="pillars" aria-label="Indicadores macroeconômicos"></section>
 <section class="box" style="margin-bottom:12px"><h2>Retrato social e agentes econômicos <span class="small" id="popSummary"></span></h2><div class="social-grid"><div><h3>Famílias e trabalhadores</h3><div id="householdsList"></div></div><div><h3>Instituições e mercado</h3><div id="institutionsList"></div></div></div></section>
@@ -80,7 +80,8 @@ ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-b
 <div class="balance-grid" id="institutionalBalances"></div>
 </section>
 <section class="box" style="margin-top:12px">
-<h2>Contabilidade Nacional e Resultado Fiscal (SCN/IBGE & RTN) <span class="small" id="macroAuditBadge"></span></h2>
+<h2>Contas Nacionais simplificadas e Resultado Fiscal <span class="small" id="macroAuditBadge"></span></h2>
+<p class="small">Modelo didático: os valores e as identidades contábeis são calculados a partir das transações simuladas. Não representam estatísticas oficiais nem reproduzem integralmente a metodologia do IBGE ou do Tesouro Nacional.</p>
 <div class="balance-grid" id="macroeconomicAccounts"></div>
 </section>
 <section class="box" style="margin-top:12px">
@@ -88,6 +89,7 @@ ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-b
 <div class="scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div>
 </section>
 </main>
+<script src="eventos_v3.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
