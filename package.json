@@ -1,7 +1,7 @@
 {
   "name": "vilarejo",
-  "version": "2.3.0",
-  "description": "Vilarejo - Simulação econômica v2.3",
+  "version": "2.4.0",
+  "description": "Vilarejo - Simulação econômica v2.4",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",

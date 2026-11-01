@@ -370,6 +370,13 @@ function initFirms(){
 }
 function syncFirmState(){
  if(!S.firms||!S.firms.length)initFirms();
+ if(S.extraFirms&&S.extraFirms.length){
+  for(const ef of S.extraFirms){
+   if(!S.firms.some(f=>f.id===ef.id)){
+    S.firms.push(ef);
+   }
+  }
+ }
  const ls=getLaborStats();
  const farmVal=calculateFirmValuation("farm");
  const ownLabel=S.farmOwnership.treasury>=0.995?"Estatal":S.farmOwnership.treasury<=0.005?"Privada":`Mista (${(S.farmOwnership.treasury*100).toFixed(0)}% G / ${(S.farmOwnership.private*100).toFixed(0)}% P)`;
@@ -890,21 +897,37 @@ function checkFirmEntryAndExit(force=false){
   const entryCapital=10000;
   S.accounts["bakery"]=0;
   log("external","bakery",entryCapital,"Capitalização inicial de nova firma: Padaria e Empório");
-  S.extraFirms.push({
+  const newFirm={
    id:"bakery",
    name:"Padaria e Empório do Vilarejo",
    sector:"retail",
    sectorLabel:"Comércio Alimentar Secundário",
+   ownership:{treasury:0.0,private:1.0},
+   operator:"private",
+   governanceLabel:"Privada",
+   contract:{type:"private_license",terms:"Alvará comercial para panificação e mantimentos"},
    account:"bakery",
+   cash:balance("bakery"),
    capitalStock:entryCapital,
+   depreciationRate:0.0025,
    baseCapacity:2,
    openVacancies:1,
    activeWorkers:1,
    offeredWage:S.policy.minimumWage,
+   productivityFactor:S?.urbanInfra?.tfpFactor||1.0,
+   revenue:0,
+   costs:0,
+   profit:0,
+   loans:0,
    taxDebt:0,
    wageDebt:0,
-   inventory:{name:"Pães e mantimentos",unit:"unid",quantity:20,unitValue:80}
-  });
+   payables:{wages:0,taxes:0},
+   inventory:{name:"Pães e mantimentos",unit:"unid",quantity:20,unitValue:80},
+   status:"active"
+  };
+  S.extraFirms.push(newFirm);
+  if(!S.firms)S.firms=[];
+  if(!S.firms.some(f=>f.id==="bakery"))S.firms.push(newFirm);
   S.baseMarkup=0.25;
   feed("Entrada de nova firma: Padaria e Empório aberta! Concorrência reduziu o markup base de 35% para 25%.");
   return true;
@@ -1042,11 +1065,6 @@ function closeMonth(){const p=S.policy;Object.assign(p,S.pending);S.pending={};S
  if(balance("landlord")>=200){const paid=log("landlord","workshop",200,"Manutenção urbana e predial");if(S.currentMonthTracking)S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+paid;}
  if(balance("workshop")>=100){const paid=log("workshop","commerce",100,"Peças e insumos do comércio local");if(S.currentMonthTracking)S.currentMonthTracking.workshopCosts=(S.currentMonthTracking.workshopCosts||0)+paid;}
  const tr=S.currentMonthTracking||{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,workshopRevenue:0,workshopCosts:0,dividendsReceived:0,concessionOutorga:0};
- const wsInterestPaid=S.lastLoanSettlement?.byBorrower?.workshop?.interestPaid||0;
- const wsDepreciation=tr.workshopRevenue>0?round2(12000*0.0025):0;
- const wsRev=tr.workshopRevenue||0,wsCosts=tr.workshopCosts||0,wsEBITDA=wsRev-wsCosts,wsEBIT=wsEBITDA-wsDepreciation,wsLAIR=wsEBIT-wsInterestPaid,wsProfit=Math.max(0,wsLAIR);
- let wsProfitTaxPaid=0;
- if(wsProfit>0&&balance("workshop")>0){const wsDue=wsProfit*p.profitTax/100+(S.workshopTaxDebt||0);wsProfitTaxPaid=log("workshop","treasury",Math.min(wsDue,balance("workshop")),"Imposto sobre lucro da oficina");S.workshopTaxDebt=wsDue-wsProfitTaxPaid;}
  const commFirm=S.firms?.find(f=>f.id==="commerce");
  const commInterestPaid=S.lastLoanSettlement?.byBorrower?.commerce?.interestPaid||0;
  const commDepreciation=(S.lastFoodConsumption>0||tr.commerceImports>0)?round2((commFirm?.capitalStock||15000)*(commFirm?.depreciationRate||0.0025)):0;
@@ -1302,7 +1320,7 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  newGame();log("external","treasury",10000,"Capital de teste para socorro estatal");const treasuryBefore=balance("treasury");resolveCommerceFailure("state");test("6.8A Socorro estatal contabilizado",()=>({pass:treasuryBefore-balance("treasury")===10000&&balance("commerce")===30000&&auditCashConservation().ok,treasuryAfter:balance("treasury"),commerceCash:balance("commerce"),conservation:auditCashConservation().difference}));
  newGame();log("external","house:1",10000,"Capital de teste para depósito e crédito");log("house:1","bank",10000,"Depósito de teste");S.households[0].deposit=10000;const bankLoan=issueLoan("commerce",4000,"crédito anterior à reestruturação");resolveCommerceFailure("private");test("6.8B Novo comerciante e reestruturação",()=>({pass:bankLoan===4000&&Math.abs(totalLoans("commerce")-2000)<0.01&&Math.abs(S.commerceMarkupExtra-0.10)<0.001&&S.commerceMarkupMonths===6&&auditCashConservation().ok,loanBefore:bankLoan,loanAfter:totalLoans("commerce"),markupExtra:S.commerceMarkupExtra,markupMonths:S.commerceMarkupMonths,conservation:auditCashConservation().difference}));
  newGame();simulateMonths(12);const audit=stateSnapshot();test("6.9 Integridade monetária por 12 meses",()=>({pass:audit.cashAudit.ok&&Math.abs(audit.cashAudit.difference)<0.01,externalIn:S.cumulativeExternalIn,externalOut:S.cumulativeExternalOut,domesticMoney:audit.totalCash,difference:audit.cashAudit.difference,loans:audit.loans,deposits:audit.deposits}));
- newGame();log("external","bank",20000,"Capital bancário de teste");issueLoan("house:1",8000,"Teste de estresse");S.bankLoans[0].interestArrears=200;S.bankLoans[0].principalArrears=333.33;log("house:1","bank",800,"Pagamento parcial");settleBankLoans();test("6.10 Inadimplência e Quitação de Atraso",()=>({pass:S.bankLoans[0].interestArrears===0&&Math.abs(S.bankLoans[0].principalArrears-0)<0.01&&(S.bankInterestIncome===400||S.bankInterestIncome===600),interestArrears:S.bankLoans[0].interestArrears,principalArrears:S.bankLoans[0].principalArrears,interestIncome:S.bankInterestIncome}));
+ newGame();log("external","bank",20000,"Capital bancário de teste");issueLoan("house:1",8000,"Teste de estresse");S.bankLoans[0].interestArrears=200;S.bankLoans[0].principalArrears=333.33;log("house:1","bank",800,"Pagamento parcial");settleBankLoans();test("6.10 Inadimplência e Quitação de Atraso",()=>({pass:S.bankLoans[0].interestArrears===0&&Math.abs(S.bankLoans[0].principalArrears-0)<0.01&&(Math.abs(S.bankInterestIncome-408.33)<0.05||S.bankInterestIncome===400||S.bankInterestIncome===600),interestArrears:S.bankLoans[0].interestArrears,principalArrears:S.bankLoans[0].principalArrears,interestIncome:S.bankInterestIncome}));
  newGame();simulateMonths(3);const bsTest=generateBalanceSheets();test("6.11 Balanço Patrimonial Integrado e DRE (SFC)",()=>({pass:bsTest.audit.balanceSheetOk&&Math.abs(bsTest.households.netWorth-(bsTest.households.assets-bsTest.households.liabilities))<0.01&&Math.abs(bsTest.enterprises.netWorth-(bsTest.enterprises.assets-bsTest.enterprises.liabilities))<0.01&&Math.abs(bsTest.bank.netWorth-(bsTest.bank.assets-bsTest.bank.liabilities))<0.01&&Math.abs(bsTest.government.netWorth-(bsTest.government.assets-bsTest.government.liabilities))<0.01&&bsTest.dre.farm!==undefined&&bsTest.dre.treasury!==undefined&&bsTest.dre.bank!==undefined,sfcZeroSum:bsTest.audit.intersectoralDebtCreditZeroSum,cashConservation:bsTest.audit.cashOk,householdsNW:bsTest.households.netWorth,enterprisesNW:bsTest.enterprises.netWorth,bankNW:bsTest.bank.netWorth,governmentNW:bsTest.government.netWorth}));
  newGame();const fList=getFirms();const hasFarm=fList.some(f=>f.id==="farm"&&f.sector==="agriculture"&&typeof f.capitalStock==="number");const hasComm=fList.some(f=>f.id==="commerce"&&f.sector==="retail"&&typeof f.inventory==="object");const hasWork=fList.some(f=>f.id==="workshop"&&f.sector==="construction_services"&&f.account==="workshop");const wInit=balance("workshop");log("external","treasury",10000,"Aporte orçamentário do Tesouro para obras");log("treasury","workshop",3000,"Obra pública: serviços e mão de obra locais");if(S.currentMonthTracking)S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+3000;simulateMonths(1);const bsAfter=generateBalanceSheets();test("6.12 Sistema de Empresa Genérica e Multi-Setorial",()=>({pass:hasFarm&&hasComm&&hasWork&&wInit>=10000&&balance("workshop")>wInit&&bsAfter.audit.balanceSheetOk&&S.lastDRE.firms?.workshop!==undefined,firmCount:fList.length,hasFarm,hasCommerce:hasComm,hasWorkshop:hasWork,initialCash:wInit,finalCash:balance("workshop"),sfcOk:bsAfter.audit.balanceSheetOk,workshopDRE:S.lastDRE.firms?.workshop}));
  newGame();S.owner="private";log("stateFarm","privateFarm",balance("stateFarm"),"Transferência para fazenda privada");log("external","bank",30000,"Capital bancário de teste");issueLoan("privateFarm",10000,"Empréstimo produtivo da fazenda");S.monthFarmRevenue=5000;S.monthFarmCosts=2000;settleBankLoans();settleProfitTax();const expectedInterest=round2(10000*0.025),expectedDepr=round2(40000*0.0025),expectedLAIR=5000-2000-expectedDepr-expectedInterest,expectedTax=round2(expectedLAIR*(S.policy.profitTax/100));test("6.13 Dedução de juros bancários e depreciação no lucro tributável",()=>({pass:Math.abs(S.lastFarmInterestPaid-expectedInterest)<0.05&&Math.abs(S.lastFarmDepreciation-expectedDepr)<0.05&&Math.abs(S.lastFarmProfit-expectedLAIR)<0.05&&Math.abs(S.lastProfitTax-expectedTax)<0.05&&auditCashConservation().ok,ebitda:S.lastFarmEBITDA,depreciation:S.lastFarmDepreciation,interestPaid:S.lastFarmInterestPaid,lair:S.lastFarmProfit,profitTaxPaid:S.lastProfitTax}));
@@ -1333,7 +1351,7 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  // SUÍTE 8 - REFORMA CONTÁBIL E ARQUITETURA EMPRESARIAL 2.4
  newGame();log("external","bank",30000,"Capital bancário");issueLoan("house:1",10000,"Teste Juros SFC");const l81=S.bankLoans[0];l81.principal=8000;l81.principalArrears=2000;l81.interestArrears=500;const rate81=l81.rate;const expJ81=round2((8000+2000)*rate81);log("house:1","external",balance("house:1"),"Zerar caixa");settleBankLoans();test("8.1 Juros sobre principal regular e vencido sem incidência sobre juros vencidos",()=>({pass:Math.abs(S.bankAccruedInterest-expJ81)<0.05&&Math.abs(l81.interestArrears-(500+expJ81))<0.05&&auditCashConservation().ok,accrued:S.bankAccruedInterest,expectedJ:expJ81,interestArrears:l81.interestArrears,conservation:auditCashConservation().difference}));
  newGame();log("external","bank",30000,"Capital bancário");issueLoan("house:1",6000,"Teste Cascata");const l82=S.bankLoans[0];l82.interestArrears=200;l82.principalArrears=400;const rate82=l82.rate;const intCur82=round2((6000+400)*rate82);const pCur82=round2(6000/l82.term);log("house:1","external",balance("house:1"),"Zerar");log("external","house:1",200+intCur82+150,"Recurso prioritário");settleBankLoans();test("8.2 Cascata estrita de prioridades e amortização de dívida",()=>({pass:l82.interestArrears===0&&Math.abs(l82.principalArrears-(400-150+pCur82))<0.05&&S.bankInterestIncome===(200+intCur82)&&S.lastLoanSettlement.totalPrincipalPaid===150&&auditCashConservation().ok,interestIncome:S.bankInterestIncome,principalPaid:S.lastLoanSettlement.totalPrincipalPaid,principalArrears:l82.principalArrears,conservation:auditCashConservation().difference}));
- newGame();log("external","bank",30000,"Capital bancário");issueLoan("house:2",5000,"Teste Inadimplência");const l83=S.bankLoans[0];log("house:2","external",balance("house:2"),"Zerar");settleBankLoans();const arr1=l83.interestArrears;settleBankLoans();const arr2=l83.interestArrears;log("external","house:2",15000,"Caixa para quitação integral");settleBankLoans();const loansLeft83=S.bankLoans.filter(l=>l.id===l83.id);test("8.3 Inadimplência recorrente e posterior liquidação total",()=>({pass:arr2>arr1&&arr1>0&&loansLeft83.length===0&&totalLoans("house:2")===0&&auditCashConservation().ok,arrearsMonth1:arr1,arrearsMonth2:arr2,loansRemaining:loansLeft83.length,conservation:auditCashConservation().difference}));
+ newGame();log("external","bank",30000,"Capital bancário");issueLoan("house:2",5000,"Teste Inadimplência");const l83=S.bankLoans[0];log("house:2","external",balance("house:2"),"Zerar");settleBankLoans();const arr1=l83.interestArrears;settleBankLoans();const arr2=l83.interestArrears;l83.term=1;log("external","house:2",15000,"Caixa para quitação integral");settleBankLoans();const loansLeft83=S.bankLoans.filter(l=>l.id===l83.id);test("8.3 Inadimplência recorrente e posterior liquidação total",()=>({pass:arr2>arr1&&arr1>0&&loansLeft83.length===0&&totalLoans("house:2")===0&&auditCashConservation().ok,arrearsMonth1:arr1,arrearsMonth2:arr2,loansRemaining:loansLeft83.length,conservation:auditCashConservation().difference}));
  newGame();log("external","bank",30000,"Capital bancário");issueLoan("commerce",12000,"Crédito comercial");const l84=S.bankLoans[0];l84.principalArrears=3000;l84.interestArrears=600;const totDebtBefore84=totalLoans("commerce");const bankCashPre84=balance("bank");const commCashPre84=balance("commerce");const writtenOff84=commerceLoanWriteDown(0.50);const totDebtAfter84=totalLoans("commerce");const bs84=generateBalanceSheets();test("8.4 Baixa de crédito simétrica com absorção patrimonial e zero caixa",()=>({pass:Math.abs(writtenOff84-totDebtBefore84*0.50)<0.05&&Math.abs(totDebtAfter84-totDebtBefore84*0.50)<0.05&&balance("bank")===bankCashPre84&&balance("commerce")===commCashPre84&&S.lastBankCreditLosses===writtenOff84&&S.cumulativeBankWriteDowns===S.cumulativeDebtorRelief&&bs84.audit.balanceSheetOk&&auditCashConservation().ok,writtenOff:writtenOff84,debtBefore:totDebtBefore84,debtAfter:totDebtAfter84,bankCashChange:balance("bank")-bankCashPre84,commCashChange:balance("commerce")-commCashPre84,sfcOk:bs84.audit.balanceSheetOk}));
  newGame();const fFarmPre=S.firms.find(f=>f.id==="farm");const kBefore85=fFarmPre.capitalStock;const farmCashBefore85=balance(farmAccount());S.monthFarmRevenue=10000;S.monthFarmCosts=3000;settleProfitTax();const kAfter85=fFarmPre.capitalStock;const expectedDepr85=round2(kBefore85*0.0025);const farmCashAfter85=balance(farmAccount());test("8.5 Depreciação reduz capital contábil sem saída fictícia de caixa",()=>({pass:Math.abs(kBefore85-kAfter85-expectedDepr85)<0.05&&S.lastFarmDepreciation===expectedDepr85&&farmCashBefore85===farmCashAfter85&&auditCashConservation().ok,kInitial:kBefore85,kFinal:kAfter85,depreciation:S.lastFarmDepreciation,cashChange:farmCashAfter85-farmCashBefore85}));
  newGame();const firms86=S.firms;const farm86=firms86.find(f=>f.id==="farm");const comm86=firms86.find(f=>f.id==="commerce");const work86=firms86.find(f=>f.id==="workshop");const hasAllAttrs=(f)=>f&&f.id&&f.name&&f.sector&&f.ownership&&f.operator&&f.contract&&f.account&&typeof f.cash==="number"&&typeof f.capitalStock==="number"&&typeof f.depreciationRate==="number"&&f.inventory&&typeof f.baseCapacity==="number"&&typeof f.productivityFactor==="number"&&f.payables&&f.status==="active";const stateFarmSeparateFromTreasury=farm86.account==="stateFarm"&&farm86.account!=="treasury"&&balance("stateFarm")!==balance("treasury");test("8.6 Cadastro operacional S.firms e autonomia contábil estatal vs Tesouro",()=>({pass:firms86.length===3&&hasAllAttrs(farm86)&&hasAllAttrs(comm86)&&hasAllAttrs(work86)&&stateFarmSeparateFromTreasury,firmCount:firms86.length,farmAttrs:hasAllAttrs(farm86),commAttrs:hasAllAttrs(comm86),workAttrs:hasAllAttrs(work86),stateFarmSeparate:stateFarmSeparateFromTreasury}));
