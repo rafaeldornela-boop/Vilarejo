@@ -34,8 +34,8 @@ function resolveRequestPath(requestUrl) {
   const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const segments = relativePath.split(/[\\/]/);
   if (segments.some((segment) => segment.startsWith("."))) return { error: 404 };
-  const allowedRootFiles = new Set(["index.html", "script.js", "eventos_v3.js", "vilarejo_core.js"]);
-  if (!allowedRootFiles.has(relativePath) && !relativePath.startsWith("public/")) return { error: 404 };
+  const allowedRootFiles = new Set(["index.html"]);
+  if (!allowedRootFiles.has(relativePath) && !relativePath.startsWith("src/") && !relativePath.startsWith("public/")) return { error: 404 };
 
   const filePath = path.resolve(ROOT, relativePath);
   if (filePath !== ROOT && !filePath.startsWith(`${ROOT}${path.sep}`)) return { error: 403 };
