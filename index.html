@@ -26,8 +26,8 @@
         <button class="nav-item" data-view="society"><span class="nav-icon">♧</span><span>Sociedade</span></button>
         <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
         <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços públicos</span></button>
-        <button class="nav-item" data-view="politics"><span class="nav-icon">⚖</span><span>Política</span></button>
-        <button class="nav-item" data-view="institutions"><span class="nav-icon">▥</span><span>Instituições</span></button>
+        <button class="nav-item" data-view="intelligence"><span class="nav-icon">◈</span><span>Inteligência</span></button>
+        <button class="nav-item" data-view="newspaper"><span class="nav-icon">📰</span><span>Jornal</span></button>
         <button class="nav-item" data-view="records"><span class="nav-icon">☷</span><span>Histórico</span></button>
       </nav>
 
@@ -47,6 +47,7 @@
           <div class="breadcrumb"><span>VILAREJO</span><i>/</i><strong id="pageTitle">Visão geral</strong></div>
         </div>
         <div class="topbar-right">
+          <button id="topbarAlertBadge" class="topbar-alert-badge hidden" title="Alertas da Central de Inteligência" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('intelligence')">0 alertas</button>
           <div class="topbar-date-block">
             <span class="topbar-calendar-icon">📅</span>
             <div class="topbar-date-text">
@@ -68,6 +69,8 @@
           <div id="event" class="event-card hidden pulse-animation">
             <div class="event-kicker">ACONTECIMENTO</div><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div>
           </div>
+
+          <div id="overviewAlertsContainer" class="overview-alerts-container hidden"></div>
 
         <section class="view-panel active" data-view-panel="overview" aria-label="Visão geral">
           <section class="calendar-board" id="calendarBoard" aria-label="Calendário do Vilarejo">
@@ -262,26 +265,98 @@
           <div id="servicesDashboard" class="services-host"></div>
         </section>
 
-        <section class="view-panel" data-view-panel="politics" aria-label="Política">
-          <div class="section-heading"><div><div class="eyebrow">GRUPOS E RELAÇÕES DE PODER</div><h2>A sociedade também disputa os rumos do Estado.</h2><p>Acompanhe quem são os grupos de interesse, quais recursos possuem e como se relacionam com o governo.</p></div></div>
-          <div id="politicsDashboard" class="politics-host"></div>
-        </section>
-
-        <section class="view-panel" data-view-panel="institutions" aria-label="Instituições">
-          <div class="section-heading"><div><div class="eyebrow">ESTRUTURA DO ESTADO</div><h2>O poder também precisa de instituições.</h2><p>Veja como os grupos de interesse se convertem em representação institucional, como se organiza a Câmara e qual é a base parlamentar do governo.</p></div></div>
-          <div id="institutionsDashboard" class="institutions-host"></div>
-        </section>
-
         <section class="view-panel" data-view-panel="government" aria-label="Governo">
-          <div class="section-heading"><div><div class="eyebrow">GESTÃO PÚBLICA E PODER</div><h2>As regras e alianças definem o caminho.</h2><p>Acompanhe a base parlamentar, altere políticas públicas e controle o orçamento do Estado.</p></div></div>
+          <div class="section-heading gov-main-heading">
+            <div>
+              <div class="eyebrow">ESTRUTURA DO ESTADO E GESTÃO PÚBLICA</div>
+              <h2>O poder, as instituições e as decisões.</h2>
+              <p>Executivo, finanças, Câmara de representação, coalizões governistas e grupos de interesse.</p>
+            </div>
+            <div class="gov-subtabs" role="tablist" aria-label="Áreas de Governo">
+              <button class="gov-tab-btn active" data-gov-tab="executivo" role="tab" aria-selected="true">Executivo & Finanças</button>
+              <button class="gov-tab-btn" data-gov-tab="camara" role="tab" aria-selected="false">Câmara & Coalizões</button>
+              <button class="gov-tab-btn" data-gov-tab="politica" role="tab" aria-selected="false">Grupos de Interesse</button>
+            </div>
+          </div>
+
           <div id="governmentSummaryCard" class="gov-summary-card"></div>
-          <div class="government-grid"><article class="content-card"><div class="eyebrow">INSTRUMENTOS DE POLÍTICA</div><h2>Políticas públicas</h2><p class="card-description">As mudanças entram em vigor no próximo fechamento mensal.</p><div id="policies"></div></article><article class="content-card"><div class="eyebrow">RESPONSABILIDADE FISCAL</div><h2>Contas do governo</h2><div class="audit-status" id="macroAuditBadge"></div><div id="macroeconomicAccounts" class="balance-grid"></div></article></div>
-          <details class="content-card detail-card"><summary>Patrimônio e balanços setoriais <span id="sfcAuditBadge"></span></summary><div id="institutionalBalances" class="balance-grid"></div></details>
-          <details class="content-card detail-card"><summary>Caixa, patrimônio e obrigações pendentes</summary><div class="detail-columns"><div><h3>Contas e patrimônio</h3><div id="accounts"></div></div><div><h3>Obrigações pendentes</h3><div id="obligations"></div></div></div></details>
+
+          <!-- Sub-aba 1: Executivo e Finanças Públicas -->
+          <div class="gov-tab-pane active" data-gov-pane="executivo">
+            <div class="government-grid">
+              <article class="content-card">
+                <div class="eyebrow">INSTRUMENTOS DE POLÍTICA</div>
+                <h2>Políticas públicas</h2>
+                <p class="card-description">As mudanças entram em vigor no próximo fechamento mensal.</p>
+                <div id="policies"></div>
+              </article>
+              <article class="content-card">
+                <div class="eyebrow">RESPONSABILIDADE FISCAL</div>
+                <h2>Contas do governo</h2>
+                <div class="audit-status" id="macroAuditBadge"></div>
+                <div id="macroeconomicAccounts" class="balance-grid"></div>
+              </article>
+            </div>
+            <details class="content-card detail-card">
+              <summary>Patrimônio e balanços setoriais <span id="sfcAuditBadge"></span></summary>
+              <div id="institutionalBalances" class="balance-grid"></div>
+            </details>
+            <details class="content-card detail-card">
+              <summary>Caixa, patrimônio e obrigações pendentes</summary>
+              <div class="detail-columns">
+                <div><h3>Contas e patrimônio</h3><div id="accounts"></div></div>
+                <div><h3>Obrigações pendentes</h3><div id="obligations"></div></div>
+              </div>
+            </details>
+          </div>
+
+          <!-- Sub-aba 2: Câmara e Coalizões (Instituições) -->
+          <div class="gov-tab-pane" data-gov-pane="camara">
+            <div id="institutionsDashboard" class="institutions-host"></div>
+          </div>
+
+          <!-- Sub-aba 3: Grupos de Interesse (Política) -->
+          <div class="gov-tab-pane" data-gov-pane="politica">
+            <div id="politicsDashboard" class="politics-host"></div>
+          </div>
         </section>
 
-        <section class="view-panel" data-view-panel="records" aria-label="Registros">
-          <div class="section-heading"><div><div class="eyebrow">MEMÓRIA DA PARTIDA</div><h2>Cada decisão deixa um rastro.</h2><p>Acompanhe acontecimentos e movimentações do dinheiro.</p></div></div>
+        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">LEITURA TEMPORAL E SÉRIES HISTÓRICAS</div>
+              <h2>Central de Inteligência</h2>
+              <p>Análise de trajetórias, tendências estatísticas e central de alertas monitorada.</p>
+            </div>
+          </div>
+          <div id="intelligenceDashboard" class="intelligence-host">
+            <div class="module-empty-state">
+              <span class="module-empty-icon">◈</span>
+              <h3>Central de Inteligência</h3>
+              <p>Os indicadores, tendências e alertas são consolidados a cada fechamento mensal da simulação.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="newspaper" aria-label="Jornal do Vilarejo">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">CRÔNICAS E MEMÓRIA DA COMUNIDADE</div>
+              <h2>Jornal do Vilarejo</h2>
+              <p>Edições periódicas que transformam os acontecimentos da comunidade em narrativa viva.</p>
+            </div>
+          </div>
+          <div id="newspaperDashboard" class="newspaper-host">
+            <div class="module-empty-state">
+              <span class="module-empty-icon">📰</span>
+              <h3>Jornal do Vilarejo</h3>
+              <p>A primeira edição será impressa e arquivada após o encerramento do primeiro mês econômico.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="records" aria-label="Histórico">
+          <div class="section-heading"><div><div class="eyebrow">MEMÓRIA DA PARTIDA</div><h2>Histórico e Rastreabilidade Financeira</h2><p>Acompanhe todos os acontecimentos registrados e movimentações do livro-caixa.</p></div></div>
           <div class="records-grid"><article class="content-card"><div class="eyebrow">DIÁRIO DO VILAREJO</div><h2>Decisões e acontecimentos</h2><ul id="feed" class="feed-list scroll"></ul></article><article class="content-card ledger-card"><div class="eyebrow">RASTREABILIDADE FINANCEIRA</div><h2>Livro-caixa</h2><p class="card-description">Últimas 60 movimentações registradas.</p><div class="scroll ledger-scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div></article></div>
         </section>
 
@@ -291,6 +366,7 @@
   </div>
 
   <script src="src/core/vilarejo_core.js"></script>
+  <script src="src/shared/vilarejo_history_store.js"></script>
   <script src="src/events/eventos_v3.js"></script>
   <script src="src/economy/vilarejo_economy.js"></script>
   <script src="src/society/vilarejo_society.js"></script>
