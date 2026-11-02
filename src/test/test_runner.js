@@ -139,6 +139,35 @@ try {
   let duplicateIdsRejected = false;
   try { core.population.syncFromEconomy([{ id: 7, adults: 1 }, { id: "7", adults: 2 }], 152); } catch (error) { duplicateIdsRejected = /duplicado/.test(error.message); }
   report("Diretório rejeita IDs duplicados após normalização sem mutação parcial", duplicateIdsRejected && JSON.stringify(core.population.getSnapshot()) === populationBeforeDuplicate);
+  const atomicCore = VilarejoCore.createRuntime();
+  atomicCore.modules.register({ id: "economia", version: "3.0.0", dependencies: ["core"] });
+  const originalHouseholds = [
+    { id: 1, name: "Família Original A", type: "family", adults: 2, children: 1, jobs: 1, happiness: 60 },
+    { id: 2, name: "Família Original B", type: "family", adults: 1, children: 2, jobs: 1, happiness: 55 }
+  ];
+  const validEconomicState = { day: 149, monthNumber: 0, owner: "state", accounts: { treasury: 100 }, marketPrice: 10, fx: 5, households: originalHouseholds };
+  atomicCore.syncFromEconomy(validEconomicState, "atomic-baseline");
+  atomicCore.population.addExtension("1", "test", { retained: true });
+  const beforeInvalidSync = JSON.stringify(atomicCore.snapshot());
+  const invalidEconomicStates = [
+    { ...validEconomicState, day: 180, monthNumber: 1, households: null },
+    { ...validEconomicState, day: 180, monthNumber: 1, households: [originalHouseholds[0], { ...originalHouseholds[1], id: "1" }] },
+    { ...validEconomicState, day: 180, monthNumber: 1, households: [{ ...originalHouseholds[0], adults: -1 }, originalHouseholds[1]] },
+    { ...validEconomicState, day: 180, monthNumber: 1, accounts: { treasury: "100" } },
+    { ...validEconomicState, day: 180, monthNumber: 1, fx: Infinity },
+    { ...validEconomicState, day: 180.5, monthNumber: 1 },
+    { ...validEconomicState, day: 180, monthNumber: "1" },
+    { ...validEconomicState, day: 180, monthNumber: 1, gameOver: true }
+  ];
+  let rejectedEveryInvalidSync = true;
+  let stateUnchangedAfterInvalidSyncs = true;
+  for (const invalidState of invalidEconomicStates) {
+    try { atomicCore.syncFromEconomy(invalidState, "invalid-regression"); rejectedEveryInvalidSync = false; } catch (_) {}
+    if (JSON.stringify(atomicCore.snapshot()) !== beforeInvalidSync) stateUnchangedAfterInvalidSyncs = false;
+  }
+  report("syncFromEconomy rejeita entradas inválidas sem alterar calendário, população, eventos ou snapshots", rejectedEveryInvalidSync && stateUnchangedAfterInvalidSyncs);
+  const preservedHouseholds = atomicCore.population.getSnapshot().groups;
+  report("Sincronização inválida preserva os domicílios originais e extensões", preservedHouseholds.length === 2 && preservedHouseholds[0].label === "Família Original A" && preservedHouseholds[0].extensions.test.retained === true && preservedHouseholds[1].label === "Família Original B");
   report("Diretório preserva extensões de outros módulos", core.population.addExtension("1", "sociedade", { escolaridade: "média" }) && core.population.getSnapshot().groups[0].extensions.sociedade.escolaridade === "média");
   core.session.reset({ day: 40 });
   report("Reiniciar a partida limpa os dados populacionais e reinicia a sessão", core.population.getSnapshot().totals.total === 0 && core.clock.snapshot().absoluteDay === 40 && core.session.get().status === "ready");

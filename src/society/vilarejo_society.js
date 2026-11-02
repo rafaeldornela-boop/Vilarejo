@@ -129,7 +129,7 @@
     return members;
   }
 
-  function createHouseholdFromEconomy(state, group) {
+  function createHouseholdFromEconomy(state, group, arrivalMonth = state.currentMonth) {
     const id = text(group.id);
     const adults = Math.max(0, Math.floor(numberOr(group.adults)));
     const children = Math.max(0, Math.floor(numberOr(group.children)));
@@ -141,7 +141,7 @@
         person.origin = "migração econômica";
         person.cultureGroup = "regional";
         person.integration = 42;
-        person.arrivalMonth = state.currentMonth;
+        person.arrivalMonth = arrivalMonth;
         person.monthsInVillage = 0;
         person.source = "migracao-economia";
       }
@@ -235,7 +235,7 @@
       currentIds.add(id);
       let household = state.households.find((item) => item.id === id);
       if (!household) {
-        household = createHouseholdFromEconomy(state, group);
+        household = createHouseholdFromEconomy(state, group, month);
         state.households.push(household);
         state.economyBaseline[id] = clone(household.sourcePopulation);
         adjustments.push({ householdId: id, type: "household_added", people: household.members.length });

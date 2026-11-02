@@ -182,50 +182,8 @@
     let groups = [];
     let lastSynchronizedDay = null;
 
-    function syncFromEconomy(households, day) {
-      if (!Array.isArray(households)) throw new TypeError("A sincronização populacional exige uma lista de domicílios.");
-      const incomingIds = new Set();
-      for (const household of households) {
-        if (!household || household.id === undefined || household.id === null || String(household.id) === "") {
-          throw new TypeError("Cada domicílio deve ter um identificador não vazio.");
-        }
-        const id = String(household.id);
-        if (incomingIds.has(id)) throw new Error(`Identificador de domicílio duplicado: ${id}.`);
-        incomingIds.add(id);
-      }
-      const existing = new Map(groups.map((group) => [String(group.id), group]));
-      groups = households.map((household) => {
-        const id = String(household.id);
-        const previous = existing.get(id) || {};
-        const adults = Math.max(0, Math.floor(finiteNumber(household.adults)));
-        const children = Math.max(0, Math.floor(finiteNumber(household.children)));
-        const jobs = Math.max(0, finiteNumber(household.jobs));
-        return {
-          id,
-          label: String(household.name || `Grupo ${id}`),
-          category: String(household.type || "household"),
-          adults,
-          children,
-          population: adults + children,
-          employed: jobs,
-          happiness: Math.max(0, Math.min(100, finiteNumber(household.happiness, 0))),
-          migrant: household.migrant === true,
-          sourceModule: "economia",
-          updatedDay: Math.max(1, Math.floor(finiteNumber(day, getDay ? getDay() : 1))),
-          extensions: clone(previous.extensions || {})
-        };
-      });
-      lastSynchronizedDay = Math.max(1, Math.floor(finiteNumber(day, getDay ? getDay() : 1)));
-      const snapshot = getSnapshot();
-      eventBus.emit("population:synchronized", snapshot, {
-        day: lastSynchronizedDay,
-        source: "core.population"
-      });
-      return snapshot;
-    }
-
-    function getSnapshot() {
-      const totals = groups.reduce((result, group) => {
+    function snapshotFor(sourceGroups, synchronizedDay) {
+      const totals = sourceGroups.reduce((result, group) => {
         result.groups += 1;
         result.adults += group.adults;
         result.children += group.children;
@@ -234,13 +192,96 @@
         result.weightedHappiness += group.happiness * group.population;
         return result;
       }, { groups: 0, adults: 0, children: 0, total: 0, employed: 0, weightedHappiness: 0 });
+      if (![totals.adults, totals.children, totals.total].every(Number.isSafeInteger) ||
+        !Number.isFinite(totals.employed) || !Number.isFinite(totals.weightedHappiness)) {
+        throw new RangeError("Os totais populacionais excedem os limites numéricos seguros.");
+      }
       totals.averageHappiness = totals.total > 0 ? Number((totals.weightedHappiness / totals.total).toFixed(2)) : 0;
       delete totals.weightedHappiness;
-      return {
-        totals,
-        groups: clone(groups),
-        lastSynchronizedDay
-      };
+      return { totals, groups: clone(sourceGroups), lastSynchronizedDay: synchronizedDay };
+    }
+
+    function prepareSyncFromEconomy(households, day) {
+      if (!Array.isArray(households)) throw new TypeError("A sincronização populacional exige uma lista de domicílios.");
+      const synchronizedDay = day === undefined ? (typeof getDay === "function" ? getDay() : 1) : day;
+      if (!Number.isSafeInteger(synchronizedDay) || synchronizedDay < 1) {
+        throw new TypeError("O dia de sincronização deve ser um inteiro positivo.");
+      }
+      const incomingIds = new Set();
+      const existing = new Map(groups.map((group) => [String(group.id), group]));
+      const nextGroups = households.map((household) => {
+        if (!household || typeof household !== "object" || Array.isArray(household)) {
+          throw new TypeError("Cada domicílio deve ser um objeto válido.");
+        }
+        const rawId = household.id;
+        if ((typeof rawId !== "string" && typeof rawId !== "number") ||
+          (typeof rawId === "number" && !Number.isFinite(rawId)) || String(rawId).trim() === "") {
+          throw new TypeError("Cada domicílio deve ter um identificador não vazio.");
+        }
+        const id = typeof rawId === "string" ? rawId.trim() : String(rawId);
+        if (incomingIds.has(id)) throw new Error(`Identificador de domicílio duplicado: ${id}.`);
+        incomingIds.add(id);
+
+        function readNumber(field, fallback, min = 0, max = Infinity, integer = false) {
+          const value = household[field];
+          if (value === undefined) return fallback;
+          if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max || (integer && !Number.isSafeInteger(value))) {
+            throw new TypeError(`Campo inválido em ${id}: ${field}.`);
+          }
+          return value;
+        }
+
+        if (household.name !== undefined && household.name !== null && typeof household.name !== "string") {
+          throw new TypeError(`Campo inválido em ${id}: name.`);
+        }
+        if (household.type !== undefined && household.type !== null && typeof household.type !== "string") {
+          throw new TypeError(`Campo inválido em ${id}: type.`);
+        }
+        if (household.migrant !== undefined && typeof household.migrant !== "boolean") {
+          throw new TypeError(`Campo inválido em ${id}: migrant.`);
+        }
+
+        const previous = existing.get(id) || {};
+        const adults = readNumber("adults", 0, 0, Infinity, true);
+        const children = readNumber("children", 0, 0, Infinity, true);
+        const jobs = readNumber("jobs", 0);
+        const happiness = readNumber("happiness", 0, 0, 100);
+        return {
+          id,
+          label: household.name || `Grupo ${id}`,
+          category: household.type || "household",
+          adults,
+          children,
+          population: adults + children,
+          employed: jobs,
+          happiness,
+          migrant: household.migrant === true,
+          sourceModule: "economia",
+          updatedDay: synchronizedDay,
+          extensions: clone(previous.extensions || {})
+        };
+      });
+
+      return { groups: nextGroups, day: synchronizedDay, snapshot: snapshotFor(nextGroups, synchronizedDay) };
+    }
+
+    function commitPreparedSync(prepared) {
+      groups = prepared.groups;
+      lastSynchronizedDay = prepared.day;
+      const snapshot = snapshotFor(groups, lastSynchronizedDay);
+      eventBus.emit("population:synchronized", snapshot, {
+        day: lastSynchronizedDay,
+        source: "core.population"
+      });
+      return snapshot;
+    }
+
+    function syncFromEconomy(households, day) {
+      return commitPreparedSync(prepareSyncFromEconomy(households, day));
+    }
+
+    function getSnapshot() {
+      return snapshotFor(groups, lastSynchronizedDay);
     }
 
     function reset() {
@@ -259,7 +300,7 @@
       return true;
     }
 
-    return { syncFromEconomy, getSnapshot, addExtension, reset };
+    return { syncFromEconomy, prepareSyncFromEconomy, commitPreparedSync, getSnapshot, addExtension, reset };
   }
 
   function createRuntime(options = {}) {
@@ -360,31 +401,70 @@
     }
 
     function syncFromEconomy(economicState, reason = "sync") {
-      if (!economicState || typeof economicState !== "object") throw new TypeError("O estado econômico é obrigatório.");
-      currentDay = Math.max(1, Math.floor(finiteNumber(economicState.day, currentDay)));
-      const economicMonthNumber = Math.max(0, Math.floor(finiteNumber(economicState.monthNumber, 0)));
-      const calendarSnapshot = clock.sync(currentDay, economicMonthNumber);
-      const populationSnapshot = population.syncFromEconomy(economicState.households || [], currentDay);
-      if (moduleRegistry.has("economia")) {
-        updateModuleSnapshot("economia", {
-          release: "3.0.0",
-          day: currentDay,
-          monthNumber: economicMonthNumber,
-          calendar: calendarSnapshot,
-          population: populationSnapshot.totals,
-          status: economicState.gameOver ? "game-over" : "active",
-          owner: economicState.owner || null,
-          accounts: clone(economicState.accounts || {}),
-          marketPrice: finiteNumber(economicState.marketPrice),
-          exchangeRate: finiteNumber(economicState.fx)
-        }, "economia.adapter");
+      if (!economicState || typeof economicState !== "object" || Array.isArray(economicState)) {
+        throw new TypeError("O estado econômico deve ser um objeto válido.");
       }
-      if (economicState.gameOver) setStatus("game-over", { reason: economicState.gameOver });
-      eventBus.emit("world:synchronized", {
-        reason,
-        calendar: calendarSnapshot,
-        population: populationSnapshot.totals
-      }, { day: currentDay, source: "core.world" });
+      if (!Number.isSafeInteger(economicState.day) || economicState.day < 1) {
+        throw new TypeError("O dia econômico deve ser um inteiro positivo.");
+      }
+      if (!Number.isSafeInteger(economicState.monthNumber) || economicState.monthNumber < 0) {
+        throw new TypeError("O mês econômico deve ser um inteiro não negativo.");
+      }
+      if (typeof reason !== "string") throw new TypeError("A razão da sincronização deve ser um texto.");
+
+      const nextDay = economicState.day;
+      const economicMonthNumber = economicState.monthNumber;
+      const populationPlan = population.prepareSyncFromEconomy(economicState.households, nextDay);
+      const rawAccounts = economicState.accounts === undefined || economicState.accounts === null ? {} : economicState.accounts;
+      if (typeof rawAccounts !== "object" || Array.isArray(rawAccounts)) {
+        throw new TypeError("As contas econômicas devem ser um objeto.");
+      }
+      for (const [account, balance] of Object.entries(rawAccounts)) {
+        if (typeof balance !== "number" || !Number.isFinite(balance)) {
+          throw new TypeError(`Saldo econômico inválido na conta '${account}'.`);
+        }
+      }
+      if (economicState.owner !== undefined && economicState.owner !== null && typeof economicState.owner !== "string") {
+        throw new TypeError("O proprietário econômico deve ser um texto ou null.");
+      }
+      function readOptionalFiniteNumber(field) {
+        const value = economicState[field];
+        if (value === undefined || value === null) return 0;
+        if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`Campo econômico inválido: ${field}.`);
+        return value;
+      }
+
+      const rawGameOver = economicState.gameOver;
+      if (rawGameOver !== undefined && rawGameOver !== null && rawGameOver !== false && typeof rawGameOver !== "string") {
+        throw new TypeError("O estado gameOver deve ser um texto, false ou null.");
+      }
+      const gameOver = rawGameOver ?? null;
+      const calendarPreview = { ...clock.fromAbsoluteDay(nextDay), economicMonthNumber };
+      const populationTotals = populationPlan.snapshot.totals;
+      const moduleSnapshot = clone({
+        release: "3.0.0",
+        day: nextDay,
+        monthNumber: economicMonthNumber,
+        calendar: calendarPreview,
+        population: populationTotals,
+        status: gameOver ? "game-over" : "active",
+        owner: economicState.owner ?? null,
+        accounts: clone(rawAccounts),
+        marketPrice: readOptionalFiniteNumber("marketPrice"),
+        exchangeRate: readOptionalFiniteNumber("fx")
+      });
+      const worldPayload = clone({ reason, calendar: calendarPreview, population: populationTotals });
+      const gameOverDetails = gameOver ? clone({ reason: gameOver }) : null;
+
+      // Nada é mutado até que calendário, domicílios e todos os dados dos snapshots estejam validados.
+      currentDay = nextDay;
+      const calendarSnapshot = clock.sync(nextDay, economicMonthNumber);
+      const populationSnapshot = population.commitPreparedSync(populationPlan);
+      if (moduleRegistry.has("economia")) updateModuleSnapshot("economia", moduleSnapshot, "economia.adapter");
+      if (gameOver) setStatus("game-over", gameOverDetails);
+      worldPayload.calendar = calendarSnapshot;
+      worldPayload.population = populationSnapshot.totals;
+      eventBus.emit("world:synchronized", worldPayload, { day: currentDay, source: "core.world" });
       return getSnapshot();
     }
 
@@ -415,7 +495,12 @@
       version: CORE_VERSION,
       events: eventBus,
       clock,
-      population,
+      population: {
+        syncFromEconomy: population.syncFromEconomy,
+        getSnapshot: population.getSnapshot,
+        addExtension: population.addExtension,
+        reset: population.reset
+      },
       modules: {
         register: registerModule,
         updateSnapshot: updateModuleSnapshot,
