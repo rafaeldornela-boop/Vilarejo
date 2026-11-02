@@ -1,46 +1,55 @@
-# Entrega | Política 1.0.0 para Vilarejo
+# Vilarejo | Política + Instituições 1.0.0
 
-Esta pasta contém os arquivos novos e as alterações necessárias para integrar o primeiro módulo político à `main`.
+Esta entrega reúne os dois módulos e as alterações de interface para a `main`.
 
-## Arquivos novos
+## Conteúdo do pacote
 
-- `src/politics/vilarejo_politics.js`
-- `src/test/politics_test.js`
-- `docs/politics/README.md`
+### Arquivos novos
 
-## Arquivos existentes que recebem alterações
+- `src/politics/vilarejo_politics.js`: dez grupos de interesse, indicadores de poder, representatividade, eventos causais e fechamento mensal.
+- `src/institutions/vilarejo_institutions.js`: Executivo, Câmara de Representação dos Interesses, distribuição de cadeiras, mandato, coalizão e oposição.
+- `src/test/politics_test.js`: 21 testes do módulo Política.
+- `src/test/institutions_test.js`: 16 testes do módulo Instituições.
+- `docs/politics/README.md` e `docs/institutions/README.md`: contratos e regras documentadas.
 
-O patch `integration/0001-politics-integration.patch` altera:
+### Arquivos existentes alterados pelo patch
 
-- `index.html`: navegação, painel político e carregamento do módulo depois da Sociedade;
-- `src/ui/dashboard.js`: renderização do painel e título da navegação;
-- `style.css`: estilos responsivos da tela de grupos;
-- `package.json`: verificações de sintaxe e execução dos testes políticos;
-- `src/test/test_runner.js`: verificação da ordem de carregamento.
+- `index.html`: novas entradas de navegação, painéis e ordem de carregamento dos módulos;
+- `src/ui/dashboard.js`: títulos e renderização dos dois painéis;
+- `style.css`: cartões, indicadores, bancadas, coalizão e layout responsivo;
+- `package.json`: build e execução das novas suítes;
+- `src/test/test_runner.js`: validação da ordem dos scripts.
 
-## Aplicação
+## Aplicação na raiz do repositório
 
-Extraia o ZIP na raiz do repositório, mesclando os diretórios `src/`, `docs/` e `integration/` com os existentes. Em seguida, na raiz do repositório, aplique o patch:
+Extraia o conteúdo do ZIP diretamente na raiz do repositório `main`, mesclando `src/`, `docs/` e `integration/` com os diretórios existentes. Depois aplique:
 
 ```bash
-git apply --check integration/0001-politics-integration.patch
-git apply integration/0001-politics-integration.patch
+git apply --check integration/0001-politics-institutions-integration.patch
+git apply integration/0001-politics-institutions-integration.patch
 npm test
 npm run build
+git diff --check
 ```
 
-Depois revise:
+Revise o resultado antes do commit:
 
 ```bash
 git status --short
-git diff --check
+git diff --stat
 git diff
 ```
 
-Faça o commit somente depois de executar a suíte completa do próprio repositório.
-
 ## Resultado dos testes desta entrega
 
-A suíte isolada do módulo Política passou em 21 testes, sem falhas. Os testes de integração exercitam um Runtime de contrato simulado, não substituem a execução do Core, Economia e Sociedade reais. A suíte valida inicialização, ausência de dados inventados, sobreposição de grupos, representatividade, influência, impactos, idempotência, determinismo, renderização segura, integração pelo contrato do Runtime, reinicialização e eventos relacionados a estatais.
+- Política: 21/21 aprovados.
+- Instituições: 16/16 aprovados.
+- Total isolado: 37/37 aprovados.
+- Sintaxe dos dois módulos: verificada com `node --check`.
+- Sintaxe e aplicação do patch: o patch foi validado pelo parser do Git (`git apply --numstat`).
 
-A suíte econômica e a suíte da Sociedade não foram executadas nesta pasta, pois dependem dos arquivos preexistentes do repositório. Execute `npm test` depois de copiar os arquivos e aplicar o patch sobre a `main`.
+A suíte completa do repositório-base não foi executada nesta pasta, porque ela depende dos arquivos da `main` que não fazem parte do pacote incremental. Por isso, execute `npm test` e `npm run build` depois de aplicar o patch no seu clone.
+
+## Decisão de desenho que deve ser conhecida
+
+A Câmara começa com 21 cadeiras, alocadas aos grupos pelo indicador de influência política, com método dos maiores restos. Isso representa bancadas de interesse, não uma eleição popular. O mandato-padrão é de 48 meses. Oscilações mensais não mudam imediatamente a distribuição de cadeiras; a renovação ocorre ao fim do mandato. A coalizão precisa ser formada explicitamente e pode ser majoritária ou minoritária.
