@@ -1,96 +1,123 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Vilarejo | Economia 3.0 + Núcleo Central 0.1</title>
-<meta name="description" content="Vilarejo: simulação econômica v3.0 integrada ao núcleo central modular 0.1.">
-<meta property="og:title" content="Vilarejo | Economia 3.0 + Núcleo Central 0.1">
-<meta property="og:description" content="Simulação econômica integrada ao núcleo central modular do Vilarejo.">
-<style>
-:root{--bg:#efe9dc;--ink:#1d2a2e;--muted:#68716d;--gold:#a87927;--red:#a4372d;--panel:#faf7f0;--line:#cfc6b1;--green:#416b50}
-@media(prefers-color-scheme:dark){:root{--bg:#161c1e;--ink:#e9e4d6;--muted:#a6afa7;--gold:#d9a94a;--red:#e0786b;--panel:#20292b;--line:#3a4745;--green:#8fbd9b}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Georgia,serif;padding:env(safe-area-inset-top,0) 14px env(safe-area-inset-bottom,0)}
-main{max-width:980px;margin:auto;padding:22px 0 44px}h1{font-size:1.55rem;margin:0}h2{font-size:1rem;margin:0 0 10px}h3{font-size:.94rem;margin:12px 0 6px}.sub{color:var(--muted);margin:4px 0 16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:12px}.k,.box{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:11px;margin-bottom:12px}.k{margin:0}.lab{font-size:.78rem;color:var(--muted)}.val{font-size:1.08rem;font-weight:bold;font-variant-numeric:tabular-nums}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}button,select,input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--ink);border-radius:5px;padding:7px 10px}button{cursor:pointer}button.primary{background:var(--ink);color:var(--bg)}button:disabled{opacity:.45;cursor:default}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.cols>.box{margin:0}.policy{display:grid;grid-template-columns:1fr auto;gap:2px 10px;margin:9px 0}.policy output{font-weight:bold;color:var(--gold)}.policy input,.policy select{grid-column:1/-1;width:100%}
-.hidden{display:none}.event{border:2px solid var(--red);background:var(--panel);border-radius:7px;padding:12px;margin:12px 0}.event .opts{display:grid;gap:7px;margin-top:9px}.event button{text-align:left}
-ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-bottom:1px dotted var(--line)}.small{font-size:.83rem;color:var(--muted)}.bad{color:var(--red)}.good{color:var(--green)}.table{width:100%;border-collapse:collapse;font-size:.86rem}.table td,.table th{text-align:left;padding:5px;border-bottom:1px solid var(--line)}.table td:last-child,.table th:last-child{text-align:right;font-variant-numeric:tabular-nums}.scroll{overflow:auto;max-height:270px}.status{font-weight:bold}.tag{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:4px;font-size:.75rem;color:var(--muted)}
-
-/* Camada visual integrada ao motor econômico */
-.topline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-.cycle-box{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:10px 12px;margin:0 0 12px}
-.cycle-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.84rem;margin-bottom:7px}
-.track{height:11px;position:relative;border:1px solid var(--line);border-radius:7px;background:rgba(128,128,128,.15);overflow:hidden}
-.harvest-zone{position:absolute;left:41.666%;width:16.667%;top:0;bottom:0;background:rgba(65,107,80,.28);border-left:1px dashed var(--green);border-right:1px dashed var(--green)}
-.year-cursor{position:absolute;top:0;bottom:0;width:3px;background:var(--gold)}
-.cycle-foot{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:4px}
-.pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px;margin:0 0 12px}
-.pillar{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:10px;min-width:0}
-.pillar-top{display:flex;justify-content:space-between;gap:6px;align-items:flex-start}
-.pillar .val{font-size:1.16rem}.spark{width:72px;height:26px;flex:none}
-.pillar-sub{display:grid;grid-template-columns:1fr auto;gap:4px 8px;border-top:1px dotted var(--line);padding-top:7px;margin-top:7px;font-size:.78rem}
-.pillar-sub span{color:var(--muted)}.pillar-sub b{text-align:right;font-variant-numeric:tabular-nums}
-.social-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px}
-.actor-card{border:1px solid var(--line);border-radius:5px;padding:8px;margin:6px 0;background:rgba(128,128,128,.025)}
-.actor-head{display:flex;justify-content:space-between;gap:8px;font-size:.84rem}.actor-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.76rem;color:var(--muted);margin-top:4px}
-.badge{display:inline-block;padding:1px 6px;border:1px solid var(--line);border-radius:4px;font-size:.7rem}
-.balance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
-.bal-col{border:1px solid var(--line);border-radius:5px;padding:8px;font-size:.82rem}
-.bal-row{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dotted var(--line)}.bal-row:last-child{border:0;font-weight:bold}
-@media(max-width:480px){body{padding-left:10px;padding-right:10px}.pillar{padding:9px}.cycle-foot{font-size:.65rem}}
-
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Vilarejo | O Gabinete</title>
+    <meta name="description" content="Vilarejo: simulação econômica v3.0 integrada ao núcleo central modular 0.1.">
+    
+    <!-- Tipografia Institucional Híbrida -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+    
+    <!-- Link para o CSS externo -->
+    <link rel="stylesheet" href="style.css">
 </head>
-<body><main>
-<h1>Vilarejo | Simulação econômica</h1>
-<p class="sub">Economia 3.0 · Núcleo Central 0.1: calendário, população compartilhada, estado da partida e comunicação entre módulos.</p>
-<section class="cycle-box" id="cycleBar" aria-label="Calendário sazonal"></section>
-<section class="pillars" id="pillars" aria-label="Indicadores macroeconômicos"></section>
-<section class="box" style="margin-bottom:12px"><h2>Retrato social e agentes econômicos <span class="small" id="popSummary"></span></h2><div class="social-grid"><div><h3>Famílias e trabalhadores</h3><div id="householdsList"></div></div><div><h3>Instituições e mercado</h3><div id="institutionsList"></div></div></div></section>
+<body>
+    <main>
+        <h1>Vilarejo | O Gabinete</h1>
+        <p class="sub">Gestão Macroeconômica e Balanço Fiscal · 3.0</p>
+        
+        <section class="cycle-box box-animated" id="cycleBar" aria-label="Calendário sazonal"></section>
+        <section class="pillars box-animated" id="pillars" aria-label="Indicadores macroeconômicos"></section>
+        
+        <section class="box box-animated" style="margin-bottom:12px">
+            <h2>Retrato social e agentes econômicos <span class="small" id="popSummary"></span></h2>
+            <div class="social-grid">
+                <div>
+                    <h3 title="As pessoas que vivem e trabalham no Vilarejo">Famílias e trabalhadores</h3>
+                    <div id="householdsList"></div>
+                </div>
+                <div>
+                    <h3 title="Empresas, bancos e o próprio governo que movimentam a economia">Instituições e mercado</h3>
+                    <div id="institutionsList"></div>
+                </div>
+            </div>
+        </section>
 
-<div class="grid" id="stats"></div>
-<div class="event hidden" id="event"><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div></div>
-<div class="row">
-<button class="primary" id="start">Começar</button><button id="pause" disabled>Pausar</button><button id="speed">Acelerar</button><button id="reset">Reiniciar</button>
-</div>
-<div class="cols">
-<section class="box">
-<h2>Ações imediatas</h2><div class="row" id="actions"></div>
-<h3>Contas e patrimônio</h3><div id="accounts"></div>
-<h3>Obrigações pendentes</h3><div id="obligations"></div>
-</section>
-<section class="box">
-<h2>Políticas públicas</h2><div class="small">Alterações entram em vigor no próximo fechamento mensal.</div><div id="policies"></div>
-</section>
-<section class="box">
-<h2>Demonstração de fluxos do último mês <span class="small">Estoque comercial: <b id="stockLabel">0</b></span></h2><div class="balance-grid" id="monthlyBalance"></div>
-</section>
-<section class="box">
-<h2>Resultado do último mês</h2><div id="monthly"></div>
-<h3>Mercado local</h3><div id="market"></div>
-</section>
-<section class="box">
-<h2>Registro de decisões e eventos</h2><ul id="feed"></ul>
-</section>
-</div>
-<section class="box" style="margin-top:12px">
-<h2>Balanço Patrimonial dos Setores Institucionais (SFC) <span class="small" id="sfcAuditBadge"></span></h2>
-<div class="balance-grid" id="institutionalBalances"></div>
-</section>
-<section class="box" style="margin-top:12px">
-<h2>Contas Nacionais simplificadas e Resultado Fiscal <span class="small" id="macroAuditBadge"></span></h2>
-<p class="small">Modelo didático: os valores e as identidades contábeis são calculados a partir das transações simuladas. Não representam estatísticas oficiais nem reproduzem integralmente a metodologia do IBGE ou do Tesouro Nacional.</p>
-<div class="balance-grid" id="macroeconomicAccounts"></div>
-</section>
-<section class="box" style="margin-top:12px">
-<h2>Livro-caixa detalhado</h2><div class="small">Últimas 60 movimentações. Valores positivos entram na conta de destino; valores negativos saem da conta de origem.</div>
-<div class="scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div>
-</section>
-</main>
-<script src="src/core/vilarejo_core.js"></script>
-<script src="src/events/eventos_v3.js"></script>
-<script src="src/economy/script.js"></script>
+        <div class="grid" id="stats"></div>
+        
+        <div class="event hidden pulse-animation" id="event">
+            <h2 id="eventTitle"></h2>
+            <div id="eventText"></div>
+            <div class="opts" id="eventOptions"></div>
+        </div>
+        
+        <div class="row controls no-print">
+            <button class="primary" id="start">Começar</button>
+            <button id="pause" disabled>Pausar</button>
+            <button id="speed">Acelerar</button>
+            <button id="reset">Reiniciar</button>
+        </div>
+        
+        <div class="cols">
+            <section class="box box-animated">
+                <h2 title="Decisões que você pode tomar agora para alterar o rumo do Vilarejo">Ações imediatas</h2>
+                <div class="row" id="actions"></div>
+                <h3 title="O dinheiro que você tem em caixa e o valor dos seus bens">Contas e patrimônio</h3>
+                <div id="accounts"></div>
+                <h3 title="Dívidas, impostos a pagar ou promessas a cumprir">Obrigações pendentes</h3>
+                <div id="obligations"></div>
+            </section>
+            
+            <section class="box box-animated">
+                <h2 title="Regras de longo prazo, como impostos e benefícios sociais">Políticas públicas</h2>
+                <div class="small">Alterações entram em vigor no próximo fechamento mensal.</div>
+                <div id="policies"></div>
+            </section>
+            
+            <section class="box box-animated">
+                <h2 title="Resumo de tudo que entrou e saiu das contas neste mês">Demonstração de fluxos <span class="small">Estoque comercial: <b id="stockLabel">0</b></span></h2>
+                <div class="balance-grid" id="monthlyBalance"></div>
+            </section>
+            
+            <section class="box box-animated">
+                <h2 title="O lucro ou prejuízo consolidado do mês passado">Resultado do último mês</h2>
+                <div id="monthly"></div>
+                <h3 title="O quanto foi produzido, comprado e vendido internamente">Mercado local</h3>
+                <div id="market"></div>
+            </section>
+            
+            <section class="box box-animated">
+                <h2 title="Histórico das suas decisões e acontecimentos importantes">Registro de decisões e eventos</h2>
+                <ul id="feed" class="scroll"></ul>
+            </section>
+        </div>
+        
+        <section class="box box-animated" style="margin-top:12px">
+            <h2 title="Uma foto de toda a riqueza e de todas as dívidas de quem vive no Vilarejo">O que o Vilarejo tem e o que ele deve (SFC) <span class="small" id="sfcAuditBadge"></span></h2>
+            <div class="balance-grid" id="institutionalBalances"></div>
+        </section>
+        
+        <section class="box box-animated" style="margin-top:12px">
+            <h2 title="O Produto Interno Bruto (PIB) e as contas do Governo">Riqueza produzida e Contas do Governo <span class="small" id="macroAuditBadge"></span></h2>
+            <p class="small">Modelo didático: os valores e as identidades contábeis são calculados a partir das transações simuladas. Não representam estatísticas oficiais nem reproduzem integralmente a metodologia do IBGE ou do Tesouro Nacional.</p>
+            <div class="balance-grid" id="macroeconomicAccounts"></div>
+        </section>
+        
+        <section class="box ledger-box box-animated" style="margin-top:12px">
+            <h2 title="O extrato completo, passo a passo, de cada moeda que trocou de mãos">Livro-caixa detalhado</h2>
+            <div class="small">Últimas 60 movimentações. Valores positivos entram na conta de destino; valores negativos saem da conta de origem.</div>
+            <div class="scroll custom-scrollbar">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Dia</th>
+                            <th>Origem → destino</th>
+                            <th>Motivo</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledger"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="src/core/vilarejo_core.js"></script>
+    <script src="src/events/eventos_v3.js"></script>
+    <script src="src/economy/script.js"></script>
 </body>
 </html>

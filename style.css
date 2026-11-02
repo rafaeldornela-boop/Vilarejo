@@ -1,0 +1,605 @@
+/* ESTILO GAZETA + GABINETE (VILAREJO) */
+
+:root {
+    /* Cores de Fundo (Papel e Mesa) */
+    --bg-desk: #2b3a42; /* Mesa de mogno/ardósia do gabinete */
+    --bg: #f4efe6;      /* Papel pergaminho clássico */
+    --panel: #fcfbf9;   /* Ofícios mais claros sobrepostos */
+    
+    /* Tintas e Contrastes (Alto Contraste) */
+    --ink: #11181c;     /* Preto quase absoluto para texto principal */
+    --muted: #495057;   /* Cinza escuro (WCAG AA) para textos auxiliares */
+    --line: #d1c7b7;    /* Pautas e divisórias do papel */
+    --line-heavy: #a89c8a; /* Bordas e chancelas estruturais */
+    
+    /* Heráldica e Indicadores (Oficiais) */
+    --gold: #b38234;    /* Dourado institucional */
+    --red: #9e2a2b;     /* Vermelho-bordô (Selo de cera / Déficit) */
+    --green: #2d6a4f;   /* Verde-musgo militar (Superávit) */
+    
+    /* Tipografia Híbrida */
+    --font-heading: 'Playfair Display', Georgia, serif;
+    --font-data: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+@media(prefers-color-scheme: dark) {
+    :root {
+        --bg-desk: #121619;
+        --bg: #1c2226;
+        --panel: #242b30;
+        --ink: #eaeaea;
+        --muted: #9ca3af;
+        --line: #3f474d;
+        --line-heavy: #5c666e;
+        --gold: #d4a359;
+        --red: #e06c62;
+        --green: #68a07c;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg-desk);
+    background-image: linear-gradient(135deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.1) 100%);
+    color: var(--ink);
+    font-family: var(--font-data); /* Base limpa e técnica */
+    font-size: 14px;
+    line-height: 1.5;
+    padding: env(safe-area-inset-top, 0) 20px env(safe-area-inset-bottom, 0);
+}
+
+main {
+    max-width: 1020px;
+    margin: 20px auto 44px;
+    padding: 30px 40px;
+    background: var(--bg);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.1); /* Efeito papel sobre a mesa */
+    border-radius: 4px;
+    border-top: 6px solid var(--ink); /* Cabeçalho forte de documento oficial */
+    animation: fadeInDocument 0.8s ease-out;
+}
+
+@keyframes fadeInDocument {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- TIPOGRAFIA DE JORNAL E OFÍCIO --- */
+h1, h2, h3, .event h2 {
+    font-family: var(--font-heading);
+    color: var(--ink);
+    margin: 0;
+}
+
+h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 8px;
+    margin-bottom: 5px;
+}
+
+h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Tooltips Nativos Estilizados pelo Navegador + Cursor Ajuda */
+[title] {
+    cursor: help;
+    border-bottom: 1px dotted var(--muted);
+}
+
+h3 {
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 16px 0 8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 4px;
+}
+
+.sub {
+    font-family: var(--font-heading);
+    font-style: italic;
+    color: var(--muted);
+    font-size: 1.1rem;
+    margin: 0 0 24px;
+}
+
+/* --- CAIXAS E PRANCHETAS (GABINETE) --- */
+.k, .box, .cycle-box, .pillar {
+    background: var(--panel);
+    border: 1px solid var(--line-heavy);
+    border-radius: 3px; /* Bordas mais retas, menos arredondadas */
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.02); /* Textura de baixo relevo sutil */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Interação sutil ao passar o mouse sobre os painéis */
+.box-animated:hover, .pillar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05), inset 0 0 10px rgba(0,0,0,0.02);
+    border-color: var(--ink);
+}
+
+.k { margin: 0; }
+
+.cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Responsividade melhorada */
+    gap: 16px;
+}
+.cols > .box { margin: 0; height: 100%; }
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+/* --- DADOS E TABELAS (TABULAR-NUMS PARA PRECISÃO) --- */
+.lab, .small {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.val, .pillar .val, .policy output, .bal-row span:last-child, .table td:last-child {
+    font-variant-numeric: tabular-nums; /* Números alinhados verticalmente */
+    font-family: var(--font-data);
+}
+
+.val {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.pillar .val {
+    font-size: 1.35rem;
+}
+
+/* --- EVENTO URGENTE (MEMORANDO DO GOVERNADOR) --- */
+.event {
+    background: #fdf5f5; /* Fundo levemente avermelhado */
+    border: 1px solid var(--red);
+    border-left: 6px solid var(--red); /* Marcação lateral forte */
+    border-radius: 3px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 4px 12px rgba(158, 42, 43, 0.15); /* Sombra avermelhada */
+}
+
+/* Animação de pulso para eventos urgentes */
+.pulse-animation:not(.hidden) {
+    animation: urgentPulse 2s infinite;
+}
+
+@keyframes urgentPulse {
+    0% { box-shadow: 0 0 0 0 rgba(158, 42, 43, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(158, 42, 43, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(158, 42, 43, 0); }
+}
+
+.event h2 {
+    color: var(--red);
+    font-size: 1.4rem;
+}
+
+@media(prefers-color-scheme: dark) {
+    .event { background: #2a1f1f; }
+}
+
+/* --- BOTÕES (CHANCELAS E CARIMBOS) --- */
+.row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.controls {
+    justify-content: center;
+    padding: 12px;
+    background: var(--line);
+    border-radius: 4px;
+}
+
+button, select, input {
+    font-family: var(--font-data);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    border-radius: 3px;
+    padding: 8px 14px;
+    transition: all 0.15s ease;
+}
+
+button {
+    cursor: pointer;
+    box-shadow: 2px 2px 0 var(--ink); /* Efeito 3D seco/carimbo */
+}
+
+button:hover:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--ink);
+    background: var(--line);
+}
+
+button:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+
+button.primary {
+    background: var(--ink);
+    color: var(--bg);
+}
+
+button.primary:hover:not(:disabled) {
+    background: var(--muted);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+    border-color: var(--muted);
+    color: var(--muted);
+}
+
+.event button {
+    text-align: left;
+    width: 100%;
+    margin-top: 6px;
+    background: var(--bg);
+    border-color: var(--red);
+    color: var(--red);
+    box-shadow: 2px 2px 0 var(--red);
+}
+
+.event button:hover:not(:disabled) {
+    background: var(--red);
+    color: var(--bg);
+}
+
+/* --- POLÍTICAS E FORMULÁRIOS (MÁQUINA DE ESCREVER) --- */
+.policy {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    margin: 12px 0;
+    align-items: center;
+}
+
+.policy output {
+    font-weight: bold;
+    color: var(--gold);
+    font-size: 1.1rem;
+}
+
+/* Estilo datilografado para inputs */
+.policy input, .policy select {
+    grid-column: 1 / -1;
+    width: 100%;
+    border: none;
+    border-bottom: 2px dotted var(--line-heavy);
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    padding-left: 4px;
+    font-family: monospace; /* Fonte monoespaçada para simular máquina */
+    font-size: 1rem;
+}
+
+.policy input:focus, .policy select:focus {
+    outline: none;
+    border-bottom-color: var(--ink);
+    border-bottom-style: solid;
+}
+
+/* --- LISTAS, FEED E BALANÇOS --- */
+ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.88rem;
+}
+
+li {
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+    animation: slideInItem 0.3s ease-out forwards; /* Animação para novos itens no feed */
+}
+
+@keyframes slideInItem {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.bad { color: var(--red); font-weight: 600; }
+.good { color: var(--green); font-weight: 600; }
+
+.status { font-weight: bold; }
+.tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid var(--line-heavy);
+    background: var(--bg);
+    border-radius: 2px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+/* --- BALANÇO PATRIMONIAL --- */
+.balance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.bal-col {
+    border: 1px solid var(--line-heavy);
+    background: var(--bg);
+    padding: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Detalhe de "fita selo" para os balanços */
+.bal-col::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--ink);
+    opacity: 0.2;
+}
+
+.bal-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.85rem;
+}
+
+.bal-row:last-child {
+    border: 0;
+    border-top: 2px double var(--ink); /* Sublinhado duplo de contabilidade */
+    font-weight: 700;
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
+/* --- LIVRO CAIXA DETALHADO --- */
+.ledger-box {
+    border: 2px solid var(--ink); /* Destaque para o livro principal */
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.table td, .table th {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--line);
+}
+
+.table th {
+    font-weight: 600;
+    color: var(--muted);
+    border-bottom: 2px solid var(--ink);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+.scroll {
+    overflow: auto;
+    max-height: 320px;
+    border: 1px solid var(--line-heavy);
+    border-top: 0;
+}
+
+/* Barra de rolagem temática (Scrollbar) */
+.custom-scrollbar::-webkit-scrollbar,
+.scroll::-webkit-scrollbar {
+    width: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-track,
+.scroll::-webkit-scrollbar-track {
+    background: var(--bg);
+    border-left: 1px solid var(--line);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.scroll::-webkit-scrollbar-thumb {
+    background: var(--line-heavy);
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}
+
+/* --- CAMADA VISUAL INTEGRADA AO MOTOR ECONÔMICO --- */
+.cycle-head {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 6px;
+}
+
+.track {
+    height: 14px;
+    position: relative;
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    overflow: hidden;
+}
+
+.harvest-zone {
+    position: absolute;
+    left: 41.666%;
+    width: 16.667%;
+    top: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(45deg, rgba(45,106,79,0.1), rgba(45,106,79,0.1) 4px, rgba(45,106,79,0.2) 4px, rgba(45,106,79,0.2) 8px);
+    border-left: 2px solid var(--green);
+    border-right: 2px solid var(--green);
+}
+
+.year-cursor {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--gold);
+    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    transition: left 0.1s linear; /* Animação suave para o cursor do tempo */
+}
+
+.cycle-foot {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-top: 6px;
+    text-transform: uppercase;
+}
+
+.pillars {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 0 0 16px;
+}
+
+.pillar-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    align-items: flex-start;
+}
+
+.spark {
+    width: 80px;
+    height: 30px;
+    flex: none;
+    border-bottom: 1px solid var(--line);
+}
+
+.pillar-sub {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+    border-top: 1px dashed var(--line);
+    padding-top: 10px;
+    margin-top: 10px;
+    font-size: 0.8rem;
+}
+
+.pillar-sub span { color: var(--muted); }
+.pillar-sub b { text-align: right; }
+
+.social-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.actor-card {
+    border: 1px solid var(--line-heavy);
+    border-left: 3px solid var(--ink);
+    padding: 10px 12px;
+    margin: 8px 0;
+    background: var(--bg);
+}
+
+.actor-head {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-bottom: 1px dotted var(--line);
+    padding-bottom: 4px;
+}
+
+.actor-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 6px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 2px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+/* --- MODO DE IMPRESSÃO (Gerar Relatórios em PDF) --- */
+@media print {
+    body { 
+        background: #fff; 
+        color: #000; 
+        padding: 0; 
+    }
+    main { 
+        box-shadow: none; 
+        margin: 0; 
+        padding: 0; 
+        border-top: none;
+    }
+    .no-print, .controls, #start, #pause, #speed, #reset { 
+        display: none !important; 
+    }
+    .box, .pillar, .event { 
+        box-shadow: none; 
+        border: 1px solid #000; 
+        page-break-inside: avoid;
+    }
+    .scroll { max-height: none; overflow: visible; }
+    h1, h2, h3, .val, .good, .bad { color: #000 !important; }
+}
+
+@media(max-width: 768px) {
+    body { padding: 0; background: var(--bg); }
+    main { margin: 0; border-radius: 0; border-top: 0; box-shadow: none; padding: 15px; }
+    h1 { font-size: 1.7rem; }
+    .cols { grid-template-columns: 1fr; }
+}
