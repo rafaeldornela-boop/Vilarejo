@@ -1,18 +1,16 @@
 {
   "name": "vilarejo",
-  "version": "2.4.0",
-  "description": "Vilarejo - Simulação econômica v2.4",
+  "version": "3.1.0",
+  "private": true,
+  "description": "Vilarejo: Economia 3.0 integrada ao Núcleo Central modular 0.1, com calendário, população compartilhada e barramento de eventos.",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "node -e \"console.log('Build complete')\"",
+    "build": "node --check server.js && node --check vilarejo_core.js && node --check script.js && node --check eventos_v3.js && node --check test_runner.js",
     "test": "node test_runner.js"
   },
-  "dependencies": {
-    "express": "^4.21.2"
-  },
-  "devDependencies": {
-    "jsdom": "^30.1.3"
+  "engines": {
+    "node": ">=18"
   }
 }
