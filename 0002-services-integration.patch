@@ -1,0 +1,116 @@
+diff --git a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@ -27,2 +27,3 @@
+         <button class="nav-item" data-view="institutions"><span class="nav-icon">▥</span><span>Instituições</span></button>
++        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços e desenvolvimento</span></button>
+         <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
+@@ -232,6 +233,11 @@
+         <section class="view-panel" data-view-panel="institutions" aria-label="Instituições">
+           <div class="section-heading"><div><div class="eyebrow">ESTRUTURA DO ESTADO</div><h2>O poder também precisa de instituições.</h2><p>Veja como os grupos de interesse se convertem em representação institucional, como se organiza a Câmara e qual é a base parlamentar do governo.</p></div></div>
+           <div id="institutionsDashboard" class="institutions-host"></div>
+         </section>
++
++        <section class="view-panel" data-view-panel="services" aria-label="Serviços públicos e desenvolvimento">
++          <div class="section-heading"><div><div class="eyebrow">CAPACIDADE E BEM-ESTAR DO ESTADO</div><h2>O que o Estado entrega à população.</h2><p>Saúde, educação, segurança, ciência, desenvolvimento, cultura e a infraestrutura material que sustenta tudo isso.</p></div></div>
++          <div id="servicesDashboard" class="services-host"></div>
++        </section>
+ 
+         <section class="view-panel" data-view-panel="government" aria-label="Governo">
+@@ -245,3 +250,4 @@
+   <script src="src/politics/vilarejo_politics.js"></script>
+   <script src="src/institutions/vilarejo_institutions.js"></script>
++  <script src="src/services/vilarejo_services.js"></script>
+   <script src="src/ui/dashboard.js"></script>
+diff --git a/src/ui/dashboard.js b/src/ui/dashboard.js
+--- a/src/ui/dashboard.js
++++ b/src/ui/dashboard.js
+@@ -50,3 +50,4 @@
+       politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
+       institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
++      services: ["Serviços e desenvolvimento", "Capacidade pública, bem-estar, infraestrutura e recursos estratégicos."],
+       government: ["Governo", "Políticas, orçamento e patrimônio público."],
+@@ -43,5 +44,12 @@
+     if (name === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+       const host = $("institutionsDashboard");
+       if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+     }
++    if (name === "services" && window.VilarejoServices && window.VilarejoServicesRuntime) {
++      const host = $("servicesDashboard");
++      if (host) {
++        host.__serviceSetLever = (domainId, leverId, value) => window.VilarejoServicesRuntime.setLever(domainId, leverId, value);
++        window.VilarejoServices.renderDashboard(window.VilarejoServicesRuntime.state, host);
++      }
++    }
+     window.scrollTo({ top: 0, behavior: "smooth" });
+@@ -300,5 +307,12 @@
+     if (activeView === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+       const host = $("institutionsDashboard");
+       if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+     }
++    if (activeView === "services" && window.VilarejoServices && window.VilarejoServicesRuntime) {
++      const host = $("servicesDashboard");
++      if (host) {
++        host.__serviceSetLever = (domainId, leverId, value) => window.VilarejoServicesRuntime.setLever(domainId, leverId, value);
++        window.VilarejoServices.renderDashboard(window.VilarejoServicesRuntime.state, host);
++      }
++    }
+   }
+diff --git a/style.css b/style.css
+--- a/style.css
++++ b/style.css
+@@ -0,0 +1,39 @@
++.services-host { min-width: 0; }
++.services-dashboard { display: grid; gap: 15px; }
++.services-intro-note { display: grid; gap: 5px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--muted); font-size: 10px; line-height: 1.55; }
++.services-intro-note strong { color: var(--forest); font: 800 13px var(--heading); }
++.services-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
++.service-card { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
++.service-card-head { display: flex; align-items: flex-start; gap: 11px; }
++.service-icon { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: var(--forest); background: #edf3e9; font-size: 17px; }
++.service-card-head h3 { margin: 0; color: var(--forest); font: 800 14px var(--heading); }
++.service-card-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
++.service-score { display: flex; align-items: baseline; gap: 8px; margin: 15px 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
++.service-score strong { color: var(--forest); font: 800 24px var(--heading); }
++.service-score span { color: var(--muted); font-size: 9px; }
++.service-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 13px; }
++.service-metric { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid #edf0eb; font-size: 9px; }
++.service-metric span { color: var(--muted); }
++.service-metric b { color: var(--forest); }
++.service-details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 9px; }
++.service-details summary { color: var(--forest); cursor: pointer; font-size: 9px; font-weight: 800; }
++.service-priorities { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
++.service-priorities span { padding: 4px 7px; border-radius: 5px; color: #63776a; background: #f0f4ed; font-size: 8px; }
++.service-levers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 9px; }
++.service-lever { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid #edf0eb; color: var(--muted); font-size: 8px; text-transform: capitalize; }
++.service-lever b { color: var(--forest); }
++.service-resource-panel { padding: 19px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
++.service-resource-panel h2 { margin: 4px 0 14px; color: var(--forest); font: 800 17px var(--heading); }
++.service-resource-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
++.service-resource-grid > div { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcf8; }
++.service-resource-grid span, .service-resource-grid small { display: block; color: var(--muted); font-size: 8px; }
++.service-resource-grid b { display: block; margin: 5px 0; color: var(--forest); font: 800 20px var(--heading); }
++.service-resource-grid small { line-height: 1.45; }
++.service-lever-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 9px; align-items: center; padding: 6px 0; border-bottom: 1px solid #edf0eb; color: var(--muted); font-size: 8px; text-transform: capitalize; }
++.service-lever-control b { color: var(--forest); }
++.service-lever-control input { grid-column: 1 / -1; width: 100%; accent-color: #789b75; }
++@media (max-width: 760px) {
++  .services-grid { grid-template-columns: 1fr; }
++  .service-resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++  .service-metrics, .service-levers { grid-template-columns: 1fr; }
++}
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -10,2 +10,2 @@
+-    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/vilarejo_economy.js && node --check src/events/eventos_v3.js && node --check src/society/vilarejo_society.js && node --check src/politics/vilarejo_politics.js && node --check src/institutions/vilarejo_institutions.js && node --check src/test/test_runner.js && node --check src/test/politics_test.js && node --check src/test/institutions_test.js",
+-    "test": "node src/test/test_runner.js && node src/test/society_test.js && node src/test/politics_test.js && node src/test/institutions_test.js"
++    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/vilarejo_economy.js && node --check src/events/eventos_v3.js && node --check src/society/vilarejo_society.js && node --check src/politics/vilarejo_politics.js && node --check src/institutions/vilarejo_institutions.js && node --check src/services/vilarejo_services.js && node --check src/test/test_runner.js && node --check src/test/politics_test.js && node --check src/test/institutions_test.js && node --check src/test/services_test.js",
++    "test": "node src/test/test_runner.js && node src/test/society_test.js && node src/test/politics_test.js && node src/test/institutions_test.js && node src/test/services_test.js"
+diff --git a/src/test/test_runner.js b/src/test/test_runner.js
+--- a/src/test/test_runner.js
++++ b/src/test/test_runner.js
+@@ -96,2 +96,3 @@
+ report("A página carrega Instituições exatamente uma vez após Política", loadedScripts.filter((src) => src === "src/institutions/vilarejo_institutions.js").length === 1 && loadedScripts.indexOf("src/politics/vilarejo_politics.js") < loadedScripts.indexOf("src/institutions/vilarejo_institutions.js"));
++report("A página carrega Serviços Públicos após os módulos de Política e Instituições", loadedScripts.filter((src) => src === "src/services/vilarejo_services.js").length === 1 && loadedScripts.indexOf("src/institutions/vilarejo_institutions.js") < loadedScripts.indexOf("src/services/vilarejo_services.js"));
+ report("O servidor permite servir o núcleo central", /src\\//.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));

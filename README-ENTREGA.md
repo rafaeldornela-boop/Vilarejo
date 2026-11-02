@@ -1,55 +1,57 @@
-# Vilarejo | Política + Instituições 1.0.0
+# Vilarejo | Expansão do Estado 1.0.0
 
-Esta entrega reúne os dois módulos e as alterações de interface para a `main`.
+Pacote consolidado: Política + Instituições + sete módulos de serviços públicos e recursos estratégicos, com painel do jogador.
 
-## Conteúdo do pacote
+## Conteúdo
 
-### Arquivos novos
+- `src/politics/vilarejo_politics.js`
+- `src/institutions/vilarejo_institutions.js`
+- `src/services/vilarejo_services.js`
+- `src/test/politics_test.js`
+- `src/test/institutions_test.js`
+- `src/test/services_test.js`
+- documentação em `docs/`
+- patches de integração sequenciais em `integration/`
 
-- `src/politics/vilarejo_politics.js`: dez grupos de interesse, indicadores de poder, representatividade, eventos causais e fechamento mensal.
-- `src/institutions/vilarejo_institutions.js`: Executivo, Câmara de Representação dos Interesses, distribuição de cadeiras, mandato, coalizão e oposição.
-- `src/test/politics_test.js`: 21 testes do módulo Política.
-- `src/test/institutions_test.js`: 16 testes do módulo Instituições.
-- `docs/politics/README.md` e `docs/institutions/README.md`: contratos e regras documentadas.
+## Aplicação na branch main
 
-### Arquivos existentes alterados pelo patch
-
-- `index.html`: novas entradas de navegação, painéis e ordem de carregamento dos módulos;
-- `src/ui/dashboard.js`: títulos e renderização dos dois painéis;
-- `style.css`: cartões, indicadores, bancadas, coalizão e layout responsivo;
-- `package.json`: build e execução das novas suítes;
-- `src/test/test_runner.js`: validação da ordem dos scripts.
-
-## Aplicação na raiz do repositório
-
-Extraia o conteúdo do ZIP diretamente na raiz do repositório `main`, mesclando `src/`, `docs/` e `integration/` com os diretórios existentes. Depois aplique:
+A expansão anterior de Política e Instituições precisa ser aplicada antes do painel de Serviços, pois o segundo patch se apoia nos painéis e na ordem de scripts criados pelo primeiro.
 
 ```bash
 git apply --check integration/0001-politics-institutions-integration.patch
 git apply integration/0001-politics-institutions-integration.patch
+
+git apply --check integration/0002-services-integration.patch
+git apply integration/0002-services-integration.patch
+
 npm test
 npm run build
 git diff --check
 ```
 
-Revise o resultado antes do commit:
+Se a integração Política + Instituições já estiver aplicada no seu clone, pule o primeiro patch. Não aplique o mesmo patch duas vezes.
 
-```bash
-git status --short
-git diff --stat
-git diff
-```
+## O que aparece na visão do jogador
 
-## Resultado dos testes desta entrega
+Novo item de navegação: **Serviços e desenvolvimento**. A tela mostra sete cartões, indicadores, prioridades e controles de intensidade. Abaixo, um painel de recursos estratégicos mostra água, eletricidade, petróleo e minerais.
 
-- Política: 21/21 aprovados.
-- Instituições: 16/16 aprovados.
-- Total isolado: 37/37 aprovados.
-- Sintaxe dos dois módulos: verificada com `node --check`.
-- Sintaxe e aplicação do patch: o patch foi validado pelo parser do Git (`git apply --numstat`).
+## Módulos e escopo
 
-A suíte completa do repositório-base não foi executada nesta pasta, porque ela depende dos arquivos da `main` que não fazem parte do pacote incremental. Por isso, execute `npm test` e `npm run build` depois de aplicar o patch no seu clone.
+Os domínios são registrados individualmente no Runtime: `saude`, `educacao`, `seguranca`, `ciencia`, `desenvolvimento`, `cultura` e `infraestrutura`. O módulo agregado `servicos` coordena fechamento mensal, snapshots e eventos entre áreas.
 
-## Decisão de desenho que deve ser conhecida
+Saneamento, água, eletricidade, petróleo e mineração estão em Infraestrutura e Recursos Estratégicos, não dentro da Saúde. Saúde consome os efeitos de saneamento, água e energia. Essa separação evita que um setor seja dono de recursos que servem ao Estado inteiro.
 
-A Câmara começa com 21 cadeiras, alocadas aos grupos pelo indicador de influência política, com método dos maiores restos. Isso representa bancadas de interesse, não uma eleição popular. O mandato-padrão é de 48 meses. Oscilações mensais não mudam imediatamente a distribuição de cadeiras; a renovação ocorre ao fim do mandato. A coalizão precisa ser formada explicitamente e pode ser majoritária ou minoritária.
+## Testes executados nesta entrega
+
+- Política: 21/21.
+- Instituições: 16/16.
+- Serviços: 20/20.
+- Total isolado: **57/57 aprovados**.
+- `node --check` nos três módulos.
+- Os patches foram validados estruturalmente com `git apply --numstat`.
+
+A suíte completa do repositório e o `git apply --check` contra um clone atualizado da `main` não foram executados neste ambiente. Portanto, rode os comandos acima antes do commit. Nenhum commit foi feito no GitHub.
+
+## Limite importante
+
+Os controles atuais alteram intensidade de políticas e os indicadores evoluem mensalmente. Ainda não há débito no orçamento, contratação de pessoal, construção física ou consumo de insumos da Economia. A próxima fase deve integrar cada decisão ao orçamento, à capacidade administrativa, ao mercado de trabalho, à produção e à infraestrutura. Não trate os índices desta versão como gastos reais.

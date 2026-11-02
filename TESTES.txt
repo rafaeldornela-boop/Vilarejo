@@ -1,0 +1,9 @@
+POLÍTICA 1.0.0: 21 aprovados, 0 reprovados
+INSTITUIÇÕES 1.0.0: 16 aprovados, 0 reprovados
+SERVIÇOS 1.0.0: 20 aprovados, 0 reprovados
+TOTAL: 57 aprovados, 0 reprovados
+
+Validação estrutural dos patches: git apply --numstat
+Validação da aplicação sobre clone atualizado da main: pendente
+Suíte completa npm test sobre main: pendente
+Build npm run build sobre main: pendente
