@@ -29,6 +29,7 @@
         <button class="nav-item" data-view="politics"><span class="nav-icon">⚖</span><span>Política</span></button>
         <button class="nav-item" data-view="institutions"><span class="nav-icon">▥</span><span>Instituições</span></button>
         <button class="nav-item" data-view="records"><span class="nav-icon">☷</span><span>Histórico</span></button>
+        <button class="nav-item" data-view="intelligence"><span class="nav-icon">⌁</span><span>Inteligência</span></button>
       </nav>
 
       <div class="sidebar-bottom">
@@ -202,7 +203,7 @@
             <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">DEMOGRAFIA</span><h3>População</h3><p>Como a comunidade cresce ou diminui.</p></div></div><div id="chart-population" class="chart-area" data-label="Evolução da população"></div></article>
             <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">ORÇAMENTO</span><h3>Receitas e despesas</h3><p>Receita pública e despesa primária mensal.</p></div></div><div id="chart-government" class="chart-area" data-label="Receita e despesa pública"></div></article>
             <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">ENDIVIDAMENTO</span><h3>Dívida pública</h3><p>Saldo de empréstimos contratados pelo governo.</p></div></div><div id="chart-debt" class="chart-area" data-label="Dívida pública"></div></article>
-            <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">DISTRIBUIÇÃO DE RENDA</span><h3>Desigualdade</h3><p>Estimativa per capita, com renda distribuída igualmente entre os integrantes de cada família.</p></div></div><div id="chart-income" class="chart-area" data-label="Índice de Gini de renda familiar"></div></article>
+            <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">DISTRIBUIÇÃO DE RENDA</span><h3>Desigualdade</h3><p>Índice de Gini e renda média não são produzidos pela referência atual; nenhum valor é estimado.</p></div></div><div id="chart-income" class="chart-area" data-label="Índice de Gini indisponível na referência atual"></div></article>
           </div>
           <details class="content-card detail-card"><summary>Detalhes do mercado e resultado do último mês</summary><div class="detail-columns"><div><h3>Mercado local</h3><div id="market"></div></div><div><h3>Resultado do último mês</h3><div id="monthly"></div></div><div><h3>Fluxos financeiros</h3><div class="balance-grid" id="monthlyBalance"></div><div class="small">Estoque comercial: <b id="stockLabel">0</b></div></div></div></details>
         </section>
@@ -264,6 +265,10 @@
           <div class="records-grid"><article class="content-card"><div class="eyebrow">DIÁRIO DO VILAREJO</div><h2>Decisões e acontecimentos</h2><ul id="feed" class="feed-list scroll"></ul></article><article class="content-card ledger-card"><div class="eyebrow">RASTREABILIDADE FINANCEIRA</div><h2>Livro-caixa</h2><p class="card-description">Últimas 60 movimentações registradas.</p><div class="scroll ledger-scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div></article></div>
         </section>
 
+        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência">
+          <div id="intelligenceDashboard" class="intel-host"></div>
+        </section>
+
         <footer class="app-footer"><span>VILAREJO · SIMULAÇÃO ECONÔMICA</span><span>Um mundo construído por decisões.</span></footer>
       </div>
     </main>
@@ -275,6 +280,8 @@
   <script src="src/society/vilarejo_society.js"></script>
   <script src="src/politics/vilarejo_politics.js"></script>
   <script src="src/institutions/vilarejo_institutions.js"></script>
+  <script src="src/intelligence/vilarejo_intelligence.js"></script>
+  <script src="src/intelligence/intelligence_view.js"></script>
   <script src="src/ui/dashboard.js"></script>
 </body>
 </html>

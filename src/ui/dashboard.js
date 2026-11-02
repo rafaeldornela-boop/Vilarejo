@@ -30,7 +30,6 @@
   let activeView = "overview";
   let lastSnapshot = null;
   let lastChartSignature = "";
-  const monthlyHistory = [];
 
   function getCivilDateInfo(simDay) {
     const dayNum = Math.max(1, Number(simDay) || 1);
@@ -85,7 +84,7 @@
           sessionId: core?.session?.startTime ? `session-${core.session.startTime}` : "session-vilarejo",
           gameOver: s?.gameOver || null,
           running: core?.session?.status === "running",
-          history: monthlyHistory,
+          history: window.VilarejoIntelligenceRuntime?.service?.getCurrentHistory?.() || [],
           population: pop,
           housingCapacity: s?.housingCapacity || (pop + 2),
           buildings: s?.buildings?.length || 0,
@@ -112,44 +111,7 @@
   }
 
   function recordMonthClosure(payload) {
-    if (!payload || !window.VilarejoTest || typeof window.VilarejoTest.stateSnapshot !== "function") return;
-    try {
-      const s = window.VilarejoTest.stateSnapshot();
-      const labor = typeof window.VilarejoTest.getLaborStats === "function" ? window.VilarejoTest.getLaborStats() : s?.laborStats;
-      const fiscal = typeof window.VilarejoTest.calculateFiscalReport === "function" ? window.VilarejoTest.calculateFiscalReport() : s?.fiscalReport;
-      const macro = typeof window.VilarejoTest.calculateNationalAccounts === "function" ? window.VilarejoTest.calculateNationalAccounts() : s?.nationalAccounts;
-      const bs = typeof window.VilarejoTest.generateBalanceSheets === "function" ? window.VilarejoTest.generateBalanceSheets() : s?.balanceSheets;
-
-      const month = payload.monthNumber || s?.monthNumber || (monthlyHistory.length + 1);
-      const existing = monthlyHistory.find((entry) => entry.month === month);
-
-      const entry = {
-        month,
-        label: "Mês " + month,
-        gdp: macro?.approaches?.production ?? (macro?.gdp ?? (s?.lastNationalAccounts?.approaches?.production || 0)),
-        unemployment: labor?.unemploymentRate ?? (s?.unemploymentHistory?.[s?.unemploymentHistory?.length - 1] || 0),
-        approval: s?.approval ?? 50,
-        costIndex: s?.costOfLivingIndex ?? 100,
-        realWageIndex: Math.round(((s?.wage || 1800) / ((s?.costOfLivingIndex || 100) / 100)) / 18),
-        primaryResult: fiscal?.primaryResult ?? 0,
-        inflation: s?.monthlyInflation ?? 0,
-        consumption: s?.lastConsumption ?? ((s?.lastFoodConsumption || 0) + (s?.lastServiceConsumption || 0)),
-        population: payload.population?.total ?? (labor ? (labor.occupied + labor.unemployedSeeking + labor.outOfLaborForce) : 10),
-        taxRevenue: fiscal?.tributaryRevenue ?? 0,
-        primaryExpenditure: fiscal?.primaryExpenditure ?? 0,
-        governmentDebt: bs?.government?.liabilities ?? 0,
-        incomeGini: 28.5
-      };
-
-      if (existing) {
-        Object.assign(existing, entry);
-      } else {
-        monthlyHistory.push(entry);
-      }
-      if (monthlyHistory.length > 60) monthlyHistory.shift();
-    } catch (e) {
-      console.warn("Erro ao registrar fechamento mensal no histórico:", e);
-    }
+    return window.VilarejoIntelligenceRuntime?.service?.recordMonthClosure?.(payload) || null;
   }
 
   function setView(name) {
@@ -170,7 +132,8 @@
       services: ["Serviços públicos", "Infraestrutura urbana, abastecimento, habitação e obras."],
       politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
       institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
-      records: ["Histórico", "Decisões, acontecimentos e movimentações financeiras."]
+      records: ["Histórico", "Decisões, acontecimentos e movimentações financeiras."],
+      intelligence: ["Central de Inteligência", "Evolução histórica, tendências e alertas da simulação."]
     };
     const item = titles[name] || titles.overview;
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
@@ -196,6 +159,10 @@
       const host = $("institutionsDashboard");
       if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
     }
+    if (activeView === "intelligence" && window.VilarejoIntelligence?.renderDashboard) {
+      const host = $("intelligenceDashboard");
+      if (host) window.VilarejoIntelligence.renderDashboard(host);
+    }
     if (activeView === "government") {
       if (window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
         const hostInst = $("institutionsDashboard");
@@ -216,6 +183,11 @@
       target.innerHTML = '<div class="chart-empty"><span class="chart-empty-mark">⌁</span><strong>' +
         (emptyTitle || "Seu histórico está começando") +
         '</strong><span>Os pontos surgem a cada fechamento mensal. Nenhum dado anterior foi inventado.</span></div>';
+      return;
+    }
+    const hasSeriesData = rows.some((row) => series.some((item) => Number.isFinite(Number(row[item.key]))));
+    if (!hasSeriesData) {
+      target.innerHTML = '<div class="chart-empty"><span class="chart-empty-mark">⌁</span><strong>Indicador sem histórico disponível</strong><span>Esta referência não produz uma série para este indicador; nenhum valor foi estimado.</span></div>';
       return;
     }
 
@@ -730,18 +702,9 @@
   function initEventSubscriptions() {
     if (window.VilarejoRuntime && window.VilarejoRuntime.events) {
       window.VilarejoRuntime.events.on("world:synchronized", () => refresh());
-      window.VilarejoRuntime.events.on("economy:month-closed", (event) => {
-        recordMonthClosure(event?.payload);
-        refresh();
-      });
-      window.VilarejoRuntime.events.on("game:initialized", () => {
-        monthlyHistory.length = 0;
-        refresh();
-      });
-      window.VilarejoRuntime.events.on("game:reset", () => {
-        monthlyHistory.length = 0;
-        refresh();
-      });
+      window.VilarejoRuntime.events.on("economy:month-closed", () => refresh());
+      window.VilarejoRuntime.events.on("game:initialized", () => refresh());
+      window.VilarejoRuntime.events.on("game:reset", () => refresh());
       window.VilarejoRuntime.events.on("institutions:coalition-updated", () => refresh());
       window.VilarejoRuntime.events.on("politics:month-closed", () => refresh());
     }
