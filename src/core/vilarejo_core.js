@@ -184,6 +184,15 @@
 
     function syncFromEconomy(households, day) {
       if (!Array.isArray(households)) throw new TypeError("A sincronização populacional exige uma lista de domicílios.");
+      const incomingIds = new Set();
+      for (const household of households) {
+        if (!household || household.id === undefined || household.id === null || String(household.id) === "") {
+          throw new TypeError("Cada domicílio deve ter um identificador não vazio.");
+        }
+        const id = String(household.id);
+        if (incomingIds.has(id)) throw new Error(`Identificador de domicílio duplicado: ${id}.`);
+        incomingIds.add(id);
+      }
       const existing = new Map(groups.map((group) => [String(group.id), group]));
       groups = households.map((household) => {
         const id = String(household.id);
@@ -200,6 +209,7 @@
           population: adults + children,
           employed: jobs,
           happiness: Math.max(0, Math.min(100, finiteNumber(household.happiness, 0))),
+          migrant: household.migrant === true,
           sourceModule: "economia",
           updatedDay: Math.max(1, Math.floor(finiteNumber(day, getDay ? getDay() : 1))),
           extensions: clone(previous.extensions || {})

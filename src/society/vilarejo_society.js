@@ -68,15 +68,23 @@
     return record;
   }
 
+  function personIdExists(state, id) {
+    return state.households.some((household) => Array.isArray(household.members) && household.members.some((person) => person.id === id));
+  }
+
   function nextPersonId(state) {
-    return `p${state.nextPersonId++}`;
+    let id;
+    do { id = `p${state.nextPersonId++}`; } while (personIdExists(state, id));
+    return id;
   }
 
   function createPerson(state, values = {}) {
     ensureState(state);
     const age = clamp(values.age ?? 30, 0, 110);
     const bornHere = values.bornHere !== false;
-    const id = values.id !== undefined && values.id !== null ? text(values.id) : nextPersonId(state);
+    const explicitId = values.id !== undefined && values.id !== null;
+    const id = explicitId ? text(values.id) : nextPersonId(state);
+    if (explicitId && personIdExists(state, id)) throw new Error(`Identificador de pessoa duplicado: ${id}.`);
     const generatedId = /^p(\d+)$/.exec(id);
     if (generatedId) state.nextPersonId = Math.max(state.nextPersonId, Number(generatedId[1]) + 1);
     return {
@@ -125,11 +133,24 @@
     const id = text(group.id);
     const adults = Math.max(0, Math.floor(numberOr(group.adults)));
     const children = Math.max(0, Math.floor(numberOr(group.children)));
+    const category = text(group.category || group.type, "household");
+    const members = seedMembers(state, id, adults, children);
+    if (group.migrant === true && adults > 0) {
+      for (const person of members.filter((item) => item.age >= ADULT_AGE).slice(0, adults)) {
+        person.bornHere = false;
+        person.origin = "migração econômica";
+        person.cultureGroup = "regional";
+        person.integration = 42;
+        person.arrivalMonth = state.currentMonth;
+        person.monthsInVillage = 0;
+        person.source = "migracao-economia";
+      }
+    }
     return {
       id,
       name: text(group.label || group.name, `Domicílio ${id}`),
-      category: text(group.category || group.type, "household"),
-      members: seedMembers(state, id, adults, children),
+      category,
+      members,
       sourcePopulation: { adults, children, employed: Math.max(0, numberOr(group.employed)), updatedDay: numberOr(group.updatedDay, null) }
     };
   }
@@ -141,11 +162,25 @@
     return state;
   }
 
+  function validatePopulationGroups(populationGroups) {
+    if (!Array.isArray(populationGroups)) return;
+    const ids = new Set();
+    for (const group of populationGroups) {
+      if (group?.id === undefined || group?.id === null) continue;
+      const id = text(group.id);
+      if (!id) throw new TypeError("Identificador de domicílio não pode ser vazio.");
+      if (ids.has(id)) throw new Error(`Identificador de domicílio duplicado: ${id}.`);
+      ids.add(id);
+    }
+  }
+
   function seedFromEconomy(state, populationGroups = []) {
     ensureState(state);
+    const groups = Array.isArray(populationGroups) ? populationGroups : [];
+    validatePopulationGroups(groups);
     state.households = [];
     state.economyBaseline = {};
-    for (const group of Array.isArray(populationGroups) ? populationGroups : []) {
+    for (const group of groups) {
       if (group?.id === undefined || group?.id === null) continue;
       const household = createHouseholdFromEconomy(state, group);
       state.households.push(household);
@@ -188,11 +223,13 @@
 
   function reconcileFromEconomy(state, populationGroups = [], options = {}) {
     ensureState(state);
+    const groups = Array.isArray(populationGroups) ? populationGroups : [];
+    validatePopulationGroups(groups);
     const currentIds = new Set();
     const adjustments = [];
     const month = finite(options.month) ? Number(options.month) : state.currentMonth;
 
-    for (const group of Array.isArray(populationGroups) ? populationGroups : []) {
+    for (const group of groups) {
       if (group?.id === undefined || group?.id === null) continue;
       const id = text(group.id);
       currentIds.add(id);
@@ -677,6 +714,10 @@
 
     const unsubscribeMonth = runtime.events.on("economy:month-closed", (event) => {
       const month = numberOr(event?.payload?.monthNumber, runtime.clock?.snapshot?.().economicMonthNumber || state.currentMonth + 1);
+      if (state.lastAdvancedMonth === month) return;
+      if (state.lastAdvancedMonth !== null && month < state.lastAdvancedMonth) {
+        throw new RangeError("A Sociedade não pode retroceder no calendário.");
+      }
       const groups = runtime.population.getSnapshot().groups;
       reconcileFromEconomy(state, groups, { month });
       advanceMonth(state, {

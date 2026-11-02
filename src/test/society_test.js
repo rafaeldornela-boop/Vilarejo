@@ -26,6 +26,35 @@ function baseGroups() {
 
 console.log("\n=== SOCIEDADE 1.0.0 ===");
 
+test("rejeita domicílios duplicados sem mutar a semente nem a reconciliação", () => {
+  const state = Society.createState({ seed: 101 });
+  const duplicateGroups = [{ id: 7, adults: 1 }, { id: "7", adults: 2 }];
+  const beforeSeed = JSON.stringify(state);
+  assert.throws(() => Society.seedFromEconomy(state, duplicateGroups), /domicílio duplicado/);
+  assert.equal(JSON.stringify(state), beforeSeed);
+  Society.seedFromEconomy(state, baseGroups());
+  const beforeReconcile = JSON.stringify(state);
+  assert.throws(() => Society.reconcileFromEconomy(state, duplicateGroups, { month: 1 }), /domicílio duplicado/);
+  assert.equal(JSON.stringify(state), beforeReconcile);
+});
+
+test("reconhece imigrante marcado pela Economia no cadastro demográfico", () => {
+  const state = Society.createState({ seed: 102 });
+  Society.seedFromEconomy(state, [{ id: "migrant-1", label: "Migrante migrant-1", category: "single", migrant: true, adults: 1, children: 0 }]);
+  const person = state.households[0].members[0];
+  assert.equal(person.bornHere, false);
+  assert.equal(person.origin, "migração econômica");
+  assert.equal(person.integration, 42);
+  assert.equal(Society.getDemographicSnapshot(state).foreignBorn, 1);
+});
+
+test("não aceita identificadores de pessoa explícitos em duplicidade", () => {
+  const state = Society.createState({ seed: 103 });
+  Society.seedFromEconomy(state, [{ id: "pessoas", adults: 0, children: 0 }]);
+  state.households[0].members.push(Society.createPerson(state, { id: "p-custom", age: 30 }));
+  assert.throws(() => Society.createPerson(state, { id: "p-custom", age: 31 }), /pessoa duplicado/);
+});
+
 test("inicializa pessoas sem alterar os domicílios da Economia", () => {
   const groups = baseGroups();
   const before = JSON.stringify(groups);

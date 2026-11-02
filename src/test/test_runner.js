@@ -106,7 +106,10 @@ console.log("\n=== VERIFICAÇÕES ESTRUTURAIS ===");
 report("A página carrega o núcleo central exatamente uma vez", loadedScripts.filter((src) => src === "src/core/vilarejo_core.js").length === 1);
 report("O núcleo central vem antes dos eventos e da economia", loadedScripts.indexOf("src/core/vilarejo_core.js") >= 0 && loadedScripts.indexOf("src/core/vilarejo_core.js") < loadedScripts.indexOf("src/events/eventos_v3.js") && loadedScripts.indexOf("src/events/eventos_v3.js") < loadedScripts.indexOf("src/economy/vilarejo_economy.js"));
 report("A página carrega vilarejo_economy.js exatamente uma vez", loadedScripts.filter((src) => src === "src/economy/vilarejo_economy.js").length === 1);
-report("O servidor permite servir o núcleo central", /src\//.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
+const expectedScripts = ["src/core/vilarejo_core.js", "src/events/eventos_v3.js", "src/economy/vilarejo_economy.js", "src/society/vilarejo_society.js", "src/politics/vilarejo_politics.js", "src/institutions/vilarejo_institutions.js", "src/services/vilarejo_services.js", "src/ui/dashboard.js"];
+report("Todos os scripts carregam uma única vez na ordem completa do contrato", JSON.stringify(loadedScripts) === JSON.stringify(expectedScripts));
+report("A página inclui o stylesheet principal liberado explicitamente pelo servidor", /<link\b[^>]*href=["']style\.css["']/i.test(html) && /new Set\(\["index\.html",\s*"style\.css"\]\)/.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
+report("O servidor permite servir scripts da aplicação", /src\//.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
 report("A página declara idioma português", /<html\s+lang=["']pt-BR["']/i.test(html));
 report("O executor de testes não depende de jsdom", !/require\(["']jsdom["']\)/.test(fs.readFileSync(path.join(ROOT, "src/test/test_runner.js"), "utf8")));
 
@@ -132,6 +135,10 @@ try {
     { id: 2, name: "Grupo B", adults: 1, children: 2, jobs: 1, happiness: 50 }
   ], 151);
   report("Diretório populacional consolida famílias sem depender de dados de interface", population.totals.total === 6 && population.totals.adults === 3 && population.totals.children === 3);
+  const populationBeforeDuplicate = JSON.stringify(core.population.getSnapshot());
+  let duplicateIdsRejected = false;
+  try { core.population.syncFromEconomy([{ id: 7, adults: 1 }, { id: "7", adults: 2 }], 152); } catch (error) { duplicateIdsRejected = /duplicado/.test(error.message); }
+  report("Diretório rejeita IDs duplicados após normalização sem mutação parcial", duplicateIdsRejected && JSON.stringify(core.population.getSnapshot()) === populationBeforeDuplicate);
   report("Diretório preserva extensões de outros módulos", core.population.addExtension("1", "sociedade", { escolaridade: "média" }) && core.population.getSnapshot().groups[0].extensions.sociedade.escolaridade === "média");
   core.session.reset({ day: 40 });
   report("Reiniciar a partida limpa os dados populacionais e reinicia a sessão", core.population.getSnapshot().totals.total === 0 && core.clock.snapshot().absoluteDay === 40 && core.session.get().status === "ready");

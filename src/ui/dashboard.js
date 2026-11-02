@@ -48,6 +48,9 @@
       overview: ["Visão geral", "Acompanhe o território e o pulso da comunidade."],
       economy: ["Economia", "Produção, preços, trabalho e atividade ao longo do tempo."],
       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
+      politics: ["Política", "Grupos de interesse, influência, satisfação e relações com o governo."],
+      institutions: ["Instituições", "Representação, bancadas, coalizões, oposição e mandatos."],
+      services: ["Serviços e desenvolvimento", "Capacidade pública, bem-estar, infraestrutura e recursos estratégicos."],
       government: ["Governo", "Políticas, orçamento e patrimônio público."],
       records: ["Registros", "Decisões, acontecimentos e movimentações financeiras."]
     };
@@ -55,7 +58,26 @@
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
     if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "O vilarejo é seu." : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
+    refreshDomainPanels();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function refreshDomainPanels() {
+    if (activeView === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
+      const host = $("politicsDashboard");
+      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+    }
+    if (activeView === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+      const host = $("institutionsDashboard");
+      if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+    }
+    if (activeView === "services" && window.VilarejoServices && window.VilarejoServicesRuntime) {
+      const host = $("servicesDashboard");
+      if (host) {
+        host.__serviceSetLever = (domainId, leverId, value) => window.VilarejoServicesRuntime.setLever(domainId, leverId, value);
+        window.VilarejoServices.renderDashboard(window.VilarejoServicesRuntime.state, host);
+      }
+    }
   }
 
   function makeChart(targetId, series, history, format, emptyTitle) {
@@ -289,6 +311,7 @@
             window.VilarejoSociety.renderDashboard(window.VilarejoSocietyRuntime.state, host);
         }
     }
+    refreshDomainPanels();
   }
 
   function initNavigation() {
@@ -296,6 +319,7 @@
       button.addEventListener("click", () => {
         setView(button.dataset.view);
         document.body.classList.remove("menu-open");
+        refresh();
       });
     });
     document.querySelectorAll("[data-months]").forEach((button) => {

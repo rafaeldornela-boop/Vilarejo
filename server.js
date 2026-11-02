@@ -34,7 +34,7 @@ function resolveRequestPath(requestUrl) {
   const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const segments = relativePath.split(/[\\/]/);
   if (segments.some((segment) => segment.startsWith("."))) return { error: 404 };
-  const allowedRootFiles = new Set(["index.html"]);
+  const allowedRootFiles = new Set(["index.html", "style.css"]);
   if (!allowedRootFiles.has(relativePath) && !relativePath.startsWith("src/") && !relativePath.startsWith("public/")) return { error: 404 };
 
   const filePath = path.resolve(ROOT, relativePath);

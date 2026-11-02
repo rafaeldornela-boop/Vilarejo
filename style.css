@@ -374,3 +374,94 @@ button:disabled { opacity: .42; cursor: not-allowed; }
   .view-panel { display: block !important; }
   .content-card, .village-card { box-shadow: none; break-inside: avoid; }
 }
+
+
+/* Painéis integrados: estilos locais aos módulos, sem redefinir tokens globais. */
+.politics-host, .institutions-host, .services-host { min-width: 0; }
+.politics-dashboard, .institutions-dashboard, .services-dashboard { display: grid; gap: 15px; }
+.politics-summary-grid, .institutions-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.politics-summary-card, .institutions-kpi { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.politics-summary-card span, .institutions-kpi span { display: block; color: #87948a; font-size: 9px; font-weight: 700; }
+.politics-summary-card strong, .institutions-kpi strong { display: block; margin-top: 5px; color: var(--forest); font: 800 19px var(--heading); overflow-wrap: anywhere; }
+.politics-section-heading { margin: 5px 0 0; }
+.politics-section-heading h2 { margin: 4px 0; color: var(--forest); font: 800 18px var(--heading); }
+.politics-section-heading p { max-width: 760px; color: var(--muted); font-size: 10px; }
+.politics-groups-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.politics-group-card { min-width: 0; padding: 16px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
+.politics-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.politics-group-head h3 { margin: 0; color: var(--forest); font: 800 14px var(--heading); }
+.politics-group-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.politics-relation, .institution-coalition-status { flex: 0 0 auto; padding: 5px 8px; border-radius: 99px; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.politics-support, .institution-coalition-status.is-majority { color: #427653; background: #edf5eb; }
+.politics-neutral { color: #81704f; background: #f6f0e4; }
+.politics-opposition { color: #a14f47; background: #f9ece9; }
+.politics-influence { display: flex; justify-content: space-between; gap: 10px; margin-top: 13px; color: #75837a; font-size: 9px; }
+.politics-influence strong { color: var(--forest); font-size: 11px; }
+.politics-track, .institution-seat-track, .institution-term-track { height: 6px; overflow: hidden; margin-top: 6px; border-radius: 99px; background: #edf0e9; }
+.politics-track span, .institution-seat-track span, .institution-term-track span { display: block; height: 100%; border-radius: inherit; background: #789b75; }
+.politics-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 13px; margin-top: 12px; }
+.politics-metrics div, .institution-group-meta, .institution-stat { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid #edf0eb; font-size: 9px; }
+.politics-metrics span, .institution-group-meta, .institution-stat { color: #89958c; }
+.politics-metrics b { color: #4c6052; text-align: right; }
+.politics-measurement { min-height: 28px; margin: 10px 0 8px; color: #8b968e; font-size: 8px; line-height: 1.45; }
+.politics-interests, .service-priorities { display: flex; flex-wrap: wrap; gap: 5px; }
+.politics-interests span, .service-priorities span { padding: 4px 7px; border-radius: 5px; color: #63776a; background: #f0f4ed; font-size: 8px; }
+.politics-data-note, .institution-data-note, .services-intro-note { padding: 11px 13px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.5; }
+.institutions-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, .8fr); gap: 13px; align-items: start; }
+.institutions-main-card, .institutions-side-card, .service-card, .service-resource-panel { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
+.institutions-side-card h3, .service-resource-panel h2 { margin: 5px 0; color: var(--forest); font: 800 16px var(--heading); }
+.institutions-side-card p { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.institutions-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.institution-group-card { min-width: 0; padding: 11px 12px; border: 1px solid #e9ede6; border-radius: 8px; background: #fcfdf9; }
+.institution-group-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.institution-group-top strong { display: block; color: #425448; font-size: 10px; }
+.institution-group-top small { display: block; margin-top: 2px; color: #89968d; font-size: 8px; }
+.institution-group-top > b { flex: 0 0 auto; color: var(--forest); font: 800 18px var(--heading); text-align: right; }
+.institution-group-top > b small { display: inline; font: 500 8px var(--font); }
+.institution-group-meta, .institution-stat { margin-top: 7px; font-size: 8px; }
+.institution-group-meta span:last-child { text-align: right; }
+.institution-data-note { margin-top: 12px; }
+.institution-divider { height: 1px; margin: 14px 0; background: #edf0eb; }
+.institution-coalition-status { display: inline-block; margin: 8px 0 5px; }
+.institution-coalition-status.is-minority { color: #8a6840; background: #f6f0e4; }
+.institution-coalition-list { display: grid; gap: 5px; }
+.institution-coalition-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #edf0eb; color: #6f7d73; font-size: 9px; }
+.institution-coalition-row b { color: #4b5c50; white-space: nowrap; }
+.institution-empty { color: #89958c; font-size: 9px; line-height: 1.5; }
+.institution-term { display: flex; align-items: baseline; gap: 8px; margin-top: 5px; }
+.institution-term strong { color: var(--forest); font: 800 24px var(--heading); }
+.institution-term span { color: #87948a; font-size: 9px; }
+.services-intro-note { display: grid; gap: 5px; padding: 13px 16px; }
+.services-intro-note strong { color: var(--forest); font: 800 13px var(--heading); }
+.services-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.service-card-head { display: flex; align-items: flex-start; gap: 11px; }
+.service-icon { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: var(--forest); background: #edf3e9; font-size: 17px; }
+.service-card-head h3 { margin: 0; color: var(--forest); font: 800 14px var(--heading); }
+.service-card-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.service-score { display: flex; align-items: baseline; gap: 8px; margin: 15px 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.service-score strong { color: var(--forest); font: 800 24px var(--heading); }
+.service-score span, .service-metric span { color: var(--muted); font-size: 9px; }
+.service-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 13px; }
+.service-metric { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid #edf0eb; font-size: 9px; }
+.service-metric b { color: var(--forest); }
+.service-details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 9px; }
+.service-details summary { color: var(--forest); cursor: pointer; font-size: 9px; font-weight: 800; }
+.service-priorities { margin: 9px 0; }
+.service-levers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 9px; }
+.service-lever-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 9px; align-items: center; padding: 6px 0; border-bottom: 1px solid #edf0eb; color: var(--muted); font-size: 8px; }
+.service-lever-control b { color: var(--forest); }
+.service-lever-control input { grid-column: 1 / -1; width: 100%; accent-color: #789b75; }
+.service-resource-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 13px; }
+.service-resource-grid > div { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcf8; }
+.service-resource-grid span, .service-resource-grid small { display: block; color: var(--muted); font-size: 8px; }
+.service-resource-grid b { display: block; margin: 5px 0; color: var(--forest); font: 800 20px var(--heading); }
+.service-resource-grid small { line-height: 1.45; }
+@media (max-width: 900px) {
+  .politics-summary-grid, .institutions-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .institutions-layout { grid-template-columns: 1fr; }
+  .service-resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .politics-groups-grid, .institutions-groups, .services-grid { grid-template-columns: 1fr; }
+  .politics-metrics, .service-metrics, .service-levers { grid-template-columns: 1fr; }
+}
