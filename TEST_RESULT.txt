@@ -1,0 +1,25 @@
+
+=== INSTITUIÇÕES 1.0.0 ===
+  ✓ inicializa módulo sem instalações ou população inventada
+  ✓ normaliza população do Core e calcula demanda setorial
+  ✓ aceita projeção demográfica da Sociedade sem exigir seu formato interno
+  ✓ cadastra equipamento e calcula cobertura com qualidade e conservação
+  ✓ não conta equipamento desativado na oferta de serviços
+  ✓ rejeita capacidade zero e tipos de equipamento desconhecidos
+  ✓ planeja custeio e investimento sem debitar a Economia
+  ✓ financiamento parcial avança projeto e financiamento total cria equipamento
+  ✓ prioriza projetos por prioridade e mantém ordem estável em empate
+  ✓ não processa duas vezes o mesmo fechamento mensal
+  ✓ ignora meses fora de ordem sem reverter estado
+  ✓ falta de custeio acelera desgaste e custeio integral reduz desgaste
+  ✓ remove e cancel respeitam identificadores e estados
+  ✓ limita histórico mensal ao tamanho configurado
+  ✓ renderiza painel sem exigir dependência de interface
+  ✓ integra com Runtime, atualiza snapshot e publica fechamento institucional
+  ✓ prioriza dados recebidos da Sociedade quando disponíveis
+  ✓ reset do Core limpa instalações e histórico do módulo
+  ✓ não altera domicílios, caixa ou empregos da Economia
+  ✓ destroy remove listeners sem afetar o restante do Runtime
+  ✓ auto-registra no navegador e atualiza o painel institucional
+
+Resultado: 21 aprovados; 0 falhas.
