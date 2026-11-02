@@ -2,14 +2,12 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
 const EventosV3 = require("../events/eventos_v3.js");
 const VilarejoCore = require("../core/vilarejo_core.js");
+const { createSimulationContext } = require("./simulation_context.js");
 
 const ROOT = path.join(__dirname, "../../");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-const scriptCode = fs.readFileSync(path.join(ROOT, "src/economy/vilarejo_economy.js"), "utf8");
-const coreCode = fs.readFileSync(path.join(ROOT, "src/core/vilarejo_core.js"), "utf8");
 const loadedScripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
 const failures = [];
 let passed = 0;
@@ -22,84 +20,6 @@ function report(name, ok, detail = "") {
     failures.push(name);
     console.error(`  ✗ ${name}${detail ? `: ${detail}` : ""}`);
   }
-}
-
-function makeElement(id) {
-  return {
-    id,
-    innerHTML: "",
-    textContent: "",
-    value: "",
-    disabled: false,
-    onclick: null,
-    oninput: null,
-    onchange: null,
-    dataset: {},
-    style: {},
-    classList: {
-      add() {},
-      remove() {},
-      contains() { return false; },
-      toggle() { return false; }
-    },
-    closest() { return null; },
-    appendChild() {},
-    removeChild() {},
-    setAttribute() {},
-    getAttribute() { return null; },
-    querySelector(selector) { return makeElement(`${id}:${selector}`); },
-    querySelectorAll() { return []; }
-  };
-}
-
-function createSimulationContext() {
-  const elements = new Map();
-  const getElementById = (id) => {
-    if (!elements.has(id)) elements.set(id, makeElement(id));
-    return elements.get(id);
-  };
-  const document = {
-    getElementById,
-    querySelector: getElementById,
-    querySelectorAll: () => [],
-    createElement: (tag) => makeElement(tag),
-    activeElement: null,
-    body: getElementById("body"),
-    documentElement: getElementById("html")
-  };
-  const window = { document, EventosV3 };
-  const context = {
-    window,
-    document,
-    console,
-    Math,
-    Date,
-    JSON,
-    Object,
-    Array,
-    Number,
-    String,
-    Boolean,
-    Map,
-    Set,
-    Intl,
-    RegExp,
-    Error,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    Infinity,
-    NaN,
-    setInterval: () => 1,
-    clearInterval: () => {},
-    setTimeout: () => 1,
-    clearTimeout: () => {}
-  };
-  vm.createContext(context);
-  vm.runInContext(coreCode, context, { filename: "vilarejo_core.js", timeout: 30000 });
-  vm.runInContext(scriptCode, context, { filename: "script.js", timeout: 30000 });
-  return context;
 }
 
 console.log("\n=== VERIFICAÇÕES ESTRUTURAIS ===");
