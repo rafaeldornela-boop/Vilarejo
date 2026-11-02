@@ -187,6 +187,21 @@ test("renova mandato no mês correto e redistribui as cadeiras", () => {
   assert.equal(m2.snapshot.coalition.status, "not_formed");
 });
 
+test("usa 21 cadeiras, maioria em 11 e mandato padrão de 48 meses", () => {
+  const state = Institutions.createState();
+  const initial = Institutions.getSnapshot(state);
+  assert.equal(initial.settings.totalSeats, 21);
+  assert.equal(initial.settings.termMonths, 48);
+  assert.equal(initial.summary.majoritySeats, 11);
+  assert.equal(initial.nextElectionMonth, 48);
+  const beforeRenewal = Institutions.advanceMonth(state, { month: 47, politicsSnapshot: politicsSnapshot() });
+  assert.equal(beforeRenewal.electionHeld, false);
+  const renewalMonth = Institutions.advanceMonth(state, { month: 48, politicsSnapshot: politicsSnapshot() });
+  assert.equal(renewalMonth.electionHeld, true);
+  assert.equal(renewalMonth.snapshot.termNumber, 2);
+  assert.equal(renewalMonth.snapshot.nextElectionMonth, 96);
+});
+
 test("é idempotente no mesmo mês e rejeita retrocesso", () => {
   const state = Institutions.createState({ termMonths: 12 });
   Institutions.recalculateRepresentation(state, politicsSnapshot());

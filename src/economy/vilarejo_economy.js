@@ -22,6 +22,7 @@ function publishEconomyMonthClosed(){
   fiscalResult:S.lastFiscalReport?.nominalResult??null,
   gameOver:S.gameOver||null
  },"economia");
+ if(window.VilarejoDashboard&&typeof window.VilarejoDashboard.refresh==="function")window.VilarejoDashboard.refresh();
 }
 const $=id=>document.getElementById(id);
 const money=v=>"R$ "+Math.round(v).toLocaleString("pt-BR");
@@ -1545,8 +1546,9 @@ function processHarrisTodaroMigration(){
    if(payer){
     const paid=log(payer,"external",p.migrationCost,"Custo único de instalação de novo trabalhador");
     if(paid+0.001>=p.migrationCost){
-     const id = "migrant-" + (++S.migrantCount);
-     const newH={id,name:"Migrante "+id,type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0};
+     let id;
+     do { id = "migrant-" + (++S.migrantCount); } while (S.households.some(h => String(h.id) === id));
+     const newH={id,name:"Migrante "+id,type:"single",migrant:true,adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0};
      S.households.push(newH);
      feed(`Novo trabalhador migrou atraído por altos salários reais locais (ΔU: +${deltaU}).`);
      immigrated=newH.name;

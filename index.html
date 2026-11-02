@@ -26,6 +26,7 @@
         <button class="nav-item" data-view="society"><span class="nav-icon">♧</span><span>Sociedade</span></button>
         <button class="nav-item" data-view="politics"><span class="nav-icon">⚖</span><span>Política</span></button>
         <button class="nav-item" data-view="institutions"><span class="nav-icon">▥</span><span>Instituições</span></button>
+        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços e desenvolvimento</span></button>
         <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
         <button class="nav-item" data-view="records"><span class="nav-icon">☷</span><span>Registros</span></button>
       </nav>
@@ -214,6 +215,11 @@
           <div id="institutionsDashboard" class="institutions-host"></div>
         </section>
 
+        <section class="view-panel" data-view-panel="services" aria-label="Serviços públicos e desenvolvimento">
+          <div class="section-heading"><div><div class="eyebrow">CAPACIDADE E BEM-ESTAR DO ESTADO</div><h2>O que o Estado entrega à população.</h2><p>Saúde, educação, segurança, ciência, desenvolvimento, cultura, infraestrutura e recursos estratégicos.</p></div></div>
+          <div id="servicesDashboard" class="services-host"></div>
+        </section>
+
         <section class="view-panel" data-view-panel="government" aria-label="Governo">
           <div class="section-heading"><div><div class="eyebrow">GESTÃO PÚBLICA</div><h2>As regras definem o caminho.</h2><p>Altere as políticas e acompanhe os efeitos sobre o orçamento e a vida local.</p></div></div>
           <div class="government-grid"><article class="content-card"><div class="eyebrow">INSTRUMENTOS DE POLÍTICA</div><h2>Políticas públicas</h2><p class="card-description">As mudanças entram em vigor no próximo fechamento mensal.</p><div id="policies"></div></article><article class="content-card"><div class="eyebrow">RESPONSABILIDADE FISCAL</div><h2>Contas do governo</h2><div class="audit-status" id="macroAuditBadge"></div><div id="macroeconomicAccounts" class="balance-grid"></div></article></div>
@@ -237,6 +243,7 @@
   <script src="src/society/vilarejo_society.js"></script>
   <script src="src/politics/vilarejo_politics.js"></script>
   <script src="src/institutions/vilarejo_institutions.js"></script>
+  <script src="src/services/vilarejo_services.js"></script>
   <script src="src/ui/dashboard.js"></script>
 </body>
 </html>

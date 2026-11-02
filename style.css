@@ -478,3 +478,42 @@ button:disabled { opacity: .42; cursor: not-allowed; }
   .view-panel { display: block !important; }
   .content-card, .village-card { box-shadow: none; break-inside: avoid; }
 }
+
+
+/* Serviços públicos: regras isoladas para não alterar os estilos da Etapa 3. */
+.services-host { min-width: 0; }
+.services-dashboard { display: grid; gap: 15px; }
+.services-intro-note { display: grid; gap: 5px; padding: 13px 16px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.5; }
+.services-intro-note strong { color: var(--forest); font: 800 13px var(--heading); }
+.services-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.service-card, .service-resource-panel { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
+.service-resource-panel h2 { margin: 5px 0; color: var(--forest); font: 800 16px var(--heading); }
+.service-card-head { display: flex; align-items: flex-start; gap: 11px; }
+.service-icon { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: var(--forest); background: #edf3e9; font-size: 17px; }
+.service-card-head h3 { margin: 0; color: var(--forest); font: 800 14px var(--heading); }
+.service-card-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.service-score { display: flex; align-items: baseline; gap: 8px; margin: 15px 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.service-score strong { color: var(--forest); font: 800 24px var(--heading); }
+.service-score span, .service-metric span { color: var(--muted); font-size: 9px; }
+.service-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 13px; }
+.service-metric { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid #edf0eb; font-size: 9px; }
+.service-metric b { color: var(--forest); }
+.service-details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 9px; }
+.service-details summary { color: var(--forest); cursor: pointer; font-size: 9px; font-weight: 800; }
+.service-priorities { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
+.service-priorities span { padding: 4px 7px; border-radius: 5px; color: #63776a; background: #f0f4ed; font-size: 8px; }
+.service-levers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 9px; }
+.service-lever-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 9px; align-items: center; padding: 6px 0; border-bottom: 1px solid #edf0eb; color: var(--muted); font-size: 8px; }
+.service-lever-control b { color: var(--forest); }
+.service-lever-control input { grid-column: 1 / -1; width: 100%; accent-color: #789b75; }
+.service-resource-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 13px; }
+.service-resource-grid > div { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcf8; }
+.service-resource-grid span, .service-resource-grid small { display: block; color: var(--muted); font-size: 8px; }
+.service-resource-grid b { display: block; margin: 5px 0; color: var(--forest); font: 800 20px var(--heading); }
+.service-resource-grid small { line-height: 1.45; }
+@media (max-width: 900px) {
+  .service-resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .services-grid, .service-metrics, .service-levers { grid-template-columns: 1fr; }
+}

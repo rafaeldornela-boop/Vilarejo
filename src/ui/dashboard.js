@@ -50,6 +50,7 @@
       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
       politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
       institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
+      services: ["Serviços e desenvolvimento", "Capacidade pública, bem-estar, infraestrutura e recursos estratégicos."],
       government: ["Governo", "Políticas, orçamento e patrimônio público."],
       records: ["Registros", "Decisões, acontecimentos e movimentações financeiras."]
     };
@@ -64,6 +65,13 @@
     if (name === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
       const host = $("institutionsDashboard");
       if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+    }
+    if (name === "services" && window.VilarejoServices && window.VilarejoServicesRuntime) {
+      const host = $("servicesDashboard");
+      if (host) {
+        host.__serviceSetLever = (domainId, leverId, value) => window.VilarejoServicesRuntime.setLever(domainId, leverId, value);
+        window.VilarejoServices.renderDashboard(window.VilarejoServicesRuntime.state, host);
+      }
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -306,6 +314,13 @@
     if (activeView === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
       const host = $("institutionsDashboard");
       if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+    }
+    if (activeView === "services" && window.VilarejoServices && window.VilarejoServicesRuntime) {
+      const host = $("servicesDashboard");
+      if (host) {
+        host.__serviceSetLever = (domainId, leverId, value) => window.VilarejoServicesRuntime.setLever(domainId, leverId, value);
+        window.VilarejoServices.renderDashboard(window.VilarejoServicesRuntime.state, host);
+      }
     }
   }
 

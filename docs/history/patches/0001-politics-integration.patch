@@ -1,0 +1,104 @@
+diff --git a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@ -25,2 +25,3 @@
+         <button class="nav-item" data-view="society"><span class="nav-icon">♧</span><span>Sociedade</span></button>
++        <button class="nav-item" data-view="politics"><span class="nav-icon">⚖</span><span>Política</span></button>
+         <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
+@@ -207,6 +207,11 @@
+         <section class="view-panel" data-view-panel="society" aria-label="Sociedade">
+           <div class="section-heading"><div><div class="eyebrow">PESSOAS E ORGANIZAÇÕES</div><h2>A economia existe para quem vive nela.</h2><p>Famílias, trabalhadores, empresas e instituições formam o tecido do vilarejo.</p></div></div>
+           <div class="society-columns"><article class="content-card"><div class="eyebrow">FAMÍLIAS E TRABALHADORES</div><h2>Moradores</h2><div id="popSummary" class="small-summary"></div><div id="householdsList" class="actor-list"></div></article><article class="content-card"><div class="eyebrow">EMPRESAS E INSTITUIÇÕES</div><h2>Agentes econômicos</h2><div id="institutionsList" class="actor-list"></div></article></div>
+         </section>
++
++        <section class="view-panel" data-view-panel="politics" aria-label="Política">
++          <div class="section-heading"><div><div class="eyebrow">GRUPOS E RELAÇÕES DE PODER</div><h2>A sociedade também disputa os rumos do Estado.</h2><p>Acompanhe quem são os grupos de interesse, quais recursos possuem e como se relacionam com o governo.</p></div></div>
++          <div id="politicsDashboard" class="politics-host"></div>
++        </section>
+
+         <section class="view-panel" data-view-panel="government" aria-label="Governo">
+@@ -225,2 +232,3 @@
+   <script src="src/society/vilarejo_society.js"></script>
++  <script src="src/politics/vilarejo_politics.js"></script>
+   <script src="src/ui/dashboard.js"></script>
+diff --git a/src/ui/dashboard.js b/src/ui/dashboard.js
+--- a/src/ui/dashboard.js
++++ b/src/ui/dashboard.js
+@@ -35,4 +35,5 @@
+       overview: ["Visão geral", "Acompanhe o território e o pulso da comunidade."],
+       economy: ["Economia", "Produção, preços, trabalho e atividade ao longo do tempo."],
+       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
++      politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
+       government: ["Governo", "Políticas, orçamento e patrimônio público."],
+@@ -43,2 +44,6 @@
+     if ($("pageDescription")) $("pageDescription").textContent = item[1];
++    if (name === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
++      const host = $("politicsDashboard");
++      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
++    }
+     window.scrollTo({ top: 0, behavior: "smooth" });
+@@ -300,5 +300,9 @@
+         }
+     }
++    if (activeView === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
++      const host = $("politicsDashboard");
++      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
++    }
+   }
+
+   function initNavigation() {
+diff --git a/style.css b/style.css
+--- a/style.css
++++ b/style.css
+@@ -326,1 +326,31 @@
+ .feed-list li:last-child { border-bottom: 0; }
++.politics-host { min-width: 0; }
++.politics-dashboard { display: grid; gap: 15px; }
++.politics-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
++.politics-summary-card { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
++.politics-summary-card span { display: block; color: #87948a; font-size: 9px; font-weight: 700; }
++.politics-summary-card strong { display: block; margin-top: 5px; color: var(--forest); font: 800 21px var(--heading); }
++.politics-section-heading { margin: 5px 0 0; }
++.politics-section-heading h2 { margin: 4px 0; color: var(--forest); font: 800 18px var(--heading); }
++.politics-section-heading p { max-width: 760px; color: var(--muted); font-size: 10px; }
++.politics-groups-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
++.politics-group-card { min-width: 0; padding: 16px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
++.politics-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
++.politics-group-head h3 { margin: 0; color: var(--forest); font: 800 14px var(--heading); }
++.politics-group-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
++.politics-relation { flex: 0 0 auto; padding: 5px 8px; border-radius: 99px; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
++.politics-support { color: #427653; background: #edf5eb; }
++.politics-neutral { color: #81704f; background: #f6f0e4; }
++.politics-opposition { color: #a14f47; background: #f9ece9; }
++.politics-influence { display: flex; justify-content: space-between; gap: 10px; margin-top: 13px; color: #75837a; font-size: 9px; }
++.politics-influence strong { color: var(--forest); font-size: 11px; }
++.politics-track { height: 6px; overflow: hidden; margin-top: 6px; border-radius: 99px; background: #edf0e9; }
++.politics-track span { display: block; height: 100%; border-radius: inherit; background: #789b75; }
++.politics-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 13px; margin-top: 12px; }
++.politics-metrics div { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid #edf0eb; font-size: 9px; }
++.politics-metrics span { color: #89958c; }
++.politics-metrics b { color: #4c6052; text-align: right; }
++.politics-measurement { min-height: 28px; margin: 10px 0 8px; color: #8b968e; font-size: 8px; line-height: 1.45; }
++.politics-interests { display: flex; flex-wrap: wrap; gap: 5px; }
++.politics-interests span { padding: 4px 7px; border-radius: 5px; color: #63776a; background: #f0f4ed; font-size: 8px; }
++.politics-data-note { margin: 0; padding: 11px 13px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.5; }
+@@ -406,2 +427,4 @@
+   .chart-grid, .society-columns, .government-grid, .records-grid { grid-template-columns: 1fr; }
++  .politics-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++  .politics-groups-grid { grid-template-columns: 1fr; }
+   .chart-wide { grid-column: auto; }
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -7,2 +7,2 @@
+-    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/vilarejo_economy.js && node --check src/events/eventos_v3.js && node --check src/society/vilarejo_society.js && node --check src/test/test_runner.js",
+-    "test": "node src/test/test_runner.js && node src/test/society_test.js"
++    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/vilarejo_economy.js && node --check src/events/eventos_v3.js && node --check src/society/vilarejo_society.js && node --check src/politics/vilarejo_politics.js && node --check src/test/test_runner.js && node --check src/test/politics_test.js",
++    "test": "node src/test/test_runner.js && node src/test/society_test.js && node src/test/politics_test.js"
+diff --git a/src/test/test_runner.js b/src/test/test_runner.js
+--- a/src/test/test_runner.js
++++ b/src/test/test_runner.js
+@@ -93,1 +93,2 @@
+ report("A página carrega vilarejo_economy.js exatamente uma vez", loadedScripts.filter((src) => src === "src/economy/vilarejo_economy.js").length === 1);
++report("A página carrega Política exatamente uma vez após Sociedade", loadedScripts.filter((src) => src === "src/politics/vilarejo_politics.js").length === 1 && loadedScripts.indexOf("src/society/vilarejo_society.js") < loadedScripts.indexOf("src/politics/vilarejo_politics.js"));
+ report("O servidor permite servir o núcleo central", /src\//.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));

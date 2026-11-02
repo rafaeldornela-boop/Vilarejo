@@ -1,0 +1,11 @@
+Validação isolada da entrega Política + Instituições 1.0.0
+
+Política: 21 testes aprovados; 0 reprovados.
+Instituições: 16 testes aprovados; 0 reprovados.
+Total: 37 testes aprovados; 0 reprovados.
+
+node --check src/politics/vilarejo_politics.js: aprovado.
+node --check src/institutions/vilarejo_institutions.js: aprovado.
+git apply --numstat integration/0001-politics-institutions-integration.patch: patch parseado pelo Git.
+
+Limite da validação: não foi executada a suíte completa do repositório principal. Os testes econômicos, de Sociedade, build e integração final devem ser executados após aplicar o patch sobre a branch main.
