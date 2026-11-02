@@ -5,6 +5,7 @@ Esta classificação considera a estrutura da Economia 3.0 e as referências enc
 ## Arquivos essenciais
 
 - `index.html`: interface e ordem de carregamento dos scripts.
+- `vilarejo_core.js`: núcleo central, calendário, diretório populacional, registro de módulos e barramento de eventos.
 - `script.js`: motor econômico principal.
 - `eventos_v3.js`: motor de eventos carregado pela página e integrado ao ciclo econômico. **Não excluir.**
 - `server.js`: servidor local opcional.
@@ -26,4 +27,4 @@ Esta classificação considera a estrutura da Economia 3.0 e as referências enc
 
 ## Histórico
 
-`docs/historico/` guarda prospectos, arquitetura preliminar e auditoria da versão 2.5. Esses documentos são registros históricos, não regras atuais do simulador. Para saber o que está implementado e testado na versão vigente, consulte `README.md` e `docs/RELATORIO_ECONOMIA_V3.0.md`.
+`docs/historico/` guarda prospectos, arquitetura preliminar e auditoria da versão 2.5. Esses documentos são registros históricos, não regras atuais do simulador. Para saber o que está implementado e testado na versão vigente, consulte `README.md`, `docs/RELATORIO_ECONOMIA_V3.0.md` e `docs/ARQUITETURA_MODULAR_V0.1.md`.

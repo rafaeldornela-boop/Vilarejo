@@ -1,8 +1,10 @@
-# Vilarejo | Economia 3.0
+# Vilarejo | Release 3.1.0
 
-Simulador econômico didático de pequena escala. O cenário reúne famílias, trabalhadores, empresas, fazenda estatal ou privada, Tesouro, banco, proprietário de imóveis e setor externo. O motor acompanha produção, consumo, salários, tributos, crédito, dívidas, estoques, investimento, patrimônio, eventos e contas nacionais simplificadas.
+Simulador econômico didático com a Economia 3.0 preservada e a primeira versão executável do Núcleo Central modular.
 
-A versão 3.0 consolida o ciclo operacional multissetorial, a apuração por empresa, o cálculo de capital de giro sazonal da fazenda, o serviço de dívidas no planejamento de liquidez e a integração do motor de eventos à partida principal.
+A Economia mantém famílias, trabalhadores, empresas, fazenda estatal ou privada, Tesouro, banco, proprietário de imóveis e setor externo. O motor acompanha produção, consumo, salários, tributos, crédito, dívidas, estoques, investimento, patrimônio, eventos e contas nacionais simplificadas.
+
+O Núcleo Central acrescenta calendário compartilhado, estado da partida, diretório populacional, registro de módulos e barramento de eventos. Nesta release ele acompanha a Economia, mas não altera os cálculos econômicos.
 
 ## Executar
 
@@ -12,13 +14,7 @@ Requisitos: Node.js 18 ou superior.
 npm start
 ```
 
-Acesse `http://localhost:3000`. A porta e o endereço de escuta podem ser definidos pelas variáveis `PORT` e `HOST`:
-
-```bash
-PORT=3001 HOST=127.0.0.1 npm start
-```
-
-Também é possível abrir `index.html` diretamente no navegador. O servidor utiliza módulos nativos do Node.js. Não é necessário executar `npm install`. O arquivo `.env.example` documenta as variáveis, mas o servidor não carrega arquivos `.env` automaticamente.
+Acesse `http://localhost:3000`. A porta e o endereço de escuta podem ser definidos por `PORT` e `HOST`. Também é possível abrir `index.html` diretamente no navegador. O servidor usa módulos nativos do Node.js; não é necessário executar `npm install`.
 
 ## Verificar e testar
 
@@ -27,62 +23,73 @@ npm run build
 npm test
 ```
 
-`npm run build` verifica a sintaxe dos quatro arquivos JavaScript principais. `npm test` executa 76 verificações automatizadas, sem dependências npm externas:
+A suíte atual executa **92 verificações automatizadas**, sem dependências npm externas:
 
 - 61 testes internos do motor econômico e bancário;
-- verificações estruturais do HTML e da ordem de carregamento dos scripts;
-- simulações de 6, 120 e 240 meses, além de um stress test de 120 meses;
-- teste de robustez com 24 sementes distintas, cada uma por 240 meses (5.760 meses-simulação);
-- integração, sincronização, determinismo e persistência do motor de eventos.
+- 8 testes diretos do Núcleo Central;
+- verificações estruturais de HTML, ordem de carregamento e servidor;
+- simulações econômicas de 6, 120 e 240 meses, stress test de 120 meses e robustez com 24 sementes × 240 meses (5.760 meses-simulação);
+- testes integrados de registro do módulo Economia, sincronização populacional e publicação dos fechamentos mensais;
+- testes do motor de eventos: determinismo, serialização e catálogo.
 
-O executor cria um DOM mínimo de teste para carregar a aplicação, sem depender de `jsdom`. O teste HTTP local também foi validado para `/`, `/script.js` e `/eventos_v3.js`; os arquivos internos de documentação e configuração não são publicados pela raiz do servidor.
+O executor usa um DOM mínimo de teste, sem `jsdom`.
 
-## Estrutura
+## Estrutura principal
 
-- `index.html`: interface do simulador.
-- `script.js`: motor econômico principal e ciclo da simulação.
-- `eventos_v3.js`: catálogo e motor de eventos integrado à partida.
-- `server.js`: servidor HTTP estático seguro, feito com módulos nativos.
-- `test_runner.js`: executor das verificações automatizadas.
-- `docs/`: documentação atual e histórico de versões anteriores.
+- `index.html`: interface e ordem de carregamento.
+- `vilarejo_core.js`: Núcleo Central 0.1.
+- `script.js`: motor econômico 3.0 e adaptador para o Núcleo. O arquivo continua monolítico nesta etapa.
+- `eventos_v3.js`: catálogo e motor de eventos econômicos.
+- `server.js`: servidor HTTP estático com allowlist explícita.
+- `test_runner.js`: executor das verificações.
+- `docs/`: documentação, contratos e histórico.
 
-### Capital de giro da fazenda
+## Como funciona o Núcleo Central
 
-Antes da liquidação mensal, o motor estima a necessidade operacional da fazenda. A reserva considera folha e encargos patronais, obrigações trabalhistas e tributárias em atraso, moradia fornecida pelo empregador, insumos previstos para a próxima etapa de colheita e serviço programado da dívida bancária. O Tesouro cobre somente a diferença entre a reserva calculada e o caixa disponível da fazenda, respeitando o teto de política e o saldo efetivo do próprio Tesouro.
+A página carrega os scripts nesta ordem: `vilarejo_core.js` → `eventos_v3.js` → `script.js`. O runtime compartilhado fica disponível como `window.VilarejoRuntime` depois do carregamento de `script.js`; os arquivos dos módulos futuros devem entrar depois dele na página. A Economia registra-se como módulo `economia` e sincroniza seu dia, contador de fechamento mensal, estado da partida e grupos domiciliares.
 
-O teto mensal padrão é de R$ 25.000 e pode ser ajustado na interface entre R$ 0 e R$ 30.000. Isso não significa que o Tesouro transfira automaticamente o teto inteiro: o aporte é limitado à necessidade de caixa identificada e à liquidez fiscal disponível. A política representa uma regra explícita de capitalização operacional, não receita produtiva nem dinheiro criado fora da contabilidade.
+Serviços públicos atuais:
 
-### Eventos integrados
+- `runtime.clock.snapshot()`: calendário do jogo;
+- `runtime.population.getSnapshot()`: totais e grupos populacionais;
+- `runtime.modules.register(...)`: registro e validação de dependências;
+- `runtime.modules.get(id)` e `runtime.modules.list()`: leitura do registro de módulos;
+- `runtime.events.on(topic, listener)`: inscrição em eventos;
+- `runtime.publish(topic, payload, source)`: publicação de eventos;
+- `runtime.snapshot()`: visão consolidada de sessão, calendário, população, módulos e eventos recentes.
 
-`eventos_v3.js` é carregado antes de `script.js`. O calendário de eventos avança junto com o mês econômico. Os modificadores de produção, preço e custo afetam o ciclo agrícola; eventos com decisões exibem opções na interface. Custos e transferências são refletidos nas contas envolvidas e no livro-caixa. Eventos de natureza governamental movimentam o Tesouro; outros efeitos são classificados conforme sua categoria.
+A Economia publica `economy:month-closed` após cada fechamento contábil. Os demais módulos devem comunicar-se por eventos e respeitar a propriedade dos dados. Não devem alterar diretamente variáveis internas de outro módulo.
 
-O catálogo contém 30 eventos. Nem toda dimensão social ou institucional do catálogo é um subsistema completo: alguns efeitos alteram variáveis e decisões existentes, enquanto os módulos próprios de Sociedade, Política e Legislação continuam fora desta entrega.
+Leia [`docs/ARQUITETURA_MODULAR_V0.1.md`](docs/ARQUITETURA_MODULAR_V0.1.md) e, obrigatoriamente, [`docs/CONTRATO_DE_MODULOS_V1.md`](docs/CONTRATO_DE_MODULOS_V1.md) antes de desenvolver Sociedade, Política ou Legislação.
 
-### Contas nacionais e resultado fiscal
+## Economia 3.0 preservada
 
-O simulador apresenta as óticas da produção, da renda e da despesa, além do resultado fiscal primário e nominal. A reconciliação do PIB é uma identidade interna do modelo, com tolerância de arredondamento de um centavo. O excedente operacional bruto é obtido como parcela residual para fechar a ótica da renda; portanto, não é uma mensuração independente.
+A versão 3.0 estabilizou o capital de giro sazonal da fazenda, incluindo folha, encargos, moradia, insumos da próxima etapa e serviço programado da dívida. O aporte do Tesouro cobre somente a diferença entre a reserva operacional e o caixa disponível, limitado pelo teto de política e pela liquidez fiscal.
 
-O resultado primário exclui alienações de ativos. O resultado nominal incorpora a despesa líquida de juros registrada para o Tesouro.
+O motor de eventos contém 30 eventos. Seus efeitos e transações continuam integrados à Economia. As contas nacionais são simplificadas e reconciliadas internamente; não representam estatísticas oficiais. O excedente operacional bruto é residual na ótica da renda.
 
-## Resultado da validação 3.0
+Relatório econômico original: [`docs/RELATORIO_ECONOMIA_V3.0.md`](docs/RELATORIO_ECONOMIA_V3.0.md).
+
+## Resultado da validação da release 3.1.0
 
 - `npm run build`: aprovado.
-- `npm test`: 76 verificações aprovadas, 0 reprovadas.
-- 24 sementes × 240 meses: 5.760 meses-simulação concluídos sem fim de jogo, divergência de caixa, falha SFC ou quebra da reconciliação interna do PIB.
-- Semente padrão: 240 meses naturais concluídos sem condição de fim de jogo.
-- Teste HTTP: página e scripts principais servidos com HTTP 200; arquivos ocultos e documentação bloqueados.
+- `npm test`: 92 verificações aprovadas, 0 reprovadas.
+- Economia 3.0: 61 testes internos e 5.760 meses-simulação de robustez mantidos.
+- Núcleo Central 0.1: calendário, população, sessão, registro de módulos e barramento testados.
+- Integração Economia/Núcleo: registro, população e fechamento mensal verificados.
 
-O relatório detalhado está em [`docs/RELATORIO_ECONOMIA_V3.0.md`](docs/RELATORIO_ECONOMIA_V3.0.md).
+Relatório da release: [`docs/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md`](docs/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md).
 
 ## Limitações conhecidas
 
-- É um modelo didático simplificado, com poucos agentes e setores. Não é previsão econômica, recomendação de política pública nem reprodução integral da economia brasileira.
-- As contas nacionais são calculadas sobre as transações representadas no jogo. A reconciliação não certifica aderência integral ao Sistema de Contas Nacionais do IBGE.
-- O excedente operacional bruto é residual na ótica da renda, conforme explicado acima.
-- `script.js` continua concentrando o motor econômico em um arquivo. A modularização foi adiada para reduzir risco de regressão durante a estabilização; deve ser feita em etapa própria, com testes de contrato.
-- Os eventos modificam variáveis e transações já representadas no simulador. Não substituem um modelo social, político ou jurídico completo.
-- Os resultados de robustez valem para os parâmetros e as sementes cobertos pela suíte automatizada. Não provam equilíbrio para toda configuração possível ou toda sequência de decisões humanas.
+- O modelo econômico é didático, com poucos agentes e setores; não é previsão econômica nem reprodução integral da economia brasileira.
+- O Núcleo observa e coordena o estado existente; ainda não é o dono de todo o estado do mundo.
+- O diretório populacional é sincronizado a partir dos domicílios econômicos; ainda não há cadastro individual de cidadãos.
+- `script.js` continua monolítico. A separação interna da Economia deverá ocorrer gradualmente, com testes de regressão.
+- Sociedade, Política e Legislação ainda não foram implementados.
+- Não existe ainda salvamento e restauração completos de uma partida.
 
-## Histórico
+## Branches sugeridas
 
-Os prospectos e relatórios anteriores foram preservados em `docs/historico/`. Para entender a lógica atual, consulte [`docs/LOGICA_DA_ECONOMIA_BASE.md`](docs/LOGICA_DA_ECONOMIA_BASE.md) e o relatório da versão 3.0.
+- `economia-estavel`: preservar a versão pura da Economia 3.0.
+- `arquitetura-modular`: partir da `economia-estavel` e adicionar a fundação modular desta release 3.1.0.

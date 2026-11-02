@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Vilarejo | Simulação econômica v3.0</title>
-<meta name="description" content="Vilarejo v3.0: simulação econômica multissetorial com mercado de trabalho por empresa, contas nacionais e auditoria patrimonial.">
-<meta property="og:title" content="Vilarejo | Simulação econômica v3.0">
-<meta property="og:description" content="Simulação econômica multissetorial com mercado de trabalho por empresa, contas nacionais e auditoria patrimonial.">
+<title>Vilarejo | Economia 3.0 + Núcleo Central 0.1</title>
+<meta name="description" content="Vilarejo: simulação econômica v3.0 integrada ao núcleo central modular 0.1.">
+<meta property="og:title" content="Vilarejo | Economia 3.0 + Núcleo Central 0.1">
+<meta property="og:description" content="Simulação econômica integrada ao núcleo central modular do Vilarejo.">
 <style>
 :root{--bg:#efe9dc;--ink:#1d2a2e;--muted:#68716d;--gold:#a87927;--red:#a4372d;--panel:#faf7f0;--line:#cfc6b1;--green:#416b50}
 @media(prefers-color-scheme:dark){:root{--bg:#161c1e;--ink:#e9e4d6;--muted:#a6afa7;--gold:#d9a94a;--red:#e0786b;--panel:#20292b;--line:#3a4745;--green:#8fbd9b}}
@@ -45,7 +45,7 @@ ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-b
 </head>
 <body><main>
 <h1>Vilarejo | Simulação econômica</h1>
-<p class="sub">Versão 2.5 (Estabilização Econômica): mercado de trabalho multissetorial, folha rastreada por empresa, contas nacionais conciliadas e auditoria patrimonial.</p>
+<p class="sub">Economia 3.0 · Núcleo Central 0.1: calendário, população compartilhada, estado da partida e comunicação entre módulos.</p>
 <section class="cycle-box" id="cycleBar" aria-label="Calendário sazonal"></section>
 <section class="pillars" id="pillars" aria-label="Indicadores macroeconômicos"></section>
 <section class="box" style="margin-bottom:12px"><h2>Retrato social e agentes econômicos <span class="small" id="popSummary"></span></h2><div class="social-grid"><div><h3>Famílias e trabalhadores</h3><div id="householdsList"></div></div><div><h3>Instituições e mercado</h3><div id="institutionsList"></div></div></div></section>
@@ -89,6 +89,7 @@ ul{list-style:none;margin:0;padding:0;font-size:.88rem}li{padding:5px 0;border-b
 <div class="scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div>
 </section>
 </main>
+<script src="vilarejo_core.js"></script>
 <script src="eventos_v3.js"></script>
 <script src="script.js"></script>
 </body>
