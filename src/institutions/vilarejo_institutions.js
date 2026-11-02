@@ -339,44 +339,188 @@
     if (!host || !state) return false;
     const data = getSnapshot(state);
     const coalitionLabel = { majority: "Maioria", minority: "Minoria", not_formed: "Não formada" }[data.coalition.status];
+    const coalitionStatusClass = data.coalition.majority ? "is-majority" : (data.coalition.status === "minority" ? "is-minority" : "is-not-formed");
+
     const groupCards = data.legislature.groups.map((group) => {
       const relation = { support: "Apoio", neutral: "Neutro", opposition: "Oposição" }[group.governmentRelation] || "Neutro";
-      return `<article class="institution-group-card">
-        <div class="institution-group-top"><div><strong>${escapeHtml(group.groupName)}</strong><small>${relation} ao governo</small></div><b>${group.seats}<small> cadeira${group.seats === 1 ? "" : "s"}</small></b></div>
+      const isInCoalition = data.coalition.groupIds.includes(group.groupId);
+      return `<article class="institution-group-card ${isInCoalition ? "in-coalition" : ""}">
+        <div class="institution-group-top"><div><strong>${escapeHtml(group.groupName)}</strong><small>${relation} ao governo${isInCoalition ? " · Na base" : ""}</small></div><b>${group.seats}<small> cadeira${group.seats === 1 ? "" : "s"}</small></b></div>
         <div class="institution-seat-track"><span style="width:${Math.min(100, group.share)}%"></span></div>
         <div class="institution-group-meta"><span>Influência: ${group.influence.toFixed(1)}</span><span>${group.share.toFixed(1)}% da Câmara</span></div>
       </article>`;
     }).join("") || `<p class="institution-empty">Aguardando a formação dos grupos políticos.</p>`;
-    const coalitionRows = data.coalition.groups.map((group) => `<div class="institution-coalition-row"><span>${escapeHtml(group.groupName)}</span><b>${group.seats} cadeiras</b></div>`).join("") || `<p class="institution-empty">O governo ainda não formalizou uma coalizão. Grupos neutros não são considerados apoiadores automaticamente.</p>`;
+
+    const coalitionRows = data.coalition.groups.map((group) => {
+      const isLeader = group.groupId === data.coalition.leaderGroupId;
+      return `<div class="institution-coalition-row">
+        <span>${escapeHtml(group.groupName)}${isLeader ? ' <small class="institution-leader-badge">(Líder)</small>' : ''}</span>
+        <b>${group.seats} cad. (${((group.seats / data.summary.totalSeats) * 100).toFixed(1)}%)</b>
+      </div>`;
+    }).join("") || `<p class="institution-empty">O governo ainda não formalizou uma coalizão. Selecione os grupos abaixo para compor sua base.</p>`;
+
+    const oppositionGroups = data.legislature.groups.filter((group) => data.opposition.groupIds.includes(group.groupId));
+    const oppositionRows = oppositionGroups.length
+      ? `<div class="institution-opposition-list">${oppositionGroups.map((group) => `<div class="institution-coalition-row opposition-row"><span>${escapeHtml(group.groupName)}</span><b>${group.seats} cadeiras</b></div>`).join("")}</div>`
+      : `<p class="institution-empty">Nenhum grupo em oposição declarada fora da base governista.</p>`;
+
+    const coalitionIdsSet = new Set(data.coalition.groupIds);
+    const checkboxRows = data.legislature.groups.map((group) => {
+      const checked = coalitionIdsSet.has(group.groupId);
+      const relation = { support: "Apoio", neutral: "Neutro", opposition: "Oposição" }[group.governmentRelation] || "Neutro";
+      return `<label class="institution-checkbox-row ${checked ? "is-selected" : ""}">
+        <input type="checkbox" name="coalitionGroup" value="${escapeHtml(group.groupId)}" ${checked ? "checked" : ""} data-seats="${group.seats}" data-group-name="${escapeHtml(group.groupName)}">
+        <span class="institution-checkbox-label">
+          <strong>${escapeHtml(group.groupName)}</strong>
+          <small class="institution-relation-tag relation-${group.governmentRelation}">${relation}</small>
+        </span>
+        <b class="institution-checkbox-seats">${group.seats} <small>cad.</small></b>
+      </label>`;
+    }).join("");
+
     const termProgress = Math.max(0, Math.min(100, ((data.currentMonth - (data.nextElectionMonth - data.settings.termMonths)) / data.settings.termMonths) * 100));
+
     host.innerHTML = `
       <section class="institutions-dashboard">
         <div class="institutions-kpis">
           <article class="institutions-kpi"><span>Cadeiras</span><strong>${data.summary.allocatedSeats}/${data.summary.totalSeats}</strong></article>
-          <article class="institutions-kpi"><span>Maioria absoluta</span><strong>${data.summary.majoritySeats}</strong></article>
+          <article class="institutions-kpi"><span>Maioria absoluta</span><strong>${data.summary.majoritySeats} cadeiras</strong></article>
           <article class="institutions-kpi"><span>Base do governo</span><strong>${data.summary.coalitionSeats} cadeiras</strong></article>
-          <article class="institutions-kpi"><span>Composição</span><strong>${escapeHtml(coalitionLabel)}</strong></article>
+          <article class="institutions-kpi"><span>Situação da base</span><strong>${escapeHtml(coalitionLabel)}</strong></article>
         </div>
         <div class="institutions-layout">
           <article class="content-card institutions-main-card">
-            <div class="section-heading compact-heading"><div><span class="eyebrow">PODER LEGISLATIVO</span><h2>${escapeHtml(data.legislature.name)}</h2><p>As cadeiras representam força institucional organizada, não uma contagem de cidadãos exclusivos.</p></div></div>
+            <div class="section-heading compact-heading"><div><span class="eyebrow">PODER LEGISLATIVO</span><h2>${escapeHtml(data.legislature.name)}</h2><p>As 21 cadeiras representam força institucional organizada (método dos maiores restos), não contagem de cidadãos.</p></div></div>
             <div class="institutions-groups">${groupCards}</div>
-            <div class="institution-data-note">Distribuição inicial por influência política, usando o método dos maiores restos. A renovação ocorre ao fim do mandato. Não é uma eleição popular: o modelo representa bancadas de interesses e será a base das votações legislativas futuras.</div>
+            <div class="institution-data-note">Distribuição por influência política conforme o método dos maiores restos. A renovação ocorre ao fim do mandato de ${data.settings.termMonths} meses. Não é eleição popular: o modelo representa bancadas de interesses que sustentam ou fiscalizam o Executivo.</div>
           </article>
           <aside class="content-card institutions-side-card">
-            <div class="eyebrow">PODER EXECUTIVO</div><h3>${escapeHtml(data.executive.name)}</h3><p>Chefia controlada pelo jogador. O governo administra as competências do Estado sui generis.</p>
+            <div class="eyebrow">PODER EXECUTIVO</div><h3>${escapeHtml(data.executive.name)}</h3><p>Chefia sob controle do jogador. Administre a governabilidade construindo maiorias parlamentares.</p>
             <div class="institution-divider"></div>
-            <div class="eyebrow">COALIZÃO DE GOVERNO</div><div class="institution-coalition-status ${data.coalition.majority ? "is-majority" : "is-minority"}">${escapeHtml(coalitionLabel)}</div>
+            <div class="eyebrow">COALIZÃO DE GOVERNO</div>
+            <div class="institution-coalition-status ${coalitionStatusClass}">${escapeHtml(coalitionLabel)} (${data.coalition.seats} / ${data.summary.totalSeats} cadeiras)</div>
             <div class="institution-coalition-list">${coalitionRows}</div>
-            <div class="institution-stat"><span>Quórum</span><b>${data.summary.quorumSeats} de ${data.summary.totalSeats}</b></div>
-            <div class="institution-stat"><span>Bloco oposicionista identificado</span><b>${data.opposition.seats} cadeiras</b></div>
+
+            <div class="institution-coalition-controls">
+              <div class="institution-control-header">
+                <strong>Negociação de Base Parlamentar</strong>
+                <small class="institution-live-counter" id="coalitionLiveCounter">Base selecionada: <b>${data.coalition.seats}</b> de ${data.summary.totalSeats} cadeiras</small>
+              </div>
+              <div class="institution-checkbox-grid">${checkboxRows}</div>
+              <div class="institution-coalition-actions">
+                <button type="button" class="btn-institution-primary" id="btnFormCoalition">Confirmar coalizão</button>
+                <button type="button" class="btn-institution-secondary" id="btnDissolveCoalition" ${data.coalition.groupIds.length === 0 ? "disabled" : ""}>Dissolver coalizão</button>
+              </div>
+              <div class="institution-coalition-feedback" id="coalitionFeedback" role="status" aria-live="polite"></div>
+            </div>
+
             <div class="institution-divider"></div>
-            <div class="eyebrow">MANDATO INSTITUCIONAL</div><div class="institution-term"><strong>${data.termNumber}</strong><span>Mandato</span></div>
+            <div class="eyebrow">BLOCOS PARLAMENTARES</div>
+            <div class="institution-stat"><span>Quórum legislativo</span><b>${data.summary.quorumSeats} de ${data.summary.totalSeats}</b></div>
+            <div class="institution-stat"><span>Bloco oposicionista identificado</span><b>${data.opposition.seats} cadeiras</b></div>
+            ${oppositionRows}
+
+            <div class="institution-divider"></div>
+            <div class="eyebrow">MANDATO INSTITUCIONAL</div>
+            <div class="institution-term"><strong>${data.termNumber}º</strong><span>Mandato</span></div>
             <div class="institution-term-track"><span style="width:${termProgress}%"></span></div>
-            <div class="institution-stat"><span>Próxima renovação</span><b>Mês ${data.nextElectionMonth}</b></div>
+            <div class="institution-stat"><span>Mês atual</span><b>Mês ${data.currentMonth}</b></div>
+            <div class="institution-stat"><span>Próxima renovação</span><b>Mês ${data.nextElectionMonth} (Duração: ${data.settings.termMonths} meses)</b></div>
           </aside>
         </div>
       </section>`;
+
+    if (typeof host.querySelectorAll === "function") {
+      const checkboxes = host.querySelectorAll('input[name="coalitionGroup"]');
+      const counter = host.querySelector("#coalitionLiveCounter");
+      const btnForm = host.querySelector("#btnFormCoalition");
+      const btnDissolve = host.querySelector("#btnDissolveCoalition");
+      const feedback = host.querySelector("#coalitionFeedback");
+
+      const updateLiveCounter = () => {
+        let total = 0;
+        checkboxes.forEach((cb) => {
+          if (cb.checked) total += Number(cb.dataset.seats) || 0;
+        });
+        if (counter) {
+          const hasMajority = total >= data.summary.majoritySeats;
+          counter.innerHTML = `Base selecionada: <b>${total}</b> cadeiras (${hasMajority ? 'Maioria' : 'Minoria'})`;
+          counter.classList.toggle('has-majority', hasMajority);
+        }
+      };
+
+      checkboxes.forEach((cb) => {
+        cb.addEventListener("change", () => {
+          cb.closest(".institution-checkbox-row")?.classList.toggle("is-selected", cb.checked);
+          updateLiveCounter();
+        });
+      });
+
+      const getRuntimeApi = () => {
+        if (root?.VilarejoInstitutionsRuntime && root.VilarejoInstitutionsRuntime.state === state) {
+          return root.VilarejoInstitutionsRuntime;
+        }
+        return null;
+      };
+
+      if (btnForm) {
+        btnForm.addEventListener("click", () => {
+          const selected = [];
+          checkboxes.forEach((cb) => {
+            if (cb.checked) selected.push(cb.value);
+          });
+          try {
+            const runtimeApi = getRuntimeApi();
+            let result;
+            if (runtimeApi && typeof runtimeApi.setCoalition === "function") {
+              result = runtimeApi.setCoalition(selected);
+            } else {
+              result = setCoalition(state, selected);
+            }
+            renderDashboard(state, host);
+            const fb = host.querySelector("#coalitionFeedback");
+            if (fb) {
+              fb.className = "institution-coalition-feedback is-success";
+              fb.textContent = result.majority
+                ? `Coalizão majoritária formalizada com ${result.seats} cadeiras (${result.groupIds.length} bancadas).`
+                : result.seats > 0
+                  ? `Coalizão minoritária formalizada com ${result.seats} cadeiras.`
+                  : `Base dissolvida: nenhum grupo selecionado.`;
+            }
+          } catch (error) {
+            if (feedback) {
+              feedback.className = "institution-coalition-feedback is-error";
+              feedback.textContent = error?.message || "Erro ao atualizar coalizão.";
+            }
+          }
+        });
+      }
+
+      if (btnDissolve) {
+        btnDissolve.addEventListener("click", () => {
+          try {
+            const runtimeApi = getRuntimeApi();
+            if (runtimeApi && typeof runtimeApi.dissolveCoalition === "function") {
+              runtimeApi.dissolveCoalition();
+            } else {
+              dissolveCoalition(state);
+            }
+            renderDashboard(state, host);
+            const fb = host.querySelector("#coalitionFeedback");
+            if (fb) {
+              fb.className = "institution-coalition-feedback is-info";
+              fb.textContent = "Coalizão dissolvida. O governo opera sem base formal.";
+            }
+          } catch (error) {
+            if (feedback) {
+              feedback.className = "institution-coalition-feedback is-error";
+              feedback.textContent = error?.message || "Erro ao dissolver coalizão.";
+            }
+          }
+        });
+      }
+    }
+
     return true;
   }
 

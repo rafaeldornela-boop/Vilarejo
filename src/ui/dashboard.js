@@ -48,6 +48,8 @@
       overview: ["Visão geral", "Acompanhe o território e o pulso da comunidade."],
       economy: ["Economia", "Produção, preços, trabalho e atividade ao longo do tempo."],
       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
+      politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
+      institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
       government: ["Governo", "Políticas, orçamento e patrimônio público."],
       records: ["Registros", "Decisões, acontecimentos e movimentações financeiras."]
     };
@@ -55,6 +57,14 @@
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
     if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "O vilarejo é seu." : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
+    if (name === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
+      const host = $("politicsDashboard");
+      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+    }
+    if (name === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+      const host = $("institutionsDashboard");
+      if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -288,6 +298,14 @@
         if (host) {
             window.VilarejoSociety.renderDashboard(window.VilarejoSocietyRuntime.state, host);
         }
+    }
+    if (activeView === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
+      const host = $("politicsDashboard");
+      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+    }
+    if (activeView === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+      const host = $("institutionsDashboard");
+      if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
     }
   }
 

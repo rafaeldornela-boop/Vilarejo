@@ -106,6 +106,8 @@ console.log("\n=== VERIFICAÇÕES ESTRUTURAIS ===");
 report("A página carrega o núcleo central exatamente uma vez", loadedScripts.filter((src) => src === "src/core/vilarejo_core.js").length === 1);
 report("O núcleo central vem antes dos eventos e da economia", loadedScripts.indexOf("src/core/vilarejo_core.js") >= 0 && loadedScripts.indexOf("src/core/vilarejo_core.js") < loadedScripts.indexOf("src/events/eventos_v3.js") && loadedScripts.indexOf("src/events/eventos_v3.js") < loadedScripts.indexOf("src/economy/vilarejo_economy.js"));
 report("A página carrega vilarejo_economy.js exatamente uma vez", loadedScripts.filter((src) => src === "src/economy/vilarejo_economy.js").length === 1);
+report("A página carrega Política exatamente uma vez após Sociedade", loadedScripts.filter((src) => src === "src/politics/vilarejo_politics.js").length === 1 && loadedScripts.indexOf("src/society/vilarejo_society.js") < loadedScripts.indexOf("src/politics/vilarejo_politics.js"));
+report("A página carrega Instituições exatamente uma vez após Política", loadedScripts.filter((src) => src === "src/institutions/vilarejo_institutions.js").length === 1 && loadedScripts.indexOf("src/politics/vilarejo_politics.js") < loadedScripts.indexOf("src/institutions/vilarejo_institutions.js"));
 report("O servidor permite servir o núcleo central", /src\//.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
 report("A página declara idioma português", /<html\s+lang=["']pt-BR["']/i.test(html));
 report("O executor de testes não depende de jsdom", !/require\(["']jsdom["']\)/.test(fs.readFileSync(path.join(ROOT, "src/test/test_runner.js"), "utf8")));

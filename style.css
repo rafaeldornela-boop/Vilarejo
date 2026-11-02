@@ -304,6 +304,104 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 .app-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 25px; padding: 17px 2px 0; border-top: 1px solid #e3e8e0; color: #9aa49b; font-size: 8px; letter-spacing: .7px; }
 .app-footer span:first-child { font-weight: 800; }
 
+.politics-host { min-width: 0; }
+.politics-dashboard { display: grid; gap: 15px; }
+.politics-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.politics-summary-card { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.politics-summary-card span { display: block; color: #87948a; font-size: 9px; font-weight: 700; }
+.politics-summary-card strong { display: block; margin-top: 5px; color: var(--forest); font: 800 21px var(--heading); }
+.politics-section-heading { margin: 5px 0 0; }
+.politics-section-heading h2 { margin: 4px 0; color: var(--forest); font: 800 18px var(--heading); }
+.politics-section-heading p { max-width: 760px; color: var(--muted); font-size: 10px; }
+.politics-groups-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.politics-group-card { min-width: 0; padding: 16px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
+.politics-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.politics-group-head h3 { margin: 0; color: var(--forest); font: 800 14px var(--heading); }
+.politics-group-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.politics-relation { flex: 0 0 auto; padding: 5px 8px; border-radius: 99px; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.politics-support { color: #427653; background: #edf5eb; }
+.politics-neutral { color: #81704f; background: #f6f0e4; }
+.politics-opposition { color: #a14f47; background: #f9ece9; }
+.politics-influence { display: flex; justify-content: space-between; gap: 10px; margin-top: 13px; color: #75837a; font-size: 9px; }
+.politics-influence strong { color: var(--forest); font-size: 11px; }
+.politics-track { height: 6px; overflow: hidden; margin-top: 6px; border-radius: 99px; background: #edf0e9; }
+.politics-track span { display: block; height: 100%; border-radius: inherit; background: #789b75; }
+.politics-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 13px; margin-top: 12px; }
+.politics-metrics div { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid #edf0eb; font-size: 9px; }
+.politics-metrics span { color: #89958c; }
+.politics-metrics b { color: #4c6052; text-align: right; }
+.politics-measurement { min-height: 28px; margin: 10px 0 8px; color: #8b968e; font-size: 8px; line-height: 1.45; }
+.politics-interests { display: flex; flex-wrap: wrap; gap: 5px; }
+.politics-interests span { padding: 4px 7px; border-radius: 5px; color: #63776a; background: #f0f4ed; font-size: 8px; }
+.politics-data-note { margin: 0; padding: 11px 13px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.5; }
+
+.institutions-host { min-width: 0; }
+.institutions-dashboard { display: grid; gap: 14px; }
+.institutions-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.institutions-kpi { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.institutions-kpi span { display: block; color: #87948a; font-size: 9px; font-weight: 700; }
+.institutions-kpi strong { display: block; margin-top: 5px; color: var(--forest); font: 800 19px var(--heading); }
+.institutions-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, .8fr); gap: 13px; align-items: start; }
+.institutions-main-card, .institutions-side-card { min-width: 0; padding: 19px; }
+.institutions-side-card h3 { margin: 5px 0; color: var(--forest); font: 800 16px var(--heading); }
+.institutions-side-card p { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.institutions-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.institution-group-card { min-width: 0; padding: 11px 12px; border: 1px solid #e9ede6; border-radius: 8px; background: #fcfdf9; }
+.institution-group-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.institution-group-top strong { display: block; color: #425448; font-size: 10px; }
+.institution-group-top small { display: block; margin-top: 2px; color: #89968d; font-size: 8px; }
+.institution-group-top > b { flex: 0 0 auto; color: var(--forest); font: 800 18px var(--heading); text-align: right; }
+.institution-group-top > b small { display: inline; font: 500 8px var(--font); }
+.institution-seat-track, .institution-term-track { height: 6px; overflow: hidden; margin-top: 8px; border-radius: 99px; background: #edf0e9; }
+.institution-seat-track span, .institution-term-track span { display: block; height: 100%; border-radius: inherit; background: #789b75; }
+.institution-group-meta, .institution-stat { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #89958c; font-size: 8px; }
+.institution-group-meta span:last-child { text-align: right; }
+.institution-data-note { margin-top: 12px; padding: 10px 12px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.5; }
+.institution-divider { height: 1px; margin: 14px 0; background: #edf0eb; }
+.institution-coalition-status { display: inline-block; margin: 8px 0 5px; padding: 5px 8px; border-radius: 99px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.institution-coalition-status.is-majority { color: #427653; background: #edf5eb; }
+.institution-coalition-status.is-minority { color: #8a6840; background: #f6f0e4; }
+.institution-coalition-status.is-not-formed { color: #8c827a; background: #f0edea; }
+.institution-coalition-list { display: grid; gap: 5px; }
+.institution-coalition-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #edf0eb; color: #6f7d73; font-size: 9px; }
+.institution-coalition-row b { color: #4b5c50; white-space: nowrap; }
+.institution-coalition-leader { color: #3b6b47; font-weight: 800; margin-left: 4px; font-size: 8px; }
+.institution-empty { color: #89958c; font-size: 9px; line-height: 1.5; }
+.institution-term { display: flex; align-items: baseline; gap: 8px; margin-top: 5px; }
+.institution-term strong { color: var(--forest); font: 800 24px var(--heading); }
+.institution-term span { color: #87948a; font-size: 9px; }
+
+.institution-coalition-controls { margin-top: 12px; padding: 12px; background: #f7faf5; border: 1px solid #e1e7dc; border-radius: 8px; }
+.institution-control-header { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.institution-control-header strong { color: var(--forest); font-size: 10px; font-weight: 800; }
+.institution-live-counter { color: #6a796e; font-size: 9px; }
+.institution-live-counter.has-majority { color: #2e6939; font-weight: 700; }
+.institution-checkbox-grid { display: grid; gap: 6px; margin: 8px 0; }
+.institution-checkbox-row { padding: 6px 8px; background: #ffffff; border: 1px solid #e5ebe1; border-radius: 6px; transition: background .15s ease, border-color .15s ease; }
+.institution-checkbox-row.is-selected { background: #f1f7ee; border-color: #bad3be; }
+.institution-checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 9px; width: 100%; }
+.institution-checkbox-label input[type="checkbox"] { cursor: pointer; accent-color: var(--forest, #2d5a3b); }
+.institution-group-name { font-weight: 700; color: #3d4f43; flex: 1; }
+.institution-group-seats { color: #68796d; font-size: 8.5px; }
+.institution-relation-tag { font-size: 7.5px; padding: 2px 6px; border-radius: 99px; text-transform: uppercase; font-weight: 800; margin-left: 4px; }
+.institution-relation-tag.is-support { color: #2e6939; background: #e6f2e4; }
+.institution-relation-tag.is-neutral { color: #7a6330; background: #f8f1de; }
+.institution-relation-tag.is-opposition { color: #9c3f37; background: #fae8e6; }
+.institution-coalition-actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn-institution-primary, .btn-institution-secondary { padding: 7px 12px; border-radius: 6px; font-size: 9px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: all .15s ease; }
+.btn-institution-primary { background: var(--forest, #2d5a3b); color: #ffffff; }
+.btn-institution-primary:hover { background: #23482f; }
+.btn-institution-secondary { background: #ffffff; color: #5f7064; border-color: #ccd5c8; }
+.btn-institution-secondary:hover:not(:disabled) { background: #f3f6f1; color: #3f4e43; }
+.btn-institution-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.institution-coalition-feedback { margin-top: 8px; font-size: 8.5px; line-height: 1.4; }
+.institution-coalition-feedback.is-success { color: #2b6d39; padding: 6px 8px; background: #eaf4e8; border-radius: 5px; }
+.institution-coalition-feedback.is-info { color: #526759; padding: 6px 8px; background: #edf2eb; border-radius: 5px; }
+.institution-coalition-feedback.is-error { color: #9c322b; padding: 6px 8px; background: #fbeae9; border-radius: 5px; }
+.institution-opposition-list { display: grid; gap: 4px; margin-top: 6px; }
+.institution-opposition-row { display: flex; justify-content: space-between; font-size: 8.5px; color: #7a8a7f; padding: 3px 0; border-bottom: 1px dashed #e9ede6; }
+.institution-opposition-row b { color: #596a5f; }
+
 @media (max-width: 1200px) {
   .sidebar { width: 218px; }
   .main-content { margin-left: 218px; }
@@ -355,6 +453,12 @@ button:disabled { opacity: .42; cursor: not-allowed; }
   .action-card { padding: 16px; }
   .action-buttons button { flex: 1 1 45%; }
   .chart-grid, .society-columns, .government-grid, .records-grid { grid-template-columns: 1fr; }
+  .politics-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .politics-groups-grid { grid-template-columns: 1fr; }
+  .institutions-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .institutions-layout { grid-template-columns: 1fr; }
+  .institutions-groups { grid-template-columns: 1fr; }
+  .institution-coalition-actions { flex-direction: column; }
   .chart-wide { grid-column: auto; }
   .section-heading.economy-heading { flex-direction: column; }
   .period-switch { align-self: flex-start; }

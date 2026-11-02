@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/vilarejo_economy.js && node --check src/events/eventos_v3.js && node --check src/society/vilarejo_society.js && node --check src/test/test_runner.js",
-    "test": "node src/test/test_runner.js && node src/test/society_test.js"
+    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/vilarejo_economy.js && node --check src/events/eventos_v3.js && node --check src/society/vilarejo_society.js && node --check src/politics/vilarejo_politics.js && node --check src/institutions/vilarejo_institutions.js && node --check src/test/test_runner.js && node --check src/test/politics_test.js && node --check src/test/institutions_test.js",
+    "test": "node src/test/test_runner.js && node src/test/society_test.js && node src/test/politics_test.js && node src/test/institutions_test.js"
   },
   "engines": {
     "node": ">=18"

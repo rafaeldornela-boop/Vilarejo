@@ -24,6 +24,8 @@
         <button class="nav-item active" data-view="overview" aria-current="page"><span class="nav-icon">⌂</span><span>Visão geral</span></button>
         <button class="nav-item" data-view="economy"><span class="nav-icon">↗</span><span>Economia</span></button>
         <button class="nav-item" data-view="society"><span class="nav-icon">♧</span><span>Sociedade</span></button>
+        <button class="nav-item" data-view="politics"><span class="nav-icon">⚖</span><span>Política</span></button>
+        <button class="nav-item" data-view="institutions"><span class="nav-icon">▥</span><span>Instituições</span></button>
         <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
         <button class="nav-item" data-view="records"><span class="nav-icon">☷</span><span>Registros</span></button>
       </nav>
@@ -202,6 +204,16 @@
           <div class="society-columns"><article class="content-card"><div class="eyebrow">FAMÍLIAS E TRABALHADORES</div><h2>Moradores</h2><div id="popSummary" class="small-summary"></div><div id="householdsList" class="actor-list"></div></article><article class="content-card"><div class="eyebrow">EMPRESAS E INSTITUIÇÕES</div><h2>Agentes econômicos</h2><div id="institutionsList" class="actor-list"></div></article></div>
         </section>
 
+        <section class="view-panel" data-view-panel="politics" aria-label="Política">
+          <div class="section-heading"><div><div class="eyebrow">GRUPOS E RELAÇÕES DE PODER</div><h2>A sociedade também disputa os rumos do Estado.</h2><p>Acompanhe quem são os grupos de interesse, quais recursos possuem e como se relacionam com o governo.</p></div></div>
+          <div id="politicsDashboard" class="politics-host"></div>
+        </section>
+
+        <section class="view-panel" data-view-panel="institutions" aria-label="Instituições">
+          <div class="section-heading"><div><div class="eyebrow">ESTRUTURA DO ESTADO</div><h2>O poder também precisa de instituições.</h2><p>Veja como os grupos de interesse se convertem em representação institucional, como se organiza a Câmara e qual é a base parlamentar do governo.</p></div></div>
+          <div id="institutionsDashboard" class="institutions-host"></div>
+        </section>
+
         <section class="view-panel" data-view-panel="government" aria-label="Governo">
           <div class="section-heading"><div><div class="eyebrow">GESTÃO PÚBLICA</div><h2>As regras definem o caminho.</h2><p>Altere as políticas e acompanhe os efeitos sobre o orçamento e a vida local.</p></div></div>
           <div class="government-grid"><article class="content-card"><div class="eyebrow">INSTRUMENTOS DE POLÍTICA</div><h2>Políticas públicas</h2><p class="card-description">As mudanças entram em vigor no próximo fechamento mensal.</p><div id="policies"></div></article><article class="content-card"><div class="eyebrow">RESPONSABILIDADE FISCAL</div><h2>Contas do governo</h2><div class="audit-status" id="macroAuditBadge"></div><div id="macroeconomicAccounts" class="balance-grid"></div></article></div>
@@ -223,6 +235,8 @@
   <script src="src/events/eventos_v3.js"></script>
   <script src="src/economy/vilarejo_economy.js"></script>
   <script src="src/society/vilarejo_society.js"></script>
+  <script src="src/politics/vilarejo_politics.js"></script>
+  <script src="src/institutions/vilarejo_institutions.js"></script>
   <script src="src/ui/dashboard.js"></script>
 </body>
 </html>
