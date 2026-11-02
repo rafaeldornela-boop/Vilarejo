@@ -1,14 +1,14 @@
 {
   "name": "vilarejo",
-  "version": "3.1.0",
+  "version": "3.2.0-alpha.1",
   "private": true,
-  "description": "Vilarejo: Economia 3.0 integrada ao Núcleo Central modular 0.1, com calendário, população compartilhada e barramento de eventos.",
+  "description": "Vilarejo: Economia 3.0, Núcleo Central 0.1 e arquitetura modular 0.2.",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "node --check server.js && node --check vilarejo_core.js && node --check script.js && node --check eventos_v3.js && node --check test_runner.js",
-    "test": "node test_runner.js"
+    "build": "node --check server.js && node --check vilarejo_core.js && node --check script.js && node --check eventos_v3.js && node --check test_runner.js && node --check public/modules/module_factory.js && node --check public/modules/economia/index.js && node --check tests/modular_architecture.test.js",
+    "test": "node test_runner.js && node tests/modular_architecture.test.js"
   },
   "engines": {
     "node": ">=18"

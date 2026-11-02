@@ -10,6 +10,8 @@ const ROOT = __dirname;
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const scriptCode = fs.readFileSync(path.join(ROOT, "script.js"), "utf8");
 const coreCode = fs.readFileSync(path.join(ROOT, "vilarejo_core.js"), "utf8");
+const moduleFactoryCode = fs.readFileSync(path.join(ROOT, "public/modules/module_factory.js"), "utf8");
+const economyPortCode = fs.readFileSync(path.join(ROOT, "public/modules/economia/index.js"), "utf8");
 const loadedScripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
 const failures = [];
 let passed = 0;
@@ -99,6 +101,8 @@ function createSimulationContext() {
   vm.createContext(context);
   vm.runInContext(coreCode, context, { filename: "vilarejo_core.js", timeout: 30000 });
   vm.runInContext(scriptCode, context, { filename: "script.js", timeout: 30000 });
+  vm.runInContext(moduleFactoryCode, context, { filename: "public/modules/module_factory.js", timeout: 30000 });
+  vm.runInContext(economyPortCode, context, { filename: "public/modules/economia/index.js", timeout: 30000 });
   return context;
 }
 
@@ -107,6 +111,10 @@ report("A página carrega o núcleo central exatamente uma vez", loadedScripts.f
 report("O núcleo central vem antes dos eventos e da economia", loadedScripts.indexOf("vilarejo_core.js") >= 0 && loadedScripts.indexOf("vilarejo_core.js") < loadedScripts.indexOf("eventos_v3.js") && loadedScripts.indexOf("eventos_v3.js") < loadedScripts.indexOf("script.js"));
 report("A página carrega script.js exatamente uma vez", loadedScripts.filter((src) => src === "script.js").length === 1);
 report("O servidor permite servir o núcleo central", /vilarejo_core\.js/.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
+report("A fábrica modular é carregada uma única vez", loadedScripts.filter((src) => src === "public/modules/module_factory.js").length === 1);
+report("A porta pública da Economia é carregada uma única vez", loadedScripts.filter((src) => src === "public/modules/economia/index.js").length === 1);
+report("Fábrica e porta da Economia são carregadas depois do runtime econômico", loadedScripts.indexOf("script.js") >= 0 && loadedScripts.indexOf("script.js") < loadedScripts.indexOf("public/modules/module_factory.js") && loadedScripts.indexOf("public/modules/module_factory.js") < loadedScripts.indexOf("public/modules/economia/index.js"));
+report("O servidor permite servir os novos módulos em public/", /relativePath\.startsWith\(["']public\/["']\)/.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
 report("A página declara idioma português", /<html\s+lang=["']pt-BR["']/i.test(html));
 report("O executor de testes não depende de jsdom", !/require\(["']jsdom["']\)/.test(fs.readFileSync(path.join(ROOT, "test_runner.js"), "utf8")));
 
@@ -155,6 +163,9 @@ try {
   report("Economia registra-se no núcleo central", initialCore.modules.some((module) => module.id === "economia" && module.version === "3.0.0"));
   report("Runtime compartilhado fica disponível para módulos futuros", !!simulation.window.VilarejoRuntime && simulation.window.VilarejoRuntime.modules.has("economia"));
   report("Estado inicial compartilha calendário e população", initialCore.calendar.absoluteDay === 149 && initialCore.population.totals.total === 10 && initialCore.population.totals.adults === 6);
+  report("Fábrica modular é publicada no ambiente da aplicação", !!simulation.window.VilarejoModuleKit && simulation.window.VilarejoModuleKit.version === "0.2.1");
+  report("Porta somente de leitura da Economia é inicializada", !!simulation.window.VilarejoEconomiaPort && simulation.window.VilarejoEconomiaPort.id === "economia");
+  report("Porta pública lê o registro econômico sem expor comandos financeiros", simulation.window.VilarejoEconomiaPort.getSnapshot().id === "economia" && typeof simulation.window.VilarejoEconomiaPort.setBalance === "undefined");
 
   const result = api.runStressTests();
   for (const item of result.results) {
