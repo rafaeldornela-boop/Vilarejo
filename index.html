@@ -82,19 +82,39 @@
               </div>
               <div class="calendar-month-card">
                 <div class="calendar-month-heading">
-                  <div><div class="eyebrow">DIAS DA COMUNIDADE</div><h2 id="calendarMonthHeading">Maio de 2026</h2></div>
-                  <span class="calendar-current-tag">HOJE</span>
+                  <div>
+                    <div class="eyebrow">DIAS DA COMUNIDADE · CALENDÁRIO GREGORIANO</div>
+                    <h2 id="calendarMonthHeading">Maio de 2026</h2>
+                  </div>
+                  <div class="calendar-heading-actions">
+                    <span class="calendar-current-tag is-current" id="calendarCurrentTag">MÊS ATUAL</span>
+                    <div class="calendar-nav-controls">
+                      <button class="calendar-nav-btn" id="calPrevMonth" title="Mês anterior" aria-label="Mês anterior">‹</button>
+                      <button class="calendar-nav-today" id="calToday" title="Voltar ao dia atual da simulação">Hoje</button>
+                      <button class="calendar-nav-btn" id="calNextMonth" title="Próximo mês" aria-label="Próximo mês">›</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="calendar-weekdays" aria-hidden="true"><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span></div>
                 <div class="calendar-days" id="calendarDays" aria-live="polite"></div>
+                <div class="calendar-legend">
+                  <span><i class="legend-swatch is-today"></i> Hoje</span>
+                  <span><i class="legend-swatch is-harvest-day"></i> Safra</span>
+                  <span><i class="legend-dot-close">●</i> Fechamento mensal</span>
+                </div>
               </div>
             </div>
             <aside class="calendar-agenda">
               <div class="calendar-agenda-heading"><span class="eyebrow">RELÓGIO DA ECONOMIA</span><span class="calendar-clock-icon">◷</span></div>
               <div class="calendar-agenda-item"><span class="agenda-mark agenda-season"></span><div><small>ETAPA PRODUTIVA</small><strong id="calendarSeason">Safra começa amanhã</strong><p id="calendarSeasonDetail">A lavoura entra no período de colheita.</p></div></div>
               <div class="calendar-agenda-separator"></div>
-              <div class="calendar-agenda-item"><span class="agenda-mark agenda-close"></span><div><small>PRÓXIMO FECHAMENTO</small><strong id="calendarClose">Em 1 dia</strong><p>Encerramento do ciclo econômico mensal.</p></div></div>
-              <div class="calendar-economic-year"><span>Ano econômico</span><strong id="calendarEconomicYear">01</strong><small id="calendarEconomicDay">Dia 149 de 360</small></div>
+              <div class="calendar-agenda-item"><span class="agenda-mark agenda-close"></span><div><small>PRÓXIMO FECHAMENTO</small><strong id="calendarClose">Em 1 dia</strong><p>Ciclo de 30 dias com liquidação SFC.</p></div></div>
+              <div class="calendar-agenda-separator"></div>
+              <div class="calendar-economic-badges">
+                <div class="econ-badge-item"><small>ANO ECONÔMICO</small><strong id="calendarEconomicYear">01</strong></div>
+                <div class="econ-badge-item"><small>MÊS ECONÔMICO</small><strong id="calendarEconomicMonth">Mês 05</strong></div>
+                <div class="econ-badge-item"><small>DIA ECONÔMICO</small><strong id="calendarEconomicDay">Dia 29 / 30</strong></div>
+              </div>
             </aside>
           </section>
           <div class="cycle-strip" id="cycleBar" aria-label="Ritmo produtivo e ciclo econômico"></div>
@@ -254,7 +274,8 @@
         </section>
 
         <section class="view-panel" data-view-panel="government" aria-label="Governo">
-          <div class="section-heading"><div><div class="eyebrow">GESTÃO PÚBLICA</div><h2>As regras definem o caminho.</h2><p>Altere as políticas e acompanhe os efeitos sobre o orçamento e a vida local.</p></div></div>
+          <div class="section-heading"><div><div class="eyebrow">GESTÃO PÚBLICA E PODER</div><h2>As regras e alianças definem o caminho.</h2><p>Acompanhe a base parlamentar, altere políticas públicas e controle o orçamento do Estado.</p></div></div>
+          <div id="governmentSummaryCard" class="gov-summary-card"></div>
           <div class="government-grid"><article class="content-card"><div class="eyebrow">INSTRUMENTOS DE POLÍTICA</div><h2>Políticas públicas</h2><p class="card-description">As mudanças entram em vigor no próximo fechamento mensal.</p><div id="policies"></div></article><article class="content-card"><div class="eyebrow">RESPONSABILIDADE FISCAL</div><h2>Contas do governo</h2><div class="audit-status" id="macroAuditBadge"></div><div id="macroeconomicAccounts" class="balance-grid"></div></article></div>
           <details class="content-card detail-card"><summary>Patrimônio e balanços setoriais <span id="sfcAuditBadge"></span></summary><div id="institutionalBalances" class="balance-grid"></div></details>
           <details class="content-card detail-card"><summary>Caixa, patrimônio e obrigações pendentes</summary><div class="detail-columns"><div><h3>Contas e patrimônio</h3><div id="accounts"></div></div><div><h3>Obrigações pendentes</h3><div id="obligations"></div></div></div></details>

@@ -87,7 +87,7 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 @keyframes panelIn { from { opacity: .45; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 
 
-.calendar-board { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:0; overflow:hidden; margin-bottom:12px; border:1px solid #e3e9df; border-radius:14px; background:var(--paper); box-shadow:var(--shadow); }
+.calendar-board { display:grid; grid-template-columns:minmax(0,1fr) 270px; gap:0; overflow:hidden; margin-bottom:12px; border:1px solid #e3e9df; border-radius:14px; background:var(--paper); box-shadow:var(--shadow); }
 .calendar-primary { min-width:0; display:grid; grid-template-columns:190px minmax(0,1fr); gap:22px; padding:20px 22px; }
 .calendar-date-card { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding-right:18px; border-right:1px solid #edf0e9; }
 .calendar-date-weekday { margin-top:16px; color:#8d9a8e; font-size:9px; font-weight:800; letter-spacing:1.2px; }
@@ -97,7 +97,15 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 .calendar-month-card { min-width:0; }
 .calendar-month-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
 .calendar-month-heading h2 { margin:3px 0 0; color:var(--forest); font:800 17px var(--heading); }
-.calendar-current-tag { padding:5px 8px; border-radius:99px; color:#67856d; background:#edf4e9; font-size:8px; font-weight:800; letter-spacing:.8px; }
+.calendar-heading-actions { display:flex; align-items:center; gap:10px; }
+.calendar-nav-controls { display:flex; align-items:center; gap:4px; }
+.calendar-nav-btn { width:28px; height:28px; display:grid; place-items:center; border:1px solid #dce4d8; border-radius:6px; background:#fff; color:var(--forest); font-size:15px; font-weight:700; transition:.15s ease; }
+.calendar-nav-btn:hover { background:#f0f5ec; border-color:#c4d3be; }
+.calendar-nav-today { height:28px; padding:0 10px; border:1px solid #dce4d8; border-radius:6px; background:#fff; color:var(--forest); font-size:11px; font-weight:700; transition:.15s ease; }
+.calendar-nav-today:hover { background:#f0f5ec; }
+.calendar-current-tag { padding:4px 8px; border-radius:99px; font-size:8px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; }
+.calendar-current-tag.is-current { color:#386b4f; background:#ebf5e8; border:1px solid #d0e7cb; }
+.calendar-current-tag.is-browsing { color:#946f34; background:#fbf5e7; border:1px solid #f2e2be; }
 .calendar-weekdays,.calendar-days { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; text-align:center; }
 .calendar-weekdays { margin-bottom:5px; }
 .calendar-weekdays span { padding:3px 0; color:#a0aaa1; font-size:8px; font-weight:800; letter-spacing:.6px; }
@@ -110,6 +118,11 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 .calendar-day.is-close-day { border: 1px dashed #b58d55; }
 .calendar-day.is-harvest-day { background: #f2f7ec; }
 .close-marker { font-size: 6px; color: #b58d55; position: absolute; top: 1px; right: 3px; font-style: normal; }
+.calendar-legend { display:flex; align-items:center; gap:14px; margin-top:10px; padding-top:8px; border-top:1px solid #edf1ea; color:#828f85; font-size:9px; font-weight:600; }
+.legend-swatch { width:8px; height:8px; display:inline-block; border-radius:3px; vertical-align:middle; margin-right:4px; }
+.legend-swatch.is-today { background:var(--forest-2); }
+.legend-swatch.is-harvest-day { background:#d4e6c7; border:1px solid #a6c493; }
+.legend-dot-close { color:#b58d55; font-size:9px; vertical-align:middle; margin-right:2px; }
 .calendar-agenda { display:flex; flex-direction:column; padding:20px 18px 17px; border-left:1px solid #e8ede5; background:#f8faf5; }
 .calendar-agenda-heading { display:flex; align-items:center; justify-content:space-between; }
 .calendar-clock-icon { color:#b08a50; font-size:19px; }
@@ -122,14 +135,34 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 .calendar-agenda-item strong { display:block; margin-top:3px; color:var(--forest); font:800 13px var(--heading); }
 .calendar-agenda-item p { margin:3px 0 0; color:#8a968c; font-size:9px; line-height:1.4; }
 .calendar-agenda-separator { height:1px; margin:15px 0 0 18px; background:#e7ece3; }
-.calendar-economic-year { display:grid; grid-template-columns:1fr auto; align-items:center; gap:2px 8px; margin-top:auto; padding-top:15px; border-top:1px solid #e7ece3; }
-.calendar-economic-year span { color:#8b988d; font-size:9px; font-weight:700; }
-.calendar-economic-year strong { grid-column:2; grid-row:1 / span 2; color:#ad8951; font:800 27px var(--heading); }
-.calendar-economic-year small { color:#9ba59c; font-size:8px; }
+.calendar-economic-badges { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:auto; padding-top:12px; border-top:1px solid #e7ece3; }
+.econ-badge-item { display:flex; flex-direction:column; padding:6px 8px; border-radius:7px; background:#ffffff; border:1px solid #e4eae0; }
+.econ-badge-item small { color:#8c978e; font-size:7.5px; font-weight:800; letter-spacing:.5px; }
+.econ-badge-item strong { color:var(--forest); font:800 12.5px var(--heading); margin-top:2px; }
+
+.gov-summary-card { margin-bottom:16px; border:1px solid #dee5d8; border-radius:12px; background:var(--paper); box-shadow:var(--shadow); overflow:hidden; }
+.gov-summary-content { padding:18px 22px; }
+.gov-summary-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.gov-summary-header h3 { margin:3px 0 0; font-size:17px; font-weight:800; color:var(--forest); }
+.gov-kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+.gov-kpi-item { display:flex; flex-direction:column; padding:12px 14px; border:1px solid #e5ebe0; border-radius:9px; background:#f9fbf7; }
+.gov-kpi-item small { color:#829186; font-size:8.5px; font-weight:800; letter-spacing:.8px; }
+.gov-kpi-item strong { margin-top:3px; color:var(--forest); font:800 17px var(--heading); letter-spacing:-.5px; }
+.gov-kpi-item strong small { color:#79877d; font-size:11px; font-weight:600; }
+.gov-kpi-item span { margin-top:3px; color:#738278; font-size:10px; }
+.gov-actions-row { display:flex; gap:10px; flex-wrap:wrap; }
+.btn-gov-shortcut { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border:1px solid #c9d8c3; border-radius:7px; background:#eef6ec; color:var(--forest); font-size:11px; font-weight:700; transition:.16s ease; }
+.btn-gov-shortcut:hover { background:#e2f0de; border-color:#b3c9ac; }
+.gov-badge { padding:5px 10px; border-radius:99px; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
+.gov-badge.is-majority { color:#246a3e; background:#eaf5e7; border:1px solid #cae4c4; }
+.gov-badge.is-minority { color:#946f34; background:#fbf5e7; border:1px solid #f2e2be; }
+.gov-badge.is-not-formed { color:#728177; background:#f0f3ed; border:1px solid #d9e2d6; }
+
 @media (max-width:1100px) {
-  .calendar-board { grid-template-columns:minmax(0,1fr) 225px; }
+  .calendar-board { grid-template-columns:minmax(0,1fr) 235px; }
   .calendar-primary { grid-template-columns:150px minmax(0,1fr); gap:15px; padding:17px; }
   .calendar-date-number { font-size:59px; }
+  .gov-kpi-row { grid-template-columns:1fr; }
 }
 @media (max-width:760px) {
   .calendar-board { grid-template-columns:1fr; }
@@ -140,7 +173,7 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
   .calendar-agenda-heading { grid-column:1 / -1; }
   .calendar-agenda-item { margin-top:3px; }
   .calendar-agenda-separator { display:none; }
-  .calendar-economic-year { grid-column:1 / -1; margin-top:2px; padding-top:9px; }
+  .calendar-economic-badges { grid-column:1 / -1; margin-top:4px; padding-top:9px; }
 }
 @media (max-width:420px) {
   .calendar-primary { grid-template-columns:1fr; }
@@ -153,7 +186,7 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
   .calendar-day,.calendar-blank { aspect-ratio:1.65; }
   .calendar-agenda { grid-template-columns:1fr; }
   .calendar-agenda-heading { grid-column:auto; }
-  .calendar-economic-year { grid-column:auto; }
+  .calendar-economic-badges { grid-column:auto; }
 }
 
 .cycle-strip { margin-bottom: 12px; padding: 13px 17px; border: 1px solid #e2e8dd; border-radius: 11px; background: #f9fbf6; }

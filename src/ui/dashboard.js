@@ -31,35 +31,86 @@
   let lastSnapshot = null;
   let lastChartSignature = "";
 
-  function getCivilDateInfo(simDay) {
-    const dayNum = Math.max(1, Number(simDay) || 1);
-    const yearIndex = Math.floor((dayNum - 1) / 360);
-    const civilYear = 2026 + yearIndex;
-    const simYear = yearIndex + 1;
-    const monthIndex = Math.floor(((dayNum - 1) % 360) / 30);
-    const dayInMonth = ((dayNum - 1) % 30) + 1;
-    // Calibrado para que o dia 149 inicial coincida com Sexta-feira, 29 de Maio de 2026
-    const weekdayIndex = (dayNum + 3) % 7;
-    const monthStartWeekday = ((weekdayIndex - ((dayInMonth - 1) % 7)) + 7) % 7;
+  function getFirstWeekdayOfMonth(year, month) {
+    // month: 1..12; returns 0=Segunda, 1=Terça, ..., 6=Domingo
+    const day = new Date(Date.UTC(Number(year) || 2026, (Number(month) || 1) - 1, 1)).getUTCDay();
+    return (day + 6) % 7;
+  }
+
+  function civilDateToSimulationDay(year, month, day) {
+    const diffMs = Date.UTC(Number(year), Number(month) - 1, Number(day)) - Date.UTC(2026, 0, 1);
+    return Math.round(diffMs / 86400000) + 1;
+  }
+
+  function simulationDayToCivilDate(simDay) {
+    const dayNum = Math.max(1, Math.round(Number(simDay) || 1));
+    const ms = Date.UTC(2026, 0, 1) + (dayNum - 1) * 86400000;
+    const d = new Date(ms);
+    const civilYear = d.getUTCFullYear();
+    const civilMonth = d.getUTCMonth() + 1; // 1..12
+    const civilDay = d.getUTCDate();
+    const utcDay = d.getUTCDay(); // 0=Sun..6=Sat
+    const weekdayIndex = (utcDay + 6) % 7; // 0=Seg..6=Dom
+    const leap = isLeapYear(civilYear);
+    const daysInMonth = getDaysInGregorianMonth(civilYear, civilMonth);
+    const monthStartWeekday = getFirstWeekdayOfMonth(civilYear, civilMonth);
+
+    // Calendário econômico de 360 dias (12 meses de 30 dias)
+    const economicYear = Math.floor((dayNum - 1) / 360) + 1;
+    const economicMonth = Math.floor(((dayNum - 1) % 360) / 30) + 1;
+    const economicDay = ((dayNum - 1) % 30) + 1;
+    const dayInYear = ((dayNum - 1) % 360) + 1;
+    const isCloseDay = economicDay === 30;
+    const isHarvest = dayInYear >= 150 && dayInYear <= 209;
+    const daysToClose = 30 - economicDay;
+
+    let harvestDaysRemaining = 0;
+    if (isHarvest) {
+      harvestDaysRemaining = 210 - dayInYear;
+    }
 
     return {
       simDay: dayNum,
-      simYear,
+      simYear: economicYear,
       civilYear,
-      monthIndex,
-      monthName: MONTH_NAMES[monthIndex],
-      dayInMonth,
+      civilMonth,
+      civilDay,
+      dayInMonth: civilDay,
+      monthIndex: civilMonth - 1,
+      monthName: MONTH_NAMES[civilMonth - 1],
       weekdayIndex,
       weekdayName: WEEKDAY_NAMES[weekdayIndex],
       weekdayAbbr: WEEKDAY_ABBR[weekdayIndex],
       monthStartWeekday,
-      daysInMonth: 30
+      daysInMonth,
+      isLeapYear: leap,
+      // Calendário econômico
+      economicYear,
+      economicMonth,
+      economicDay,
+      isCloseDay,
+      isHarvest,
+      daysToClose,
+      harvestDaysRemaining
     };
   }
 
+  const getCivilDateInfo = simulationDayToCivilDate;
+
+  let visibleMonths = 12;
+  let activeView = "overview";
+  let lastSnapshot = null;
+  let lastChartSignature = "";
+  const monthlyHistory = [];
+
+  // Estado de navegação do calendário civil
+  let viewedCivilYear = 2026;
+  let viewedCivilMonth = 5; // 1..12
+  let isBrowsingCivilCalendar = false;
+
   function snapshot() {
     try {
-      if (window.VilarejoTest && typeof window.VilarejoTest.stateSnapshot === "function") {
+      if (typeof window !== "undefined" && window.VilarejoTest && typeof window.VilarejoTest.stateSnapshot === "function") {
         const s = window.VilarejoTest.stateSnapshot();
         const core = typeof window.VilarejoTest.getCoreSnapshot === "function"
           ? window.VilarejoTest.getCoreSnapshot()
@@ -116,6 +167,7 @@
 
   function setView(name) {
     activeView = name;
+    if (typeof document === "undefined") return;
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
       panel.classList.toggle("active", panel.dataset.viewPanel === name);
     });
@@ -141,7 +193,77 @@
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
 
     refreshActiveView();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function renderGovernmentOverview() {
+    const host = $("governmentSummaryCard");
+    if (!host || typeof window === "undefined") return;
+    try {
+      const instRuntime = window.VilarejoInstitutionsRuntime;
+      const polRuntime = window.VilarejoPoliticsRuntime;
+      const instState = instRuntime?.state;
+      const polState = polRuntime?.state;
+
+      const seats = instState?.seats || {};
+      const totalSeats = instState?.totalSeats || 21;
+      const neededMajority = instState?.neededMajority || 11;
+      const coalition = instState?.coalition || [];
+      const status = instState?.status || "not_formed";
+      const monthInTerm = instState?.monthInTerm || 1;
+      const termMonths = instState?.termMonths || 48;
+      const remainingMonths = Math.max(0, termMonths - monthInTerm);
+
+      let coalitionSeats = 0;
+      coalition.forEach((gid) => { coalitionSeats += (seats[gid] || 0); });
+      const oppositionSeats = Math.max(0, totalSeats - coalitionSeats);
+      const isMajority = coalitionSeats >= neededMajority;
+
+      const statusBadge = status === "majority"
+        ? '<span class="gov-badge is-majority">Maioria absoluta</span>'
+        : status === "minority"
+        ? '<span class="gov-badge is-minority">Governo de minoria</span>'
+        : '<span class="gov-badge is-not-formed">Sem coalizão formada</span>';
+
+      host.innerHTML = `
+        <div class="gov-summary-content">
+          <div class="gov-summary-header">
+            <div>
+              <div class="eyebrow">PODER EXECUTIVO E PARLAMENTAR</div>
+              <h3>Situação da Base de Governo</h3>
+            </div>
+            ${statusBadge}
+          </div>
+          <div class="gov-kpi-row">
+            <div class="gov-kpi-item">
+              <small>BASE DO GOVERNO</small>
+              <strong>${coalitionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
+              <span>${coalition.length > 0 ? coalition.length + ' grupo(s) na coalizão' : 'Nenhum grupo coligado'}</span>
+            </div>
+            <div class="gov-kpi-item">
+              <small>OPOSIÇÃO / INDEPENDENTES</small>
+              <strong>${oppositionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
+              <span>Maioria necessária: ${neededMajority}</span>
+            </div>
+            <div class="gov-kpi-item">
+              <small>MANDATO DA CÂMARA</small>
+              <strong>${monthInTerm}º <small>mês de ${termMonths}</small></strong>
+              <span>${remainingMonths} meses até renovação</span>
+            </div>
+          </div>
+          <div class="gov-actions-row">
+            <button class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('institutions')">
+              <span>▥</span> Gerenciar coalizão e cadeiras da Câmara
+            </button>
+            <button class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('politics')">
+              <span>⚖</span> Avaliar influência dos grupos políticos
+            </button>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      console.warn("Erro ao renderizar resumo governamental:", e);
+    }
   }
 
   function refreshActiveView() {
@@ -151,11 +273,14 @@
     if (activeView === "services") {
       renderServicesView();
     }
-    if (activeView === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
+    if (activeView === "government") {
+      renderGovernmentOverview();
+    }
+    if (activeView === "politics" && typeof window !== "undefined" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
       const host = $("politicsDashboard");
       if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
     }
-    if (activeView === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+    if (activeView === "institutions" && typeof window !== "undefined" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
       const host = $("institutionsDashboard");
       if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
     }
@@ -296,68 +421,94 @@
   }
 
   function refreshCalendar(data) {
-    const info = getCivilDateInfo(data.day);
-    const day = info.dayInMonth;
-    const month = info.monthIndex;
-    const year = info.civilYear;
+    const currentSimDay = Math.max(1, Math.round(Number(data.day) || 1));
+    const todayInfo = simulationDayToCivilDate(currentSimDay);
 
-    const economicDay = ((Math.max(1, Number(data.day)) - 1) % 360) + 1;
-    const inHarvest = economicDay >= 150 && economicDay < 210;
-    const daysToClose = 30 - ((Math.max(1, Number(data.day)) - 1) % 30);
-    const closeLabel = daysToClose === 1 ? "Amanhã" : "Em " + daysToClose + " dias";
+    // Se o usuário não estiver folheando explicitamente, acompanha o mês da simulação
+    if (!isBrowsingCivilCalendar) {
+      viewedCivilYear = todayInfo.civilYear;
+      viewedCivilMonth = todayInfo.civilMonth;
+    }
+
+    const isViewingCurrentMonth = (viewedCivilYear === todayInfo.civilYear && viewedCivilMonth === todayInfo.civilMonth);
+
+    // Dados do mês visualizado
+    const daysInViewedMonth = getDaysInGregorianMonth(viewedCivilYear, viewedCivilMonth);
+    const startWeekdayOfViewedMonth = getFirstWeekdayOfMonth(viewedCivilYear, viewedCivilMonth);
+    const viewedMonthName = MONTH_NAMES[viewedCivilMonth - 1];
+
+    // Status da Safra e Fechamento no dia atual da simulação
+    const inHarvest = todayInfo.isHarvest;
+    const daysToClose = todayInfo.daysToClose;
+    const closeLabel = daysToClose === 0 ? "Hoje!" : daysToClose === 1 ? "Amanhã" : "Em " + daysToClose + " dias";
 
     let seasonTitle;
     let seasonDetail;
     if (inHarvest) {
-      const remaining = 210 - economicDay;
+      const remaining = todayInfo.harvestDaysRemaining;
       seasonTitle = "Safra em andamento";
       seasonDetail = remaining === 1 ? "Último dia da colheita." : "Colheita ativa · " + remaining + " dias restantes no período.";
-    } else if (economicDay < 150) {
-      const remaining = 150 - economicDay;
+    } else if (((currentSimDay - 1) % 360) + 1 < 150) {
+      const remaining = 150 - (((currentSimDay - 1) % 360) + 1);
       seasonTitle = remaining === 1 ? "Safra começa amanhã" : "Entressafra";
       seasonDetail = "Início da colheita em " + remaining + (remaining === 1 ? " dia." : " dias.");
     } else {
-      const remaining = (360 - economicDay) + 150;
+      const remaining = (360 - (((currentSimDay - 1) % 360) + 1)) + 150;
       seasonTitle = "Entressafra";
       seasonDetail = "Próxima safra em " + remaining + " dias.";
     }
 
     // TopBar
     if ($("topbarCivilDate")) {
-      $("topbarCivilDate").textContent = `${info.weekdayName}, ${String(day).padStart(2, "0")} de ${info.monthName} de ${year}`;
+      $("topbarCivilDate").textContent = `${todayInfo.weekdayName}, ${String(todayInfo.civilDay).padStart(2, "0")} de ${todayInfo.monthName} de ${todayInfo.civilYear}`;
     }
     if ($("dateLabel")) {
-      $("dateLabel").textContent = `Ano ${info.simYear} · Mês ${month + 1} · Dia ${data.day} da simulação`;
+      $("dateLabel").textContent = `Ano Econômico ${todayInfo.economicYear} · Mês ${todayInfo.economicMonth}, Dia ${todayInfo.economicDay} · Dia ${currentSimDay} absoluto`;
     }
     if ($("topbarSeasonBadge")) {
       $("topbarSeasonBadge").textContent = inHarvest ? "Safra ativa" : "Entressafra";
       $("topbarSeasonBadge").className = "season-badge " + (inHarvest ? "is-harvest" : "is-offseason");
     }
 
-    // Calendário Visual Convencional (Grid de 30 dias)
-    if ($("calendarWeekday")) $("calendarWeekday").textContent = info.weekdayName.toUpperCase();
-    if ($("calendarDayNumber")) $("calendarDayNumber").textContent = String(day).padStart(2, "0");
-    if ($("calendarMonthYear")) $("calendarMonthYear").textContent = (info.monthName + " " + year).toUpperCase();
-    if ($("calendarMonthHeading")) $("calendarMonthHeading").textContent = info.monthName + " de " + year;
-    if ($("calendarSimDay")) $("calendarSimDay").textContent = `Dia ${data.day} da simulação · Ano ${info.simYear}`;
+    // Painel Principal do Calendário Civil
+    if ($("calendarWeekday")) $("calendarWeekday").textContent = todayInfo.weekdayName.toUpperCase();
+    if ($("calendarDayNumber")) $("calendarDayNumber").textContent = String(todayInfo.civilDay).padStart(2, "0");
+    if ($("calendarMonthYear")) $("calendarMonthYear").textContent = (todayInfo.monthName + " " + todayInfo.civilYear).toUpperCase();
+    if ($("calendarMonthHeading")) $("calendarMonthHeading").textContent = `${viewedMonthName} de ${viewedCivilYear}`;
+    if ($("calendarSimDay")) $("calendarSimDay").textContent = `Dia ${currentSimDay} da simulação · Mês Econômico ${todayInfo.economicMonth}`;
 
+    // Tag indicadora de navegação
+    const currentTag = $("calendarCurrentTag");
+    if (currentTag) {
+      if (isViewingCurrentMonth) {
+        currentTag.textContent = "MÊS ATUAL DA SIMULAÇÃO";
+        currentTag.className = "calendar-current-tag is-current";
+      } else {
+        currentTag.textContent = "HISTÓRICO / FUTURO";
+        currentTag.className = "calendar-current-tag is-browsing";
+      }
+    }
+
+    // Grade dos Dias do Mês Gregoriano
     const cells = [];
-    // Espaços vazios antes do dia 1 do mês
-    for (let i = 0; i < info.monthStartWeekday; i += 1) {
+    // Células em branco antes do primeiro dia da semana do mês (Segunda=0)
+    for (let i = 0; i < startWeekdayOfViewedMonth; i += 1) {
       cells.push('<span class="calendar-blank" aria-hidden="true"></span>');
     }
 
-    for (let d = 1; d <= 30; d += 1) {
-      const isToday = d === day;
-      const isPast = d < day;
-      const weekdayCol = (info.monthStartWeekday + d - 1) % 7;
-      const isWeekend = weekdayCol === 5 || weekdayCol === 6;
-      const isCloseDay = d === 30;
+    for (let d = 1; d <= daysInViewedMonth; d += 1) {
+      const cellSimDay = civilDateToSimulationDay(viewedCivilYear, viewedCivilMonth, d);
+      const isToday = (cellSimDay === currentSimDay);
+      const isPast = (cellSimDay < currentSimDay);
+      const weekdayCol = (startWeekdayOfViewedMonth + d - 1) % 7;
+      const isWeekend = (weekdayCol === 5 || weekdayCol === 6);
 
-      // Calcular o dia da simulação correspondente a este dia no mês
-      const cellSimDay = (info.simYear - 1) * 360 + month * 30 + d;
-      const cellEconomicDay = ((cellSimDay - 1) % 360) + 1;
-      const isCellHarvest = cellEconomicDay >= 150 && cellEconomicDay < 210;
+      // Regras de Fechamento Econômico (a cada 30 dias de simulação)
+      const isCloseDay = (cellSimDay >= 1 && cellSimDay % 30 === 0);
+
+      // Regras de Safra (dias econômicos 150 a 209 em cada ciclo de 360 dias)
+      const econDayInYear = cellSimDay >= 1 ? (((cellSimDay - 1) % 360) + 1) : 0;
+      const isCellHarvest = (cellSimDay >= 1 && econDayInYear >= 150 && econDayInYear <= 209);
 
       const classes = [
         "calendar-day",
@@ -368,12 +519,22 @@
         isCellHarvest ? "is-harvest-day" : ""
       ].filter(Boolean).join(" ");
 
-      const tooltip = [
-        `${d} de ${info.monthName} de ${year}`,
-        isToday ? "Hoje (Dia atual)" : "",
-        isCloseDay ? "Fechamento mensal" : "",
-        isCellHarvest ? "Período de safra" : ""
-      ].filter(Boolean).join(" · ");
+      const tooltipParts = [
+        `${d} de ${viewedMonthName} de ${viewedCivilYear}`
+      ];
+      if (cellSimDay >= 1) {
+        const cEconYear = Math.floor((cellSimDay - 1) / 360) + 1;
+        const cEconMonth = Math.floor(((cellSimDay - 1) % 360) / 30) + 1;
+        const cEconDay = ((cellSimDay - 1) % 30) + 1;
+        tooltipParts.push(`Dia ${cellSimDay} da simulação (Ano ${cEconYear}, Mês ${cEconMonth}, Dia ${cEconDay})`);
+      } else {
+        tooltipParts.push("Período anterior ao início da simulação");
+      }
+      if (isToday) tooltipParts.push("Hoje (Dia atual da simulação)");
+      if (isCloseDay) tooltipParts.push("Fechamento mensal da economia");
+      if (isCellHarvest) tooltipParts.push("Período de safra agrícola");
+
+      const tooltip = tooltipParts.join(" · ");
 
       cells.push(
         `<span class="${classes}" title="${escapeHtml(tooltip)}"` +
@@ -384,17 +545,19 @@
 
     if ($("calendarDays")) $("calendarDays").innerHTML = cells.join("");
 
-    // Agenda e Ciclo Econômico
+    // Agenda: Relógio da Economia
     if ($("calendarSeason")) $("calendarSeason").textContent = seasonTitle;
     if ($("calendarSeasonDetail")) $("calendarSeasonDetail").textContent = seasonDetail;
     if ($("calendarClose")) $("calendarClose").textContent = closeLabel;
-    if ($("calendarEconomicYear")) $("calendarEconomicYear").textContent = String(info.simYear).padStart(2, "0");
-    if ($("calendarEconomicDay")) $("calendarEconomicDay").textContent = "Dia " + economicDay + " de 360";
+    if ($("calendarEconomicYear")) $("calendarEconomicYear").textContent = String(todayInfo.economicYear).padStart(2, "0");
+    if ($("calendarEconomicMonth")) $("calendarEconomicMonth").textContent = "Mês " + String(todayInfo.economicMonth).padStart(2, "0");
+    if ($("calendarEconomicDay")) $("calendarEconomicDay").textContent = "Dia " + todayInfo.economicDay + " / 30";
 
     const cycle = $("cycleBar");
     if (cycle) {
-      const progress = ((economicDay - 1) / 360) * 100;
-      cycle.innerHTML = '<div class="cycle-head"><b>Ritmo produtivo · Ano ' + info.simYear + ' (' + year + ')</b><span>' +
+      const econDayInYear = ((currentSimDay - 1) % 360) + 1;
+      const progress = ((econDayInYear - 1) / 360) * 100;
+      cycle.innerHTML = '<div class="cycle-head"><b>Ritmo produtivo · Ano Econômico ' + todayInfo.economicYear + ' (' + todayInfo.civilYear + ')</b><span>' +
         (inHarvest ? '<span class="good">SAFRA ATIVA</span>' : 'ENTRESSAFRA') + ' · fechamento em ' + daysToClose + (daysToClose === 1 ? ' dia' : ' dias') +
         '</span></div><div class="track"><div class="harvest-zone" title="Janela de colheita (dias 150 a 209)"></div><div class="year-cursor" style="left:' + progress.toFixed(2) + '%"></div></div><div class="cycle-foot"><span>Janeiro (Dia 1)</span><span>Safra · dias 150 a 209 (Maio/Junho)</span><span>Dezembro (Dia 360)</span></div>';
     }
@@ -674,6 +837,37 @@
         if (lastSnapshot) refreshCharts(lastSnapshot);
       });
     });
+    const prevBtn = $("calPrevMonth");
+    if (prevBtn) {
+      prevBtn.addEventListener("click", () => {
+        isBrowsingCivilCalendar = true;
+        viewedCivilMonth -= 1;
+        if (viewedCivilMonth < 1) {
+          viewedCivilMonth = 12;
+          viewedCivilYear -= 1;
+        }
+        if (lastSnapshot) refreshCalendar(lastSnapshot);
+      });
+    }
+    const nextBtn = $("calNextMonth");
+    if (nextBtn) {
+      nextBtn.addEventListener("click", () => {
+        isBrowsingCivilCalendar = true;
+        viewedCivilMonth += 1;
+        if (viewedCivilMonth > 12) {
+          viewedCivilMonth = 1;
+          viewedCivilYear += 1;
+        }
+        if (lastSnapshot) refreshCalendar(lastSnapshot);
+      });
+    }
+    const todayBtn = $("calToday");
+    if (todayBtn) {
+      todayBtn.addEventListener("click", () => {
+        isBrowsingCivilCalendar = false;
+        if (lastSnapshot) refreshCalendar(lastSnapshot);
+      });
+    }
     const mobileToggle = $("mobileMenu");
     if (mobileToggle) mobileToggle.addEventListener("click", () => document.body.classList.toggle("menu-open"));
     ["start", "pause"].forEach((id) => {
@@ -700,7 +894,7 @@
   }
 
   function initEventSubscriptions() {
-    if (window.VilarejoRuntime && window.VilarejoRuntime.events) {
+    if (typeof window !== "undefined" && window.VilarejoRuntime && window.VilarejoRuntime.events) {
       window.VilarejoRuntime.events.on("world:synchronized", () => refresh());
       window.VilarejoRuntime.events.on("economy:month-closed", () => refresh());
       window.VilarejoRuntime.events.on("game:initialized", () => refresh());
@@ -718,10 +912,42 @@
     refresh();
   }
 
-  window.VilarejoDashboard = { refresh, setView, recordMonthClosure };
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
-  } else {
-    init();
+  if (typeof window !== "undefined") {
+    window.VilarejoCalendar = {
+      isLeapYear,
+      getDaysInGregorianMonth,
+      getFirstWeekdayOfMonth,
+      civilDateToSimulationDay,
+      simulationDayToCivilDate,
+      getCivilDateInfo,
+      MONTH_NAMES,
+      WEEKDAY_NAMES,
+      WEEKDAY_ABBR
+    };
+    window.VilarejoDashboard = { refresh, setView, recordMonthClosure };
+    if (typeof document !== "undefined") {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+      } else {
+        init();
+      }
+    }
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      isLeapYear,
+      getDaysInGregorianMonth,
+      getFirstWeekdayOfMonth,
+      civilDateToSimulationDay,
+      simulationDayToCivilDate,
+      getCivilDateInfo,
+      MONTH_NAMES,
+      WEEKDAY_NAMES,
+      WEEKDAY_ABBR,
+      refresh,
+      setView,
+      recordMonthClosure
+    };
   }
 })();
