@@ -99,9 +99,9 @@
 
   let visibleMonths = 12;
   let activeView = "overview";
+  let activeGovTab = "executivo";
   let lastSnapshot = null;
   let lastChartSignature = "";
-  const monthlyHistory = [];
 
   // Estado de navegação do calendário civil
   let viewedCivilYear = 2026;
@@ -129,10 +129,12 @@
           ? window.VilarejoTest.calculateNationalAccounts()
           : s?.nationalAccounts;
 
+        const currentSessionId = (core?.session?.id || s?.sessionId || "session-1").toString();
+
         return {
           day: s?.day || (core?.calendar?.absoluteDay ?? 149),
           monthNumber: s?.monthNumber || (core?.calendar?.economicMonthNumber ?? 0),
-          sessionId: core?.session?.startTime ? `session-${core.session.startTime}` : "session-vilarejo",
+          sessionId: currentSessionId,
           gameOver: s?.gameOver || null,
           running: core?.session?.status === "running",
           history: window.VilarejoIntelligenceRuntime?.service?.getCurrentHistory?.() || [],
@@ -165,7 +167,18 @@
     return window.VilarejoIntelligenceRuntime?.service?.recordMonthClosure?.(payload) || null;
   }
 
-  function setView(name) {
+  function setView(name, subTab) {
+    if (name === "institutions") {
+      setView("government");
+      setGovTab("camara");
+      return;
+    }
+    if (name === "politics") {
+      setView("government");
+      setGovTab("politica");
+      return;
+    }
+
     activeView = name;
     if (typeof document === "undefined") return;
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
@@ -184,16 +197,59 @@
       services: ["Serviços públicos", "Infraestrutura urbana, abastecimento, habitação e obras."],
       politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
       institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
-      records: ["Histórico", "Decisões, acontecimentos e movimentações financeiras."],
-      intelligence: ["Central de Inteligência", "Evolução histórica, tendências e alertas da simulação."]
+      intelligence: ["Central de Inteligência", "Análise preditiva, sinais de risco e leitura integrada da simulação."],
+      newspaper: ["Jornal do Vilarejo", "Notícias, crônicas e fatos da comunidade a cada mês."],
+      records: ["Histórico", "Decisões, acontecimentos e movimentações financeiras."]
     };
     const item = titles[name] || titles.overview;
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
     if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "O vilarejo é seu." : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
 
-    refreshActiveView();
+    if (subTab && name === "government") {
+      setGovTab(subTab);
+    } else {
+      refreshActiveView();
+    }
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function setGovTab(tabName) {
+    activeGovTab = tabName || "executivo";
+    if (typeof document === "undefined") return;
+    document.querySelectorAll("[data-gov-tab]").forEach((btn) => {
+      const isSelected = btn.dataset.govTab === activeGovTab;
+      btn.classList.toggle("active", isSelected);
+      btn.setAttribute("aria-selected", isSelected ? "true" : "false");
+    });
+    document.querySelectorAll(".gov-tab-pane").forEach((pane) => {
+      pane.classList.toggle("active", pane.dataset.govPane === activeGovTab || pane.id === `gov-tab-${activeGovTab}`);
+    });
+    renderGovernmentSubView();
+  }
+
+  function renderGovernmentSubView() {
+    if (activeGovTab === "executivo") {
+      renderGovernmentOverview();
+    } else if (activeGovTab === "camara") {
+      const host = $("institutionsDashboard");
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+          window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+        } else if (!host.children.length) {
+          host.innerHTML = '<div class="module-empty-state"><div class="module-empty-icon">▥</div><h3>Câmara Municipal</h3><p>A representação parlamentar e formação de coalizão estarão disponíveis com a sincronização institucional.</p></div>';
+        }
+      }
+    } else if (activeGovTab === "politica") {
+      const host = $("politicsDashboard");
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
+          window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+        } else if (!host.children.length) {
+          host.innerHTML = '<div class="module-empty-state"><div class="module-empty-icon">⚖</div><h3>Grupos de Interesse</h3><p>A correlação de forças e influência dos grupos de poder será carregada a cada ciclo político.</p></div>';
+        }
+      }
+    }
   }
 
   function renderGovernmentOverview() {
@@ -201,23 +257,25 @@
     if (!host || typeof window === "undefined") return;
     try {
       const instRuntime = window.VilarejoInstitutionsRuntime;
-      const polRuntime = window.VilarejoPoliticsRuntime;
-      const instState = instRuntime?.state;
-      const polState = polRuntime?.state;
-
-      const seats = instState?.seats || {};
-      const totalSeats = instState?.totalSeats || 21;
-      const neededMajority = instState?.neededMajority || 11;
-      const coalition = instState?.coalition || [];
-      const status = instState?.status || "not_formed";
-      const monthInTerm = instState?.monthInTerm || 1;
-      const termMonths = instState?.termMonths || 48;
-      const remainingMonths = Math.max(0, termMonths - monthInTerm);
-
-      let coalitionSeats = 0;
-      coalition.forEach((gid) => { coalitionSeats += (seats[gid] || 0); });
-      const oppositionSeats = Math.max(0, totalSeats - coalitionSeats);
-      const isMajority = coalitionSeats >= neededMajority;
+      const instState = instRuntime?.getSnapshot?.() || instRuntime?.state || {};
+      const legislature = instState.legislature || {};
+      const coalitionData = instState.coalition || {};
+      const summary = instState.summary || {};
+      const totalSeats = Number(legislature.totalSeats || summary.totalSeats || instState.settings?.totalSeats || 21);
+      const neededMajority = Number(legislature.majoritySeats || summary.quorumSeats || Math.floor(totalSeats / 2) + 1);
+      const coalitionIds = Array.isArray(coalitionData.groupIds) ? coalitionData.groupIds : [];
+      const coalitionGroups = Array.isArray(coalitionData.groups) ? coalitionData.groups : [];
+      const coalitionCount = coalitionIds.length || coalitionGroups.length;
+      const coalitionSeats = Number(coalitionData.seats ?? summary.coalitionSeats ?? 0);
+      const status = coalitionData.status || summary.coalitionStatus || "not_formed";
+      const termMonths = Number(instState.settings?.termMonths || 48);
+      const currentMonth = Number(instState.currentMonth || 0);
+      const nextElectionMonth = Number(instState.nextElectionMonth || currentMonth + termMonths);
+      const monthInTerm = Math.max(1, currentMonth - (nextElectionMonth - termMonths) + 1);
+      const remainingMonths = Math.max(0, nextElectionMonth - currentMonth);
+      const oppositionSeats = Number(
+        instState.alignment?.oppositionSeats ?? instState.opposition?.seats ?? Math.max(0, totalSeats - coalitionSeats)
+      );
 
       const statusBadge = status === "majority"
         ? '<span class="gov-badge is-majority">Maioria absoluta</span>'
@@ -238,7 +296,7 @@
             <div class="gov-kpi-item">
               <small>BASE DO GOVERNO</small>
               <strong>${coalitionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
-              <span>${coalition.length > 0 ? coalition.length + ' grupo(s) na coalizão' : 'Nenhum grupo coligado'}</span>
+              <span>${coalitionCount > 0 ? coalitionCount + ' grupo(s) na coalizão' : 'Nenhum grupo coligado'}</span>
             </div>
             <div class="gov-kpi-item">
               <small>OPOSIÇÃO / INDEPENDENTES</small>
@@ -252,10 +310,10 @@
             </div>
           </div>
           <div class="gov-actions-row">
-            <button class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('institutions')">
+            <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('camara')">
               <span>▥</span> Gerenciar coalizão e cadeiras da Câmara
             </button>
-            <button class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('politics')">
+            <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('politica')">
               <span>⚖</span> Avaliar influência dos grupos políticos
             </button>
           </div>
@@ -269,33 +327,39 @@
   function refreshActiveView() {
     if (activeView === "society") {
       renderSocietyView();
-    }
-    if (activeView === "services") {
+    } else if (activeView === "services") {
       renderServicesView();
-    }
-    if (activeView === "government") {
-      renderGovernmentOverview();
-    }
-    if (activeView === "politics" && typeof window !== "undefined" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
-      const host = $("politicsDashboard");
-      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
-    }
-    if (activeView === "institutions" && typeof window !== "undefined" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
-      const host = $("institutionsDashboard");
-      if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
-    }
-    if (activeView === "intelligence" && window.VilarejoIntelligence?.renderDashboard) {
+    } else if (activeView === "government") {
+      renderGovernmentSubView();
+    } else if (activeView === "intelligence") {
       const host = $("intelligenceDashboard");
-      if (host) window.VilarejoIntelligence.renderDashboard(host);
-    }
-    if (activeView === "government") {
-      if (window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
-        const hostInst = $("institutionsDashboard");
-        if (hostInst) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, hostInst);
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoIntelligence && typeof window.VilarejoIntelligence.renderDashboard === "function") {
+          window.VilarejoIntelligence.renderDashboard(host);
+        } else {
+          host.innerHTML = `
+            <div class="module-empty-state">
+              <div class="module-empty-icon">💡</div>
+              <h3>Central de Inteligência</h3>
+              <p>O módulo de análise preditiva e inteligência executiva será carregado aqui conforme o fechamento dos primeiros meses de simulação.</p>
+            </div>
+          `;
+        }
       }
-      if (window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
-        const hostPol = $("politicsDashboard");
-        if (hostPol) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, hostPol);
+    } else if (activeView === "newspaper") {
+      const host = $("newspaperDashboard");
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoNewspaper && typeof window.VilarejoNewspaper.renderDashboard === "function") {
+          window.VilarejoNewspaper.renderDashboard(host);
+        } else {
+          host.innerHTML = `
+            <div class="module-empty-state">
+              <div class="module-empty-icon">📰</div>
+              <h3>Jornal do Vilarejo</h3>
+              <p>A redação do Vilarejo está preparando as próximas edições mensais. As crônicas e notícias da comunidade serão publicadas aqui.</p>
+            </div>
+          `;
+        }
       }
     }
   }
@@ -366,7 +430,7 @@
   }
 
   function refreshCharts(data) {
-    const history = data.history || [];
+    const history = Array.isArray(data.history) ? data.history : [];
     makeChart("chart-gdp", [
       { key: "gdp", label: "PIB mensal", className: "series-green" }
     ], history, compact, "O PIB histórico começa no primeiro fechamento");
@@ -805,11 +869,97 @@
     if ($("historyCount")) $("historyCount").textContent = data.history.length + " meses registrados";
   }
 
+  function refreshAlerts() {
+    const badge = $("topbarAlertBadge");
+    const countEl = $("topbarAlertCount");
+    const container = $("overviewAlertsContainer");
+
+    let alerts = [];
+    if (typeof window !== "undefined" && window.VilarejoIntelligenceRuntime?.service?.getAlerts) {
+      try {
+        alerts = window.VilarejoIntelligenceRuntime.service.getAlerts() || [];
+      } catch (e) {
+        alerts = [];
+      }
+    }
+
+    const activeAlerts = Array.isArray(alerts)
+      ? alerts.filter((alert) => alert && alert.status === "ativo" && alert.severity !== "informativo")
+      : [];
+    const alertCount = activeAlerts.length;
+
+    if (badge) {
+      badge.classList.toggle("hidden", alertCount === 0);
+      badge.classList.toggle("has-alerts", alertCount > 0);
+      badge.title = alertCount > 0
+        ? `${alertCount} alerta(s) na Central de Inteligência`
+        : "Central de Inteligência — Nenhum alerta no momento";
+    }
+    if (countEl) {
+      countEl.textContent = String(alertCount);
+    }
+
+    if (container) {
+      container.classList.toggle("hidden", alertCount === 0);
+      if (alertCount > 0) {
+        const itemsHtml = activeAlerts.slice(0, 3).map((a) => {
+          const sev = (a.severity || "").toLowerCase();
+          const sevClass = sev === "critico" || sev === "grave" ? "severity-critico" : "severity-alto";
+          const title = escapeHtml(a.title || a.indicator || "Alerta de sistema");
+          const msg = escapeHtml(a.message || a.condition || "");
+          const sevLabel = escapeHtml((a.severity || "Atenção").toUpperCase());
+          return `
+            <div class="overview-alert-item ${sevClass}">
+              <div class="alert-item-header">
+                <span class="alert-item-title">${title}</span>
+                <span class="alert-item-severity">${sevLabel}</span>
+              </div>
+              <p class="alert-item-desc">${msg}</p>
+            </div>
+          `;
+        }).join("");
+
+        container.innerHTML = `
+          <div class="overview-alerts-box">
+            <div class="overview-alerts-header">
+              <div>
+                <div class="eyebrow">ALERTAS DO VILAREJO</div>
+                <h4>Sinais de Risco e Tendências Observadas</h4>
+              </div>
+              <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('intelligence')">
+                Ver Central de Inteligência →
+              </button>
+            </div>
+            <div class="overview-alerts-list">
+              ${itemsHtml}
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div class="overview-alerts-box">
+            <div class="overview-alerts-header">
+              <div>
+                <div class="eyebrow">ALERTAS DO VILAREJO</div>
+                <h4>Situação Monitorada</h4>
+              </div>
+              <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('intelligence')">
+                Central de Inteligência →
+              </button>
+            </div>
+            <p class="society-muted" style="margin-top:0.35rem">Nenhum alerta persistente ativo entre os indicadores observados. Dados ausentes permanecem indisponíveis e não são tratados como normais.</p>
+          </div>
+        `;
+      }
+    }
+  }
+
   function refresh() {
     const data = snapshot();
     if (!data) return;
     lastSnapshot = data;
     refreshStatus(data);
+    refreshAlerts();
     refreshMap(data);
 
     const history = data.history || [];
@@ -830,6 +980,17 @@
         document.body.classList.remove("menu-open");
       });
     });
+    document.querySelectorAll("[data-gov-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        setGovTab(button.dataset.govTab);
+      });
+    });
+    const alertBadge = $("topbarAlertBadge");
+    if (alertBadge) {
+      alertBadge.addEventListener("click", () => {
+        setView("intelligence");
+      });
+    }
     document.querySelectorAll("[data-months]").forEach((button) => {
       button.addEventListener("click", () => {
         visibleMonths = Number(button.dataset.months) || 12;
@@ -895,10 +1056,26 @@
 
   function initEventSubscriptions() {
     if (typeof window !== "undefined" && window.VilarejoRuntime && window.VilarejoRuntime.events) {
-      window.VilarejoRuntime.events.on("world:synchronized", () => refresh());
-      window.VilarejoRuntime.events.on("economy:month-closed", () => refresh());
-      window.VilarejoRuntime.events.on("game:initialized", () => refresh());
-      window.VilarejoRuntime.events.on("game:reset", () => refresh());
+      window.VilarejoRuntime.events.on("world:synchronized", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("economy:month-closed", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("intelligence:month-closed", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("game:initialized", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("game:reset", () => {
+        refreshAlerts();
+        refresh();
+      });
       window.VilarejoRuntime.events.on("institutions:coalition-updated", () => refresh());
       window.VilarejoRuntime.events.on("politics:month-closed", () => refresh());
     }
@@ -908,6 +1085,7 @@
     initNavigation();
     initMapDetails();
     initEventSubscriptions();
+    refreshAlerts();
     setView(activeView);
     refresh();
   }
@@ -924,7 +1102,14 @@
       WEEKDAY_NAMES,
       WEEKDAY_ABBR
     };
-    window.VilarejoDashboard = { refresh, setView, recordMonthClosure };
+    window.VilarejoDashboard = {
+      refresh,
+      setView,
+      setGovTab,
+      getSnapshot: snapshot,
+      recordMonthClosure,
+      refreshAlerts
+    };
     if (typeof document !== "undefined") {
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init, { once: true });
@@ -947,7 +1132,10 @@
       WEEKDAY_ABBR,
       refresh,
       setView,
-      recordMonthClosure
+      setGovTab,
+      getSnapshot: snapshot,
+      recordMonthClosure,
+      refreshAlerts
     };
   }
 })();
