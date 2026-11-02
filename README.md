@@ -37,16 +37,17 @@ O executor usa um DOM mínimo de teste, sem `jsdom`.
 ## Estrutura principal
 
 - `index.html`: interface e ordem de carregamento.
-- `vilarejo_core.js`: Núcleo Central 0.1.
-- `script.js`: motor econômico 3.0 e adaptador para o Núcleo. O arquivo continua monolítico nesta etapa.
-- `eventos_v3.js`: catálogo e motor de eventos econômicos.
+- `public/assets/audio/`: recursos de áudio.
+- `src/core/vilarejo_core.js`: Núcleo Central 0.1.
+- `src/economy/script.js`: motor econômico 3.0 e adaptador para o Núcleo.
+- `src/events/eventos_v3.js`: catálogo e motor de eventos econômicos.
+- `src/test/test_runner.js`: executor das verificações.
 - `server.js`: servidor HTTP estático com allowlist explícita.
-- `test_runner.js`: executor das verificações.
 - `docs/`: documentação, contratos e histórico.
 
 ## Como funciona o Núcleo Central
 
-A página carrega os scripts nesta ordem: `vilarejo_core.js` → `eventos_v3.js` → `script.js`. O runtime compartilhado fica disponível como `window.VilarejoRuntime` depois do carregamento de `script.js`; os arquivos dos módulos futuros devem entrar depois dele na página. A Economia registra-se como módulo `economia` e sincroniza seu dia, contador de fechamento mensal, estado da partida e grupos domiciliares.
+A página carrega os scripts nesta ordem: `src/core/vilarejo_core.js` → `src/events/eventos_v3.js` → `src/economy/script.js`. O runtime compartilhado fica disponível como `window.VilarejoRuntime` depois do carregamento de `src/economy/script.js`; os arquivos dos módulos futuros devem entrar depois dele na página. A Economia registra-se como módulo `economia` e sincroniza seu dia, contador de fechamento mensal, estado da partida e grupos domiciliares.
 
 Serviços públicos atuais:
 
@@ -60,7 +61,7 @@ Serviços públicos atuais:
 
 A Economia publica `economy:month-closed` após cada fechamento contábil. Os demais módulos devem comunicar-se por eventos e respeitar a propriedade dos dados. Não devem alterar diretamente variáveis internas de outro módulo.
 
-Leia [`docs/ARQUITETURA_MODULAR_V0.1.md`](docs/ARQUITETURA_MODULAR_V0.1.md) e, obrigatoriamente, [`docs/CONTRATO_DE_MODULOS_V1.md`](docs/CONTRATO_DE_MODULOS_V1.md) antes de desenvolver Sociedade, Política ou Legislação.
+Leia [`docs/architecture/ARQUITETURA_MODULAR_V0.1.md`](docs/architecture/ARQUITETURA_MODULAR_V0.1.md) e, obrigatoriamente, [`docs/architecture/CONTRATO_DE_MODULOS_V1.md`](docs/architecture/CONTRATO_DE_MODULOS_V1.md) antes de desenvolver Sociedade, Política ou Legislação.
 
 ## Economia 3.0 preservada
 
@@ -68,7 +69,7 @@ A versão 3.0 estabilizou o capital de giro sazonal da fazenda, incluindo folha,
 
 O motor de eventos contém 30 eventos. Seus efeitos e transações continuam integrados à Economia. As contas nacionais são simplificadas e reconciliadas internamente; não representam estatísticas oficiais. O excedente operacional bruto é residual na ótica da renda.
 
-Relatório econômico original: [`docs/RELATORIO_ECONOMIA_V3.0.md`](docs/RELATORIO_ECONOMIA_V3.0.md).
+Relatório econômico original: [`docs/economy/RELATORIO_ECONOMIA_V3.0.md`](docs/economy/RELATORIO_ECONOMIA_V3.0.md).
 
 ## Resultado da validação da release 3.1.0
 
@@ -78,14 +79,14 @@ Relatório econômico original: [`docs/RELATORIO_ECONOMIA_V3.0.md`](docs/RELATOR
 - Núcleo Central 0.1: calendário, população, sessão, registro de módulos e barramento testados.
 - Integração Economia/Núcleo: registro, população e fechamento mensal verificados.
 
-Relatório da release: [`docs/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md`](docs/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md).
+Relatório da release: [`docs/releases/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md`](docs/releases/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md).
 
 ## Limitações conhecidas
 
 - O modelo econômico é didático, com poucos agentes e setores; não é previsão econômica nem reprodução integral da economia brasileira.
 - O Núcleo observa e coordena o estado existente; ainda não é o dono de todo o estado do mundo.
 - O diretório populacional é sincronizado a partir dos domicílios econômicos; ainda não há cadastro individual de cidadãos.
-- `script.js` continua monolítico. A separação interna da Economia deverá ocorrer gradualmente, com testes de regressão.
+- `src/economy/script.js` continua monolítico. A separação interna da Economia deverá ocorrer gradualmente, com testes de regressão.
 - Sociedade, Política e Legislação ainda não foram implementados.
 - Não existe ainda salvamento e restauração completos de uma partida.
 

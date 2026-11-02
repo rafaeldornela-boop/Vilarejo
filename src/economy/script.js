@@ -50,7 +50,7 @@ function log(from,to,amount,reason,mandatory=false){
  return amount;
 }
 function feed(msg){S.feed.unshift("Dia "+S.day+": "+msg);S.feed=S.feed.slice(0,18)}
-function rand(){S.seed=(S.seed*1664525+1013904223)>>>0;return S.seed/4294967296}
+function economicRand(){S.seed=(S.seed*1664525+1013904223)>>>0;return S.seed/4294967296}
 function adults(){return S.households.reduce((n,h)=>n+h.adults,0)}
 function population(){return S.households.reduce((n,h)=>n+h.adults+h.children,0)}
 function employed(){return S.households.reduce((n,h)=>n+h.jobs,0)}
@@ -1527,7 +1527,7 @@ function processHarrisTodaroMigration(){
    const hReal=hLocalNet/costIndex;
    return hReal<uExt*0.85&&h.cash>=p.migrationCost;
   });
-  if(candidate&&rand()<0.40){
+  if(candidate&&economicRand()<0.40){
    const costPaid=log(accountKey(candidate),"external",p.migrationCost,"Custo único de emigração");
    if(costPaid+0.001>=p.migrationCost){
     const rem=balance(accountKey(candidate));
@@ -1539,7 +1539,7 @@ function processHarrisTodaroMigration(){
    }
   }
  }else if(deltaU>100&&population()<S.housingCapacity&&adults()<S.jobsAvailable){
-  if(rand()<0.40){
+  if(economicRand()<0.40){
    const fAcc=farmAccount();
    const payer=balance(fAcc)>=p.migrationCost?fAcc:(balance("treasury")>=p.migrationCost?"treasury":null);
    if(payer){
@@ -1764,10 +1764,10 @@ function updateCommerceInsolvency(){
 }
 function closeMonth(){
  const p=S.policy;Object.assign(p,S.pending);S.pending={};
- S.usdCoffee=clamp(S.usdCoffee*(1+(rand()-.5)*.12+.04*(300-S.usdCoffee)/300),150,600);
+ S.usdCoffee=clamp(S.usdCoffee*(1+(economicRand()-.5)*.12+.04*(300-S.usdCoffee)/300),150,600);
  if(p.fxMode==="fixed")S.fx=5;
- else{const shock=(rand()-.5)*.08,meanReversion=.08*(5-S.fx)/5,rateEffect=-.008*(p.baseRate-1.5);S.fx=clamp(S.fx*(1+shock+meanReversion+rateEffect),3.5,7.5)}
- S.externalWage*=1+(rand()-.5)*.04;
+ else{const shock=(economicRand()-.5)*.08,meanReversion=.08*(5-S.fx)/5,rateEffect=-.008*(p.baseRate-1.5);S.fx=clamp(S.fx*(1+shock+meanReversion+rateEffect),3.5,7.5)}
+ S.externalWage*=1+(economicRand()-.5)*.04;
 
  // 1. Ciclo de Planejamento Operacional e Mercado Coletivo de Trabalho
  runFirmPlanningPhase({ day: S.day, month: S.monthNumber, policy: p });
@@ -2075,7 +2075,7 @@ function render(){syncPendingEventPrompt();auditCashConservation();const ls=getL
  $("monthly").innerHTML=`Entradas externas: <b>${money(S.lastFlow.in)}</b><br>Circulação interna: <b>${money(S.lastFlow.internal)}</b><br>Saídas externas: <b>${money(S.lastFlow.out)}</b><br>Folha devida: <b>${money(S.lastWage.due)}</b><br>Salários pagos: <b>${money(S.lastWage.paid)}</b><br>Consumo total (Alimentos + Serviços): <b>${money(S.lastConsumption)} (${money(S.lastFoodConsumption||0)} + ${money(S.lastServiceConsumption||0)})</b><br>Demanda não atendida: <b class="${S.lastShortage?"bad":""}">${money(S.lastShortage)} (${S.lastShortageUnits.toFixed(2)} unidades)</b><br>Famílias afetadas: <b>${S.lastUnmetHouseholds}</b><br>LAIR da fazenda (após deprec. e juros): <b>${money(S.lastFarmProfit)}</b><br>Imposto sobre lucro pago: <b>${money(S.lastProfitTax)}</b>`;
  $("market").innerHTML=`Estoque alimentar: ${S.marketStock.toFixed(2)} cestas<br>Preço da cesta básica: ${money(S.marketPrice)} · Tarifa de serviços locais: ${money(S.servicePrice||180)}<br>Índice Local de Custo de Vida (Laspeyres): <b>${(S.costOfLivingIndex||100).toFixed(1)}</b> (${(S.monthlyInflation||0).toFixed(2)}% no mês)<br>Custo externo estimado: ${money(USD_IMPORT*S.fx)} por cesta<br>Pressão de estoque: ${S.marketPressure.toFixed(2)}<br>Importação do mês: ${S.importedUnits.toFixed(2)} unidades<br>Falhas de abastecimento consecutivas: ${S.commerceEmptyMonths}<br>Crédito do comércio em aberto: ${money(totalLoans("commerce"))}<br><span class="small">Consumo familiar segue Sistema Linear de Despesas (LES) entre alimentos essenciais/discricionários e serviços locais.</span>`;
  $("feed").innerHTML=S.feed.map(x=>`<li>${x}</li>`).join("");$("ledger").innerHTML=S.ledger.slice(0,60).map(x=>`<tr><td>${x.day}</td><td>${nameOf(x.from)} → ${nameOf(x.to)}</td><td>${x.reason}</td><td>${money(x.amount)}</td></tr>`).join("");const ev=$("event");if(S.event){ev.classList.remove("hidden");$("eventTitle").textContent=S.event.title;$("eventText").textContent=S.event.text;$("eventOptions").innerHTML=S.event.options.map((o,i)=>`<button data-choice="${i}" ${o.disabled?"disabled":""}>${o.label}</button>`).join("")}else ev.classList.add("hidden");$("eventOptions").onclick=e=>{const b=e.target.closest("button");if(!b||!S.event)return;const weatherDecision=S.event.title==="Proteção contra geada";S.event.options[+b.dataset.choice].run();if(weatherDecision)continueDayOperations();else{syncPendingEventPrompt();render()}};if(S.gameOver){$("eventTitle").textContent="Fim de jogo";$("eventText").textContent=S.gameOver;ev.classList.remove("hidden");$("eventOptions").innerHTML="";pause()}renderPolicies();renderExtendedDashboard()}
-function continueDayOperations(){const doy=S.day%YEAR;buyInputsAndProduce();if(doy>=150&&doy<210&&!S.weatherProtection&&!S.weatherEventDone&&rand()<FROST_DAILY_RISK){S.weatherEventDone=true;S.weatherFactor=.65;feed("Geada atingiu a lavoura: produção restante reduzida em 35%.")}if(S.day%10===0)sellCoffee();S.buildings=S.buildings.filter(due=>{if(S.day>=due){S.housingCapacity+=2;feed("Moradia concluída: capacidade ampliada em duas pessoas.");return false}return true});if(S.day%MONTH===0)closeMonth();auditCashConservation();render()}
+function continueDayOperations(){const doy=S.day%YEAR;buyInputsAndProduce();if(doy>=150&&doy<210&&!S.weatherProtection&&!S.weatherEventDone&&economicRand()<FROST_DAILY_RISK){S.weatherEventDone=true;S.weatherFactor=.65;feed("Geada atingiu a lavoura: produção restante reduzida em 35%.")}if(S.day%10===0)sellCoffee();S.buildings=S.buildings.filter(due=>{if(S.day>=due){S.housingCapacity+=2;feed("Moradia concluída: capacidade ampliada em duas pessoas.");return false}return true});if(S.day%MONTH===0)closeMonth();auditCashConservation();render()}
 function tick(){if(S.event||S.gameOver){pause();return}S.day++;syncCoreFromEconomy("day-advanced");const doy=S.day%YEAR;if(doy===0){S.weatherFactor=1;S.weatherEventDone=false;S.weatherDecisionDone=false;S.weatherProtection=false;S.productionThisSeason=0}if(doy===150&&!S.weatherDecisionDone){S.weatherDecisionDone=true;S.event={title:"Proteção contra geada",text:"A safra está começando. A geada tem risco aproximado de 20% ao longo da colheita e pode reduzir em 35% a produção restante. A proteção custa R$ 8.000.",options:[{label:"Contratar proteção (R$ 8.000)",run:()=>{const paid=log(farmAccount(),"external",8000,"Seguro contra geada");if(paid>=8000){S.weatherProtection=true;S.monthFarmCosts+=paid;if(S.currentMonthTracking)S.currentMonthTracking.farmInsurance+=paid;feed("Proteção contra geada contratada.")}else{S.weatherProtection=false;feed("Caixa insuficiente para contratar proteção.")}S.event=null;render() }},{label:"Assumir o risco",run:()=>{S.weatherProtection=false;feed("Fazenda decidiu não contratar proteção contra geada.");S.event=null;render()}}]};render();pause();return}continueDayOperations()}
 function start(){if(timer||S.gameOver||S.event)return;timer=setInterval(tick,650/speed);if(CORE_RUNTIME)CORE_RUNTIME.session.setStatus("running");$("start").textContent="Continuar";$("pause").disabled=false}
 function pause(){const wasRunning=!!timer;clearInterval(timer);timer=null;if(wasRunning&&CORE_RUNTIME&&!S.gameOver)CORE_RUNTIME.session.setStatus("paused");$("pause").disabled=true}
