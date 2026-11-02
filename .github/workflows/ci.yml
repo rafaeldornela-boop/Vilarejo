@@ -1,0 +1,33 @@
+name: Vilarejo CI
+
+on:
+  push:
+    branches: [main, integracao-governo-1.0]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Node ${{ matrix.node }} · build e testes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 22]
+    steps:
+      - name: Obter o código
+        uses: actions/checkout@v4
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Instalar dependências declaradas
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verificar sintaxe e build
+        run: npm run build
+      - name: Executar regressões e integrações
+        run: npm test
