@@ -29,8 +29,10 @@ No checkout original de `integracao-governo-1.0`, antes da reconciliação com a
 - `npm run build`: passou.
 - `npm test`: passou com 102 verificações do runner, 16 testes da Sociedade, 21 de Política, 22 de Instituições e 23 de Serviços.
 - A integração real da Economia com Core, Sociedade, Política, Instituições e Serviços passou em 12, 24 e 60 meses, incluindo imigração determinística, reset/replay e auditorias mensais de caixa, SFC e contas nacionais. Os smoke tests HTTP verificaram os oito módulos JavaScript e rejeição de caminhos proibidos.
+- CI remoto de `push`: [run 41537618119](https://github.com/rafaeldornela-boop/Vilarejo/actions/runs/41537618119) — Node 18 e 22 aprovados.
+- CI remoto de `pull_request`: [run 41537754525](https://github.com/rafaeldornela-boop/Vilarejo/actions/runs/41537754525) — Node 18 e 22 aprovados.
 
-Esta validação local foi executada antes do push; os resultados de CI Node 18/22 devem ser registrados após a execução do workflow na branch remota.
+Os resultados referem-se ao commit de reconciliação e devem ser reexecutados se o código da branch mudar.
 
 ## Compatibilidade
 
