@@ -1,96 +1,32 @@
-# Vilarejo | Release 3.1.0
+# Vilarejo | Refatoração do módulo Sociedade 1.0.0
 
-Simulador econômico didático com a Economia 3.0 preservada e a primeira versão executável do Núcleo Central modular.
+Esta entrega substitui o acoplamento do antigo `sociedade_v03.js` por um módulo próprio, carregado depois do Core e da Economia.
 
-A Economia mantém famílias, trabalhadores, empresas, fazenda estatal ou privada, Tesouro, banco, proprietário de imóveis e setor externo. O motor acompanha produção, consumo, salários, tributos, crédito, dívidas, estoques, investimento, patrimônio, eventos e contas nacionais simplificadas.
+## Arquivos
 
-O Núcleo Central acrescenta calendário compartilhado, estado da partida, diretório populacional, registro de módulos e barramento de eventos. Nesta release ele acompanha a Economia, mas não altera os cálculos econômicos.
+- `src/society/vilarejo_society.js`: módulo Sociedade 1.0.0.
+- `src/test/society_test.js`: 11 testes automatizados independentes.
+- `integration.patch`: inclusão do script na ordem correta em `index.html`.
+- `docs/arquitetura/REFATORACAO_SOCIEDADE_V1.md`: contrato, limites e decisões arquiteturais.
 
-## Executar
+## Aplicação
 
-Requisitos: Node.js 18 ou superior.
-
-```bash
-npm start
-```
-
-Acesse `http://localhost:3000`. A porta e o endereço de escuta podem ser definidos por `PORT` e `HOST`. Também é possível abrir `index.html` diretamente no navegador. O servidor usa módulos nativos do Node.js; não é necessário executar `npm install`.
-
-## Verificar e testar
+Na raiz do repositório:
 
 ```bash
-npm run build
-npm test
+# Copie a pasta src/society desta entrega para a raiz do projeto.
+# Depois aplique o patch de integração:
+git apply integration.patch
+
+# Testes focados da Sociedade:
+node src/test/society_test.js
+
+# Depois, execute também a suíte de regressão econômica:
+node src/test/test_runner.js
 ```
 
-A suíte atual executa **92 verificações automatizadas**, sem dependências npm externas:
+O módulo é carregado após `src/economy/script.js`, registra `sociedade` no Runtime e acompanha o evento `economy:month-closed`.
 
-- 61 testes internos do motor econômico e bancário;
-- 8 testes diretos do Núcleo Central;
-- verificações estruturais de HTML, ordem de carregamento e servidor;
-- simulações econômicas de 6, 120 e 240 meses, stress test de 120 meses e robustez com 24 sementes × 240 meses (5.760 meses-simulação);
-- testes integrados de registro do módulo Economia, sincronização populacional e publicação dos fechamentos mensais;
-- testes do motor de eventos: determinismo, serialização e catálogo.
+## O que ele não faz
 
-O executor usa um DOM mínimo de teste, sem `jsdom`.
-
-## Estrutura principal
-
-- `index.html`: interface e ordem de carregamento.
-- `public/assets/audio/`: recursos de áudio.
-- `src/core/vilarejo_core.js`: Núcleo Central 0.1.
-- `src/economy/script.js`: motor econômico 3.0 e adaptador para o Núcleo.
-- `src/events/eventos_v3.js`: catálogo e motor de eventos econômicos.
-- `src/test/test_runner.js`: executor das verificações.
-- `server.js`: servidor HTTP estático com allowlist explícita.
-- `docs/`: documentação, contratos e histórico.
-
-## Como funciona o Núcleo Central
-
-A página carrega os scripts nesta ordem: `src/core/vilarejo_core.js` → `src/events/eventos_v3.js` → `src/economy/script.js`. O runtime compartilhado fica disponível como `window.VilarejoRuntime` depois do carregamento de `src/economy/script.js`; os arquivos dos módulos futuros devem entrar depois dele na página. A Economia registra-se como módulo `economia` e sincroniza seu dia, contador de fechamento mensal, estado da partida e grupos domiciliares.
-
-Serviços públicos atuais:
-
-- `runtime.clock.snapshot()`: calendário do jogo;
-- `runtime.population.getSnapshot()`: totais e grupos populacionais;
-- `runtime.modules.register(...)`: registro e validação de dependências;
-- `runtime.modules.get(id)` e `runtime.modules.list()`: leitura do registro de módulos;
-- `runtime.events.on(topic, listener)`: inscrição em eventos;
-- `runtime.publish(topic, payload, source)`: publicação de eventos;
-- `runtime.snapshot()`: visão consolidada de sessão, calendário, população, módulos e eventos recentes.
-
-A Economia publica `economy:month-closed` após cada fechamento contábil. Os demais módulos devem comunicar-se por eventos e respeitar a propriedade dos dados. Não devem alterar diretamente variáveis internas de outro módulo.
-
-Leia [`docs/architecture/ARQUITETURA_MODULAR_V0.1.md`](docs/architecture/ARQUITETURA_MODULAR_V0.1.md) e, obrigatoriamente, [`docs/architecture/CONTRATO_DE_MODULOS_V1.md`](docs/architecture/CONTRATO_DE_MODULOS_V1.md) antes de desenvolver Sociedade, Política ou Legislação.
-
-## Economia 3.0 preservada
-
-A versão 3.0 estabilizou o capital de giro sazonal da fazenda, incluindo folha, encargos, moradia, insumos da próxima etapa e serviço programado da dívida. O aporte do Tesouro cobre somente a diferença entre a reserva operacional e o caixa disponível, limitado pelo teto de política e pela liquidez fiscal.
-
-O motor de eventos contém 30 eventos. Seus efeitos e transações continuam integrados à Economia. As contas nacionais são simplificadas e reconciliadas internamente; não representam estatísticas oficiais. O excedente operacional bruto é residual na ótica da renda.
-
-Relatório econômico original: [`docs/economy/RELATORIO_ECONOMIA_V3.0.md`](docs/economy/RELATORIO_ECONOMIA_V3.0.md).
-
-## Resultado da validação da release 3.1.0
-
-- `npm run build`: aprovado.
-- `npm test`: 92 verificações aprovadas, 0 reprovadas.
-- Economia 3.0: 61 testes internos e 5.760 meses-simulação de robustez mantidos.
-- Núcleo Central 0.1: calendário, população, sessão, registro de módulos e barramento testados.
-- Integração Economia/Núcleo: registro, população e fechamento mensal verificados.
-
-Relatório da release: [`docs/releases/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md`](docs/releases/RELEASE_ECONOMIA_3_0_E_NUCLEO_0_1.md).
-
-## Limitações conhecidas
-
-- O modelo econômico é didático, com poucos agentes e setores; não é previsão econômica nem reprodução integral da economia brasileira.
-- O Núcleo observa e coordena o estado existente; ainda não é o dono de todo o estado do mundo.
-- O diretório populacional é sincronizado a partir dos domicílios econômicos; ainda não há cadastro individual de cidadãos.
-- `src/economy/script.js` continua monolítico. A separação interna da Economia deverá ocorrer gradualmente, com testes de regressão.
-- Sociedade, Política e Legislação ainda não foram implementados.
-- Não existe ainda salvamento e restauração completos de uma partida.
-
-## Branches sugeridas
-
-- `economia-estavel`: preservar a versão pura da Economia 3.0.
-- `arquitetura-modular`: partir da `economia-estavel` e adicionar a fundação modular desta release 3.1.0.
+Não altera `S.households`, empregos, `sectorJobs`, salários, caixa, contas, preços, empresas ou produção. Também não injeta dados demográficos na Economia. Ele mantém cadastro individual e entrega uma projeção explícita (`getEconomyProjection`) para uma futura integração controlada.

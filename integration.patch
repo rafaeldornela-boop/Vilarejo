@@ -1,0 +1,10 @@
+diff --git a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@ -118,5 +118,6 @@
+     <script src="src/core/vilarejo_core.js"></script>
+     <script src="src/events/eventos_v3.js"></script>
+     <script src="src/economy/script.js"></script>
++    <script src="src/society/vilarejo_society.js"></script>
+ </body>
+ </html>
