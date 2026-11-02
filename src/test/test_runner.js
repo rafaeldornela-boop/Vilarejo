@@ -171,6 +171,18 @@ try {
     `mês=${sixMonths.monthNumber}; diferença de caixa=${sixMonths.cashAudit.difference.toFixed(8)}`);
 
   api.reset();
+  const twelveMonths = api.simulateMonths(12, false);
+  report("12 meses: caixa, SFC e três óticas do PIB", twelveMonths.monthNumber === 12 && twelveMonths.cashAudit.ok, `mês=${twelveMonths.monthNumber}; diferença de caixa=${twelveMonths.cashAudit.difference.toFixed(8)}`);
+
+  api.reset();
+  const twentyFourMonths = api.simulateMonths(24, false);
+  report("24 meses: caixa, SFC e três óticas do PIB", twentyFourMonths.monthNumber === 24 && twentyFourMonths.cashAudit.ok, `mês=${twentyFourMonths.monthNumber}; diferença de caixa=${twentyFourMonths.cashAudit.difference.toFixed(8)}`);
+
+  api.reset();
+  const sixtyMonths = api.simulateMonths(60, false);
+  report("60 meses: caixa, SFC e três óticas do PIB", sixtyMonths.monthNumber === 60 && sixtyMonths.cashAudit.ok, `mês=${sixtyMonths.monthNumber}; diferença de caixa=${sixtyMonths.cashAudit.difference.toFixed(8)}`);
+
+  api.reset();
   const natural = api.simulateMonths(120, false);
   const naturalOk = natural.monthNumber >= 12 && natural.monthNumber <= 120 &&
     (Boolean(natural.gameOver) || natural.monthNumber === 120) &&

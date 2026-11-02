@@ -1545,7 +1545,7 @@ function processHarrisTodaroMigration(){
    if(payer){
     const paid=log(payer,"external",p.migrationCost,"Custo único de instalação de novo trabalhador");
     if(paid+0.001>=p.migrationCost){
-     const id=++S.migrantCount;
+     const id = "migrant-" + (++S.migrantCount);
      const newH={id,name:"Migrante "+id,type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0};
      S.households.push(newH);
      feed(`Novo trabalhador migrou atraído por altos salários reais locais (ΔU: +${deltaU}).`);
