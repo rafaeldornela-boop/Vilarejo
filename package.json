@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/script.js && node --check src/events/eventos_v3.js && node --check src/test/test_runner.js",
+    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/economy/vilarejo_economy.js && node --check src/events/eventos_v3.js && node --check src/test/test_runner.js",
     "test": "node src/test/test_runner.js"
   },
   "engines": {

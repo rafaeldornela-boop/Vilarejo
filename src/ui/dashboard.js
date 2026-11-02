@@ -282,6 +282,13 @@
       refreshCharts(data);
       lastChartSignature = signature;
     }
+    
+    if (activeView === 'society' && window.VilarejoSociety && window.VilarejoSocietyRuntime) {
+        const host = document.querySelector('[data-view-panel="society"]');
+        if (host) {
+            window.VilarejoSociety.renderDashboard(window.VilarejoSocietyRuntime.state, host);
+        }
+    }
   }
 
   function initNavigation() {

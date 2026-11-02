@@ -8,7 +8,7 @@ const VilarejoCore = require("../core/vilarejo_core.js");
 
 const ROOT = path.join(__dirname, "../../");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-const scriptCode = fs.readFileSync(path.join(ROOT, "src/economy/script.js"), "utf8");
+const scriptCode = fs.readFileSync(path.join(ROOT, "src/economy/vilarejo_economy.js"), "utf8");
 const coreCode = fs.readFileSync(path.join(ROOT, "src/core/vilarejo_core.js"), "utf8");
 const loadedScripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
 const failures = [];
@@ -104,8 +104,8 @@ function createSimulationContext() {
 
 console.log("\n=== VERIFICAÇÕES ESTRUTURAIS ===");
 report("A página carrega o núcleo central exatamente uma vez", loadedScripts.filter((src) => src === "src/core/vilarejo_core.js").length === 1);
-report("O núcleo central vem antes dos eventos e da economia", loadedScripts.indexOf("src/core/vilarejo_core.js") >= 0 && loadedScripts.indexOf("src/core/vilarejo_core.js") < loadedScripts.indexOf("src/events/eventos_v3.js") && loadedScripts.indexOf("src/events/eventos_v3.js") < loadedScripts.indexOf("src/economy/script.js"));
-report("A página carrega script.js exatamente uma vez", loadedScripts.filter((src) => src === "src/economy/script.js").length === 1);
+report("O núcleo central vem antes dos eventos e da economia", loadedScripts.indexOf("src/core/vilarejo_core.js") >= 0 && loadedScripts.indexOf("src/core/vilarejo_core.js") < loadedScripts.indexOf("src/events/eventos_v3.js") && loadedScripts.indexOf("src/events/eventos_v3.js") < loadedScripts.indexOf("src/economy/vilarejo_economy.js"));
+report("A página carrega vilarejo_economy.js exatamente uma vez", loadedScripts.filter((src) => src === "src/economy/vilarejo_economy.js").length === 1);
 report("O servidor permite servir o núcleo central", /src\//.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
 report("A página declara idioma português", /<html\s+lang=["']pt-BR["']/i.test(html));
 report("O executor de testes não depende de jsdom", !/require\(["']jsdom["']\)/.test(fs.readFileSync(path.join(ROOT, "src/test/test_runner.js"), "utf8")));
