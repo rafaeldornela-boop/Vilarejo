@@ -10,6 +10,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const coreCode = fs.readFileSync(path.join(ROOT, "src/core/vilarejo_core.js"), "utf8");
 const historyStoreCode = fs.readFileSync(path.join(ROOT, "src/shared/vilarejo_history_store.js"), "utf8");
 const intelligenceCode = fs.readFileSync(path.join(ROOT, "src/intelligence/vilarejo_intelligence.js"), "utf8");
+const decisionObserverCode = fs.readFileSync(path.join(ROOT, "src/ui/decision_observer.js"), "utf8");
 const dashboardCode = fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8");
 
 let passed = 0;
@@ -32,6 +33,7 @@ function createDOMContext() {
 
   function makeMockElement(id) {
     const classListSet = new Set();
+    if (id === "event") classListSet.add("hidden");
     const attrs = new Map();
     const children = [];
 
@@ -119,12 +121,19 @@ function createDOMContext() {
       return [];
     },
     createElement: (tag) => makeMockElement(`dyn-${tag}`),
+    addEventListener: (type, handler) => {
+      if (!listeners.has(`document:${type}`)) listeners.set(`document:${type}`, []);
+      listeners.get(`document:${type}`).push(handler);
+    },
+    dispatchEvent: (type, event) => (listeners.get(`document:${type}`) || []).forEach((handler) => handler(event)),
+    activeElement: null,
     body: makeMockElement("body"),
     documentElement: makeMockElement("html")
   };
 
   const window = {
     document,
+    setTimeout: (fn) => { fn(); return 1; },
     scrollTo: () => {}
   };
 
@@ -156,6 +165,7 @@ function createDOMContext() {
   vm.runInContext(coreCode, context, { filename: "vilarejo_core.js" });
   vm.runInContext(historyStoreCode, context, { filename: "vilarejo_history_store.js" });
   vm.runInContext(intelligenceCode, context, { filename: "vilarejo_intelligence.js" });
+  vm.runInContext(decisionObserverCode, context, { filename: "decision_observer.js" });
   vm.runInContext(dashboardCode, context, { filename: "dashboard.js" });
 
   return context;
@@ -168,6 +178,11 @@ test("index.html declara exatamente as 8 áreas canônicas de navegação", () =
   assert.deepEqual(views, [
     "overview", "economy", "society", "government", "services", "intelligence", "newspaper", "records"
   ]);
+  const panels = [...html.matchAll(/data-view-panel="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(panels.length, 8);
+  assert.equal(new Set(panels).size, 8, "cada área tem um único painel");
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(ids).size, ids.length, "cada ID do DOM é único");
 });
 
 test("index.html agrupa Executivo, Câmara e Política em sub-abas de Governo", () => {
@@ -190,10 +205,33 @@ test("index.html disponibiliza hosts dedicados para Inteligência e Jornal", () 
 test("index.html carrega o histórico compartilhado antes do dashboard", () => {
   const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((m) => m[1]);
   const histIdx = scripts.indexOf("src/shared/vilarejo_history_store.js");
+  const observerIdx = scripts.indexOf("src/ui/decision_observer.js");
   const dashIdx = scripts.indexOf("src/ui/dashboard.js");
   assert.ok(histIdx >= 0, "vilarejo_history_store.js está referenciado");
+  assert.ok(observerIdx >= 0, "decision_observer.js está referenciado");
   assert.ok(dashIdx >= 0, "dashboard.js está referenciado");
   assert.ok(histIdx < dashIdx, "Histórico compartilhado é carregado antes do dashboard");
+  assert.ok(observerIdx < dashIdx, "observador é carregado antes do dashboard");
+  assert.equal(scripts.filter((src) => src === "src/ui/decision_observer.js").length, 1);
+});
+
+test("Calendário gregoriano permanece visual e independente do ciclo econômico de 360 dias", () => {
+  const calendar = createDOMContext().window.VilarejoCalendar;
+  const civilEndOfEconomicYear = calendar.simulationDayToCivilDate(360);
+  assert.deepEqual({
+    civilYear: civilEndOfEconomicYear.civilYear,
+    civilMonth: civilEndOfEconomicYear.civilMonth,
+    civilDay: civilEndOfEconomicYear.civilDay,
+    economicYear: civilEndOfEconomicYear.economicYear,
+    economicMonth: civilEndOfEconomicYear.economicMonth,
+    economicDay: civilEndOfEconomicYear.economicDay
+  }, { civilYear: 2026, civilMonth: 12, civilDay: 26, economicYear: 1, economicMonth: 12, economicDay: 30 });
+  const firstDayOfEconomicYearTwo = calendar.simulationDayToCivilDate(361);
+  assert.equal(firstDayOfEconomicYearTwo.economicYear, 2);
+  assert.equal(firstDayOfEconomicYearTwo.economicMonth, 1);
+  assert.equal(firstDayOfEconomicYearTwo.economicDay, 1);
+  assert.equal(firstDayOfEconomicYearTwo.civilDay, 27, "o ano econômico não redefine o 1º de janeiro");
+  assert.equal(calendar.civilDateToSimulationDay(2026, 1, 1), 1);
 });
 
 test("Central usa o contrato HistoryStore por execução sem criar repositório paralelo no dashboard", () => {
@@ -270,6 +308,16 @@ test("Navegação setView suporta as 8 telas e mapeia legados institutions e pol
 
   dash.setView("politics");
   assert.equal(ctx.document.getElementById("pageTitle").textContent, "Governo");
+});
+
+test("Histórico de decisões é inicializado no dashboard, por execução, sem snapshots paralelos", () => {
+  const ctx = createDOMContext();
+  const dash = ctx.window.VilarejoDashboard;
+  assert.deepEqual(dash.getDecisionRecords(), []);
+  dash.setView("records");
+  assert.match(ctx.document.getElementById("decisionHistory").innerHTML, /Sem decisões registradas/);
+  assert.equal(ctx.window.VilarejoSharedHistoryStore, undefined, "observador não cria outra store de snapshots");
+  assert.equal(ctx.document.getElementById("event").classList.contains("hidden"), true, "modal inicia fechado");
 });
 
 test("Central de Alertas consome serviço real e atualiza badge e painel", () => {
