@@ -24,11 +24,8 @@
         <button class="nav-item active" data-view="overview" aria-current="page"><span class="nav-icon">⌂</span><span>Visão geral</span></button>
         <button class="nav-item" data-view="economy"><span class="nav-icon">↗</span><span>Economia</span></button>
         <button class="nav-item" data-view="society"><span class="nav-icon">♧</span><span>Sociedade</span></button>
-        <button class="nav-item" data-view="politics"><span class="nav-icon">⚖</span><span>Política</span></button>
-        <button class="nav-item" data-view="institutions"><span class="nav-icon">▥</span><span>Instituições</span></button>
-        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços e desenvolvimento</span></button>
         <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
-        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços</span></button>
+        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços e desenvolvimento</span></button>
         <div class="sidebar-caption nav-section-label">ANÁLISE E MEMÓRIA</div>
         <button class="nav-item" data-view="intelligence"><span class="nav-icon">◈</span><span>Inteligência</span></button>
         <button class="nav-item" data-view="newspaper"><span class="nav-icon">📰</span><span>Jornal</span></button>
@@ -269,32 +266,6 @@
           </div>
         </section>
 
-        <section class="view-panel" data-view-panel="services" aria-label="Serviços">
-          <div class="section-heading">
-            <div>
-              <div class="eyebrow">INFRAESTRUTURA E BEM-ESTAR PÚBLICO</div>
-              <h2>Serviços essenciais e capacidade urbana</h2>
-              <p>Capacidade urbana e abastecimento são exibidos quando o motor os publica; indicadores setoriais ausentes seguem indisponíveis.</p>
-            </div>
-          </div>
-          <div id="servicesDashboard" class="services-host"></div>
-        </section>
-
-        <section class="view-panel" data-view-panel="politics" aria-label="Política">
-          <div class="section-heading"><div><div class="eyebrow">GRUPOS E RELAÇÕES DE PODER</div><h2>A sociedade também disputa os rumos do Estado.</h2><p>Acompanhe os grupos de interesse, sua influência, satisfação e relação com o governo.</p></div></div>
-          <div id="politicsDashboard" class="politics-host"></div>
-        </section>
-
-        <section class="view-panel" data-view-panel="institutions" aria-label="Instituições">
-          <div class="section-heading"><div><div class="eyebrow">ESTRUTURA DO ESTADO</div><h2>Representação, coalizões e mandatos.</h2><p>Veja a composição das bancadas, a maioria necessária, a coalizão e a oposição identificada.</p></div></div>
-          <div id="institutionsDashboard" class="institutions-host"></div>
-        </section>
-
-        <section class="view-panel" data-view-panel="services" aria-label="Serviços públicos e desenvolvimento">
-          <div class="section-heading"><div><div class="eyebrow">CAPACIDADE E BEM-ESTAR DO ESTADO</div><h2>O que o Estado entrega à população.</h2><p>Saúde, educação, segurança, ciência, desenvolvimento, cultura, infraestrutura e recursos estratégicos.</p></div></div>
-          <div id="servicesDashboard" class="services-host"></div>
-        </section>
-
         <section class="view-panel" data-view-panel="government" aria-label="Governo">
           <div class="section-heading gov-main-heading">
             <div>
@@ -351,6 +322,21 @@
           </div>
         </section>
 
+        <section class="view-panel" data-view-panel="services" aria-label="Serviços e desenvolvimento">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">CAPACIDADE E BEM-ESTAR DO ESTADO</div>
+              <h2>O que o Estado entrega à população.</h2>
+              <p>Saúde, educação, segurança, ciência, desenvolvimento, cultura, infraestrutura e recursos estratégicos.</p>
+            </div>
+          </div>
+          <div id="servicesDashboard" class="services-host"></div>
+        </section>
+
+        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência">
+          <div id="intelligenceDashboard" class="intel-host"></div>
+        </section>
+
         <section class="view-panel" data-view-panel="newspaper" aria-label="Jornal do Vilarejo">
           <div class="section-heading">
             <div>
@@ -378,10 +364,6 @@
           <div class="records-grid"><article class="content-card"><div class="eyebrow">DIÁRIO DO VILAREJO</div><h2>Decisões e acontecimentos</h2><ul id="feed" class="feed-list scroll"></ul></article><article class="content-card ledger-card"><div class="eyebrow">RASTREABILIDADE FINANCEIRA</div><h2>Livro-caixa</h2><p class="card-description">Últimas 60 movimentações registradas.</p><div class="scroll ledger-scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div></article></div>
         </section>
 
-        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência">
-          <div id="intelligenceDashboard" class="intel-host"></div>
-        </section>
-
         <footer class="app-footer"><span>VILAREJO · SIMULAÇÃO ECONÔMICA</span><span>Um mundo construído por decisões.</span></footer>
       </div>
     </main>
@@ -395,6 +377,9 @@
   <script src="src/politics/vilarejo_politics.js"></script>
   <script src="src/institutions/vilarejo_institutions.js"></script>
   <script src="src/services/vilarejo_services.js"></script>
+  <script src="src/intelligence/vilarejo_intelligence.js"></script>
+  <script src="src/intelligence/intelligence_view.js"></script>
+  <script src="src/ui/decision_observer.js"></script>
   <script src="src/ui/dashboard.js"></script>
 </body>
 </html>

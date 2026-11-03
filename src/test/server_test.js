@@ -83,7 +83,7 @@ async function assertServedAsset(baseUrl, assetPath) {
       .map((match) => match[1])
       .filter((reference) => !reference.startsWith("#") && !/^(?:[a-z]+:|\/\/)/i.test(reference));
     const scriptReferences = localReferences.filter((reference) => /\.js(?:[?#]|$)/i.test(reference));
-    assert.equal(scriptReferences.length, 8, "index deve referenciar os oito módulos JavaScript de runtime");
+    assert.equal(scriptReferences.length, 12, "index deve referenciar os doze módulos JavaScript de runtime");
     for (const reference of localReferences) {
       const assetUrl = new URL(reference, baseUrl);
       assert.equal(assetUrl.origin, baseUrl, `referência local permanece na origem ${reference}`);
