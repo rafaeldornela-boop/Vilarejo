@@ -126,6 +126,40 @@
   let viewedCivilMonth = 5; // 1..12
   let isBrowsingCivilCalendar = false;
 
+  function getCalendarViewState() {
+    return { year: viewedCivilYear, month: viewedCivilMonth, isBrowsing: isBrowsingCivilCalendar };
+  }
+
+  function navigateCalendarMonth(offset) {
+    const delta = Number(offset);
+    if (!Number.isSafeInteger(delta) || delta === 0) return getCalendarViewState();
+
+    const monthIndex = (viewedCivilYear - 1) * 12 + viewedCivilMonth - 1 + delta;
+    const nextYear = Math.floor(monthIndex / 12) + 1;
+    if (nextYear < 1) return getCalendarViewState();
+    viewedCivilYear = nextYear;
+    viewedCivilMonth = ((monthIndex % 12) + 12) % 12 + 1;
+    isBrowsingCivilCalendar = true;
+    if (lastSnapshot) refreshCalendar(lastSnapshot);
+    return getCalendarViewState();
+  }
+
+  function returnCalendarToToday(rawDay) {
+    const currentDay = finiteValue(rawDay) ?? finiteValue(lastSnapshot?.day);
+    isBrowsingCivilCalendar = false;
+    if (currentDay !== null) {
+      const today = simulationDayToCivilDate(currentDay);
+      viewedCivilYear = today.civilYear;
+      viewedCivilMonth = today.civilMonth;
+    }
+    if (lastSnapshot) refreshCalendar(lastSnapshot);
+    return getCalendarViewState();
+  }
+
+  function resetCalendarNavigation(rawDay) {
+    return returnCalendarToToday(rawDay);
+  }
+
   function snapshot() {
     try {
       if (typeof window !== "undefined" && window.VilarejoTest && typeof window.VilarejoTest.stateSnapshot === "function") {
@@ -1076,7 +1110,7 @@
       ].filter(Boolean).join(" ");
 
       const tooltipParts = [
-        `${d} de ${viewedMonthName} de ${viewedCivilYear}`
+        `${WEEKDAY_NAMES[weekdayCol]}, ${d} de ${viewedMonthName} de ${viewedCivilYear}`
       ];
       if (cellSimDay >= 1) {
         const cEconYear = Math.floor((cellSimDay - 1) / 360) + 1;
@@ -1094,13 +1128,18 @@
       const tooltip = tooltipParts.join(" · ");
 
       cells.push(
-        `<span class="${classes}" title="${escapeHtml(tooltip)}"` +
+        `<span role="listitem" class="${classes}" title="${escapeHtml(tooltip)}" aria-label="${escapeHtml(tooltip)}"` +
         (isToday ? ' aria-current="date"' : '') +
         `>${d}${isCloseDay ? '<i class="close-marker">●</i>' : ''}${hasRecordedEvent ? '<i class="event-marker" aria-hidden="true">◆</i>' : ''}</span>`
       );
     }
 
-    if ($("calendarDays")) $("calendarDays").innerHTML = cells.join("");
+    const daysContainer = $("calendarDays");
+    if (daysContainer) {
+      daysContainer.setAttribute("role", "list");
+      daysContainer.setAttribute("aria-label", `Dias de ${viewedMonthName} de ${viewedCivilYear}`);
+      daysContainer.innerHTML = cells.join("");
+    }
     const eventList = $("calendarEventList");
     if (eventList) {
       eventList.innerHTML = calendarEvents.length
@@ -1641,34 +1680,15 @@
     });
     const prevBtn = $("calPrevMonth");
     if (prevBtn) {
-      prevBtn.addEventListener("click", () => {
-        isBrowsingCivilCalendar = true;
-        viewedCivilMonth -= 1;
-        if (viewedCivilMonth < 1) {
-          viewedCivilMonth = 12;
-          viewedCivilYear -= 1;
-        }
-        if (lastSnapshot) refreshCalendar(lastSnapshot);
-      });
+      prevBtn.addEventListener("click", () => navigateCalendarMonth(-1));
     }
     const nextBtn = $("calNextMonth");
     if (nextBtn) {
-      nextBtn.addEventListener("click", () => {
-        isBrowsingCivilCalendar = true;
-        viewedCivilMonth += 1;
-        if (viewedCivilMonth > 12) {
-          viewedCivilMonth = 1;
-          viewedCivilYear += 1;
-        }
-        if (lastSnapshot) refreshCalendar(lastSnapshot);
-      });
+      nextBtn.addEventListener("click", () => navigateCalendarMonth(1));
     }
     const todayBtn = $("calToday");
     if (todayBtn) {
-      todayBtn.addEventListener("click", () => {
-        isBrowsingCivilCalendar = false;
-        if (lastSnapshot) refreshCalendar(lastSnapshot);
-      });
+      todayBtn.addEventListener("click", () => returnCalendarToToday());
     }
     const mobileToggle = $("mobileMenu");
     if (mobileToggle) mobileToggle.addEventListener("click", () => document.body.classList.toggle("menu-open"));
@@ -1720,14 +1740,13 @@
         refreshAlerts();
         refresh();
       });
-      window.VilarejoRuntime.events.on("game:initialized", () => {
+      const resetCalendarForNewRun = (event) => {
+        resetCalendarNavigation(finiteValue(event?.payload?.day));
         refreshAlerts();
         refresh();
-      });
-      window.VilarejoRuntime.events.on("game:reset", () => {
-        refreshAlerts();
-        refresh();
-      });
+      };
+      window.VilarejoRuntime.events.on("game:initialized", resetCalendarForNewRun);
+      window.VilarejoRuntime.events.on("game:reset", resetCalendarForNewRun);
       window.VilarejoRuntime.events.on("institutions:coalition-updated", () => refresh());
       window.VilarejoRuntime.events.on("politics:month-closed", () => refresh());
     }
@@ -1760,6 +1779,10 @@
       refresh,
       setView,
       setGovTab,
+      navigateCalendarMonth,
+      returnCalendarToToday,
+      resetCalendarNavigation,
+      getCalendarViewState,
       getSnapshot: snapshot,
       selectMapSector,
       getDecisionRecords: () => decisionObserver ? decisionObserver.getRecords() : [],
@@ -1788,6 +1811,10 @@
       MONTH_NAMES,
       WEEKDAY_NAMES,
       WEEKDAY_ABBR,
+      navigateCalendarMonth,
+      returnCalendarToToday,
+      resetCalendarNavigation,
+      getCalendarViewState,
       refresh,
       setView,
       setGovTab,
