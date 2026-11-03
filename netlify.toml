@@ -1,25 +1,44 @@
-# Netlify Build and Deploy Configuration for Vilarejo
+# Publicação estática do Vilarejo no Netlify.
+# O build gera dist/ com HTML, CSS, módulos de runtime e assets públicos.
+# Não há SPA fallback: arquivos ausentes (ex.: .js inexistente) devem retornar 404.
+
 [build]
-  publish = "."
   command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Content-Type = "text/html; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
+    Cache-Control = "no-cache"
 
 [[headers]]
   for = "/*.js"
   [headers.values]
     Content-Type = "text/javascript; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/src/*"
+  [headers.values]
+    Content-Type = "text/javascript; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
+    Cache-Control = "no-cache"
 
 [[headers]]
   for = "/*.css"
   [headers.values]
     Content-Type = "text/css; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
+    Cache-Control = "no-cache"
 
 [[headers]]
   for = "/public/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  force = false
+    X-Content-Type-Options = "nosniff"
