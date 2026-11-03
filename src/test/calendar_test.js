@@ -1,6 +1,8 @@
 "use strict";
-
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const VilarejoCore = require("../core/vilarejo_core.js");
 const Dashboard = require("../ui/dashboard.js");
 
 const {
@@ -10,7 +12,11 @@ const {
   simulationDayToCivilDate,
   MONTH_NAMES,
   WEEKDAY_NAMES,
-  WEEKDAY_ABBR
+  WEEKDAY_ABBR,
+  navigateCalendarMonth,
+  returnCalendarToToday,
+  resetCalendarNavigation,
+  getCalendarViewState
 } = Dashboard;
 
 let passed = 0;
@@ -222,6 +228,61 @@ test("Período de safra cobre rigorosamente os dias 150 a 209 do ciclo econômic
     const shouldBeHarvest = dayInYear >= 150 && dayInYear <= 209;
     assert.equal(info.isHarvest, shouldBeHarvest, `Dia ${d} (dia ${dayInYear} do ano econômico) erro de safra`);
   }
+});
+
+test("Navegação anterior/posterior atravessa mês e ano sem alterar o relógio econômico", () => {
+  const clock = VilarejoCore.createRuntime().clock;
+  clock.reset(149, 4);
+  const before = clock.snapshot();
+
+  const previousYear = navigateCalendarMonth(-5);
+  assert.deepEqual({ year: previousYear.year, month: previousYear.month }, { year: 2025, month: 12 });
+  assert.equal(previousYear.isBrowsing, true);
+
+  const nextYear = navigateCalendarMonth(13);
+  assert.deepEqual({ year: nextYear.year, month: nextYear.month }, { year: 2027, month: 1 });
+  assert.deepEqual(clock.snapshot(), before, "Navegar na vista civil não deve escrever no relógio econômico");
+});
+
+test("Hoje e reset da partida retornam ao mês civil do dia atual e limpam o estado de navegação", () => {
+  navigateCalendarMonth(8);
+  const today = returnCalendarToToday(149);
+  assert.deepEqual({ year: today.year, month: today.month, isBrowsing: today.isBrowsing }, {
+    year: 2026, month: 5, isBrowsing: false
+  });
+
+  navigateCalendarMonth(-9);
+  const reset = resetCalendarNavigation(366);
+  assert.deepEqual({ year: reset.year, month: reset.month, isBrowsing: reset.isBrowsing }, {
+    year: 2027, month: 1, isBrowsing: false
+  });
+
+  navigateCalendarMonth(-3);
+  const nextReset = resetCalendarNavigation(149);
+  assert.deepEqual({ year: nextReset.year, month: nextReset.month, isBrowsing: nextReset.isBrowsing }, {
+    year: 2026, month: 5, isBrowsing: false
+  });
+});
+
+test("Calendário mantém correspondência com o relógio canônico da Economia por 720 dias", () => {
+  const clock = VilarejoCore.createRuntime().clock;
+  for (let day = 1; day <= 720; day += 1) {
+    const visual = simulationDayToCivilDate(day);
+    const canonical = clock.fromAbsoluteDay(day);
+    assert.equal(visual.economicYear, canonical.year, `Ano econômico divergente no dia ${day}`);
+    assert.equal(visual.economicMonth, canonical.month, `Mês econômico divergente no dia ${day}`);
+    assert.equal(visual.economicDay, canonical.day, `Dia econômico divergente no dia ${day}`);
+  }
+});
+
+test("CSS mantém grade sem overflow e controles de calendário com alvo mobile de 44 px", () => {
+  const css = fs.readFileSync(path.join(__dirname, "../../style.css"), "utf8");
+  const mobileRule = css.match(/@media \(max-width:760px\) \{([\s\S]*?)\n\}/);
+  assert.ok(mobileRule, "Breakpoint mobile de 760 px deve existir");
+  assert.match(mobileRule[1], /\.calendar-nav-btn\s*\{[^}]*width:44px;[^}]*height:44px;/);
+  assert.match(mobileRule[1], /\.calendar-nav-today\s*\{[^}]*min-height:44px;/);
+  assert.match(css, /\.calendar-weekdays,\.calendar-days\s*\{\s*display:grid;\s*grid-template-columns:repeat\(7,minmax\(0,1fr\)\)/);
+  assert.match(css, /@media \(max-width:420px\)/, "Breakpoint de telas estreitas deve existir");
 });
 
 if (failures.length > 0) {

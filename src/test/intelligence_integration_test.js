@@ -247,6 +247,14 @@ test("Dashboard mantém navegação Governo/Inteligência e renderiza gráficos,
 test("reset cria nova execução e preserva a anterior para consulta", () => {
   const priorId = service.getCurrentRunId();
   const priorHistory = service.getRunHistory(priorId);
+  const dashboard = app.window.VilarejoDashboard;
+  const browsed = dashboard.navigateCalendarMonth(2);
+  assert.equal(browsed.isBrowsing, true);
+  dashboard.refresh();
+  const afterRefresh = dashboard.getCalendarViewState();
+  assert.equal(afterRefresh.year, browsed.year);
+  assert.equal(afterRefresh.month, browsed.month, "Refresh normal não deve perder o mês consultado");
+
   api.reset();
   const newId = service.getCurrentRunId();
   assert.notEqual(newId, priorId);
@@ -255,6 +263,13 @@ test("reset cria nova execução e preserva a anterior para consulta", () => {
   assert.equal(service.getRunHistory(priorId).length, priorHistory.length);
   assert.equal(service.getHistoryStoreSnapshot(priorId).records.length, priorHistory.length);
   assert.equal(service.getRun(priorId).status, "archived");
+  const resetDate = app.window.VilarejoCalendar.simulationDayToCivilDate(api.stateSnapshot().day);
+  const afterReset = dashboard.getCalendarViewState();
+  assert.equal(afterReset.isBrowsing, false, "Reset deve encerrar a navegação histórica/futura");
+  assert.equal(afterReset.year, resetDate.civilYear);
+  assert.equal(afterReset.month, resetDate.civilMonth);
+  assert.equal(app.document.getElementById("calendarMonthHeading").textContent, `${resetDate.monthName} de ${resetDate.civilYear}`);
+  assert.match(app.document.getElementById("calendarDays").innerHTML, /is-today/, "A data atual da nova partida deve voltar a ser destacada na grade");
 });
 
 test("reload do app arquiva a série anterior quando o estado econômico reinicia", () => {

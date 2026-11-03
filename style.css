@@ -177,6 +177,9 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
   .calendar-primary { grid-template-columns:minmax(0,1fr); gap:13px; padding:15px; }
   .calendar-date-card { padding-right:12px; }
   .calendar-date-number { font-size:52px; }
+  .calendar-nav-btn { width:44px; height:44px; font-size:19px; }
+  .calendar-nav-today { min-height:44px; padding:0 13px; }
+  .calendar-nav-controls { gap:6px; }
   .calendar-agenda { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:13px 16px; border-top:1px solid #e8ede5; border-left:0; }
   .calendar-agenda-heading { grid-column:1 / -1; }
   .calendar-agenda-item { margin-top:3px; }
