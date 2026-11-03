@@ -240,6 +240,31 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function setGovTab(name) {
+    const allowedTabs = ["executivo", "camara", "politica"];
+    activeGovTab = allowedTabs.includes(name) ? name : "executivo";
+    if (typeof document === "undefined") return activeGovTab;
+
+    document.querySelectorAll("[data-gov-tab]").forEach((button) => {
+      const selected = button.dataset.govTab === activeGovTab;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-selected", selected ? "true" : "false");
+    });
+    document.querySelectorAll("[data-gov-pane]").forEach((pane) => {
+      pane.classList.toggle("active", pane.dataset.govPane === activeGovTab);
+    });
+
+    if (activeGovTab === "camara" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+      const host = $("institutionsDashboard");
+      if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+    }
+    if (activeGovTab === "politica" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
+      const host = $("politicsDashboard");
+      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+    }
+    return activeGovTab;
+  }
+
   function refreshDomainPanels() {
     if (activeView === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
       const host = $("politicsDashboard");
@@ -1198,6 +1223,37 @@
     syncEventModalVisibility();
   }
 
+  function getCalendarViewState() {
+    return {
+      year: viewedCivilYear,
+      month: viewedCivilMonth,
+      isBrowsing: isBrowsingCivilCalendar
+    };
+  }
+
+  function navigateCalendarMonth(offset) {
+    const delta = Number(offset);
+    if (!Number.isSafeInteger(delta) || delta === 0) return getCalendarViewState();
+
+    const monthIndex = (viewedCivilYear - 1) * 12 + viewedCivilMonth - 1 + delta;
+    viewedCivilYear = Math.floor(monthIndex / 12) + 1;
+    viewedCivilMonth = ((monthIndex % 12) + 12) % 12 + 1;
+    isBrowsingCivilCalendar = true;
+    if (lastSnapshot) refreshCalendar(lastSnapshot);
+    return getCalendarViewState();
+  }
+
+  function returnCalendarToToday() {
+    isBrowsingCivilCalendar = false;
+    if (lastSnapshot) {
+      const today = simulationDayToCivilDate(lastSnapshot.day);
+      viewedCivilYear = today.civilYear;
+      viewedCivilMonth = today.civilMonth;
+      refreshCalendar(lastSnapshot);
+    }
+    return getCalendarViewState();
+  }
+
   function initNavigation() {
     document.querySelectorAll("[data-view]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1226,34 +1282,15 @@
     });
     const prevBtn = $("calPrevMonth");
     if (prevBtn) {
-      prevBtn.addEventListener("click", () => {
-        isBrowsingCivilCalendar = true;
-        viewedCivilMonth -= 1;
-        if (viewedCivilMonth < 1) {
-          viewedCivilMonth = 12;
-          viewedCivilYear -= 1;
-        }
-        if (lastSnapshot) refreshCalendar(lastSnapshot);
-      });
+      prevBtn.addEventListener("click", () => navigateCalendarMonth(-1));
     }
     const nextBtn = $("calNextMonth");
     if (nextBtn) {
-      nextBtn.addEventListener("click", () => {
-        isBrowsingCivilCalendar = true;
-        viewedCivilMonth += 1;
-        if (viewedCivilMonth > 12) {
-          viewedCivilMonth = 1;
-          viewedCivilYear += 1;
-        }
-        if (lastSnapshot) refreshCalendar(lastSnapshot);
-      });
+      nextBtn.addEventListener("click", () => navigateCalendarMonth(1));
     }
     const todayBtn = $("calToday");
     if (todayBtn) {
-      todayBtn.addEventListener("click", () => {
-        isBrowsingCivilCalendar = false;
-        if (lastSnapshot) refreshCalendar(lastSnapshot);
-      });
+      todayBtn.addEventListener("click", returnCalendarToToday);
     }
     const mobileToggle = $("mobileMenu");
     if (mobileToggle) mobileToggle.addEventListener("click", () => document.body.classList.toggle("menu-open"));
@@ -1345,6 +1382,9 @@
       refresh,
       setView,
       setGovTab,
+      navigateCalendarMonth,
+      returnCalendarToToday,
+      getCalendarViewState,
       getSnapshot: snapshot,
       selectMapSector,
       getDecisionRecords: () => decisionObserver ? decisionObserver.getRecords() : [],
@@ -1371,6 +1411,9 @@
       MONTH_NAMES,
       WEEKDAY_NAMES,
       WEEKDAY_ABBR,
+      navigateCalendarMonth,
+      returnCalendarToToday,
+      getCalendarViewState,
       refresh,
       setView,
       setGovTab,

@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const Dashboard = require("../ui/dashboard.js");
+const VilarejoCore = require("../core/vilarejo_core.js");
 
 const {
   isLeapYear,
@@ -10,7 +11,10 @@ const {
   simulationDayToCivilDate,
   MONTH_NAMES,
   WEEKDAY_NAMES,
-  WEEKDAY_ABBR
+  WEEKDAY_ABBR,
+  navigateCalendarMonth,
+  returnCalendarToToday,
+  getCalendarViewState
 } = Dashboard;
 
 let passed = 0;
@@ -222,6 +226,41 @@ test("Período de safra cobre rigorosamente os dias 150 a 209 do ciclo econômic
     const shouldBeHarvest = dayInYear >= 150 && dayInYear <= 209;
     assert.equal(info.isHarvest, shouldBeHarvest, `Dia ${d} (dia ${dayInYear} do ano econômico) erro de safra`);
   }
+});
+
+test("Meses e dias econômicos do calendário visual coincidem com o relógio canônico por 720 dias", () => {
+  const clock = VilarejoCore.createRuntime().clock;
+  for (let d = 1; d <= 720; d += 1) {
+    const visual = simulationDayToCivilDate(d);
+    const canonical = clock.fromAbsoluteDay(d);
+    assert.equal(visual.economicYear, canonical.year, `Ano econômico divergente no dia ${d}`);
+    assert.equal(visual.economicMonth, canonical.month, `Mês econômico divergente no dia ${d}`);
+    assert.equal(visual.economicDay, canonical.day, `Dia econômico divergente no dia ${d}`);
+    assert.equal(visual.isCloseDay, canonical.day === 30, `Fechamento divergente no dia ${d}`);
+  }
+});
+
+test("Navegação do calendário atravessa meses e anos sem alterar o relógio da partida", () => {
+  const runtime = VilarejoCore.createRuntime();
+  runtime.clock.reset(149, 0);
+  const clockBefore = runtime.clock.snapshot();
+  const initialView = getCalendarViewState();
+
+  const december = navigateCalendarMonth(7);
+  assert.deepEqual({ year: december.year, month: december.month }, { year: 2026, month: 12 });
+  assert.equal(december.isBrowsing, true);
+
+  const january = navigateCalendarMonth(1);
+  assert.deepEqual({ year: january.year, month: january.month }, { year: 2027, month: 1 });
+
+  const previousDecember = navigateCalendarMonth(-1);
+  assert.deepEqual({ year: previousDecember.year, month: previousDecember.month }, { year: 2026, month: 12 });
+
+  const restoredView = navigateCalendarMonth(-7);
+  assert.deepEqual({ year: restoredView.year, month: restoredView.month }, { year: initialView.year, month: initialView.month });
+  returnCalendarToToday();
+  assert.equal(getCalendarViewState().isBrowsing, false);
+  assert.deepEqual(runtime.clock.snapshot(), clockBefore, "Consultar/navegar pelo calendário não pode avançar nem alterar o relógio");
 });
 
 if (failures.length > 0) {
