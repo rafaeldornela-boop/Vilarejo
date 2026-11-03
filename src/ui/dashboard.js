@@ -1110,7 +1110,7 @@
       ].filter(Boolean).join(" ");
 
       const tooltipParts = [
-        `${d} de ${viewedMonthName} de ${viewedCivilYear}`
+        `${WEEKDAY_NAMES[weekdayCol]}, ${d} de ${viewedMonthName} de ${viewedCivilYear}`
       ];
       if (cellSimDay >= 1) {
         const cEconYear = Math.floor((cellSimDay - 1) / 360) + 1;
@@ -1128,13 +1128,18 @@
       const tooltip = tooltipParts.join(" · ");
 
       cells.push(
-        `<span class="${classes}" title="${escapeHtml(tooltip)}" aria-label="${escapeHtml(tooltip)}"` +
+        `<span role="listitem" class="${classes}" title="${escapeHtml(tooltip)}" aria-label="${escapeHtml(tooltip)}"` +
         (isToday ? ' aria-current="date"' : '') +
         `>${d}${isCloseDay ? '<i class="close-marker">●</i>' : ''}${hasRecordedEvent ? '<i class="event-marker" aria-hidden="true">◆</i>' : ''}</span>`
       );
     }
 
-    if ($("calendarDays")) $("calendarDays").innerHTML = cells.join("");
+    const daysContainer = $("calendarDays");
+    if (daysContainer) {
+      daysContainer.setAttribute("role", "list");
+      daysContainer.setAttribute("aria-label", `Dias de ${viewedMonthName} de ${viewedCivilYear}`);
+      daysContainer.innerHTML = cells.join("");
+    }
     const eventList = $("calendarEventList");
     if (eventList) {
       eventList.innerHTML = calendarEvents.length

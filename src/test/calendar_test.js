@@ -275,6 +275,13 @@ test("Calendário mantém correspondência com o relógio canônico da Economia 
   }
 });
 
+test("Dias do calendário têm semântica de lista e anunciam o dia da semana", () => {
+  const dashboardSource = fs.readFileSync(path.join(__dirname, "../ui/dashboard.js"), "utf8");
+  assert.match(dashboardSource, /daysContainer\.setAttribute\("role",\s*"list"\)/);
+  assert.match(dashboardSource, /role="listitem"/);
+  assert.ok(dashboardSource.includes("WEEKDAY_NAMES[weekdayCol]"));
+});
+
 test("CSS mantém grade sem overflow e controles de calendário com alvo mobile de 44 px", () => {
   const css = fs.readFileSync(path.join(__dirname, "../../style.css"), "utf8");
   const mobileRule = css.match(/@media \(max-width:760px\) \{([\s\S]*?)\n\}/);

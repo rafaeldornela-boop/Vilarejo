@@ -43,6 +43,7 @@ function memoryStorage() {
 }
 function makeElement(id) {
   const classes = new Set(id === "event" ? ["hidden"] : []);
+  const attributes = new Map();
   return {
     id, innerHTML: "", textContent: "", value: "", disabled: false,
     onclick: null, oninput: null, onchange: null, onkeyup: null, dataset: {}, style: {}, addEventListener() {},
@@ -57,7 +58,9 @@ function makeElement(id) {
         classes.add(name); return true;
       }
     },
-    closest() { return null; }, appendChild() {}, removeChild() {}, setAttribute() {}, getAttribute() { return null; },
+    closest() { return null; }, appendChild() {}, removeChild() {},
+    setAttribute(name, value) { attributes.set(name, String(value)); },
+    getAttribute(name) { return attributes.get(name) ?? null; },
     querySelector(selector) { return makeElement(`${id}:${selector}`); }, querySelectorAll() { return []; }
   };
 }
@@ -208,7 +211,12 @@ test("Dashboard mantém navegação Governo/Inteligência e renderiza gráficos,
   assert.ok(app.document.getElementById("topbarCivilDate").textContent.includes(String(civilNow.civilYear)));
   assert.match(app.document.getElementById("dateLabel").textContent, /Ano Econômico/);
   assert.equal(app.document.getElementById("calendarEconomicMonth").textContent, `Mês ${String(civilNow.economicMonth).padStart(2, "0")}`);
-  assert.match(app.document.getElementById("calendarDays").innerHTML, /is-close-day/);
+  const calendarDays = app.document.getElementById("calendarDays");
+  assert.equal(calendarDays.getAttribute("role"), "list");
+  assert.equal(calendarDays.getAttribute("aria-label"), `Dias de ${civilNow.monthName} de ${civilNow.civilYear}`);
+  assert.match(calendarDays.innerHTML, /role="listitem"/);
+  assert.ok(calendarDays.innerHTML.includes(`aria-label="${civilNow.weekdayName}, ${civilNow.civilDay} de ${civilNow.monthName} de ${civilNow.civilYear}`));
+  assert.match(calendarDays.innerHTML, /is-close-day/);
   assert.ok(app.document.getElementById("calendarEventList").innerHTML.length > 0);
   const farmSector = app.window.VilarejoDashboard.selectMapSector("Fazenda e produção", dashboardSnapshot);
   assert.equal(farmSector.metrics.find((metric) => metric.label === "Estoque da fazenda").value, api.stateSnapshot().farmInventory);
