@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="municipal-interface">
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="#inicio" aria-label="Vilarejo, início">
@@ -19,7 +19,7 @@
         <span class="brand-copy"><strong>vilarejo</strong><small>uma economia viva</small></span>
       </a>
 
-      <div class="sidebar-caption">SEU TERRITÓRIO</div>
+      <div class="sidebar-caption">ACOMPANHAR E GERIR</div>
       <nav class="main-nav" aria-label="Navegação principal">
         <button class="nav-item active" data-view="overview" aria-current="page"><span class="nav-icon">⌂</span><span>Visão geral</span></button>
         <button class="nav-item" data-view="economy"><span class="nav-icon">↗</span><span>Economia</span></button>
@@ -28,7 +28,8 @@
         <button class="nav-item" data-view="institutions"><span class="nav-icon">▥</span><span>Instituições</span></button>
         <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços e desenvolvimento</span></button>
         <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
-        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços públicos</span></button>
+        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços</span></button>
+        <div class="sidebar-caption nav-section-label">ANÁLISE E MEMÓRIA</div>
         <button class="nav-item" data-view="intelligence"><span class="nav-icon">◈</span><span>Inteligência</span></button>
         <button class="nav-item" data-view="newspaper"><span class="nav-icon">📰</span><span>Jornal</span></button>
         <button class="nav-item" data-view="records"><span class="nav-icon">☷</span><span>Histórico</span></button>
@@ -60,36 +61,41 @@
           </div>
           <span class="season-badge" id="topbarSeasonBadge">Entressafra</span>
           <span class="status-pill" id="gameStatus">Em planejamento</span>
+          <div class="ux-time-controls no-print" role="group" aria-label="Controles da simulação">
+            <button class="btn-primary" id="start" type="button">Começar</button>
+            <button class="btn-secondary" id="pause" type="button" disabled>Pausar</button>
+            <button class="btn-secondary" id="speed" type="button">Acelerar</button>
+            <button class="btn-quiet" id="reset" type="button" aria-label="Reiniciar partida">Reiniciar</button>
+          </div>
         </div>
       </header>
 
       <div class="page-wrap">
         <div class="page-intro">
-          <div><div class="eyebrow">PAINEL DO GOVERNANTE</div><h1 id="pageHeading">O vilarejo é seu.</h1><p id="pageDescription">Acompanhe o território e o pulso da comunidade.</p></div>
+          <div><div class="eyebrow">CENTRAL DE GESTÃO MUNICIPAL</div><h1 id="pageHeading">Panorama do município</h1><p id="pageDescription">O que mudou, o que merece atenção e quais decisões estão disponíveis.</p></div>
           <div class="intro-mark">V<span>·</span></div>
         </div>
 
-          <div id="event" class="event-card hidden pulse-animation">
-            <div class="event-kicker">ACONTECIMENTO</div><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div>
+          <div id="event" class="event-card event-modal hidden pulse-animation" role="presentation">
+            <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="eventTitle" aria-describedby="eventText">
+              <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" loading="lazy" decoding="async"><figcaption>Ilustração geral de deliberação; não retrata este evento nem qualquer resultado observado.</figcaption></figure>
+              <div class="event-kicker">ESCOLHA DO MOTOR</div><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div>
+              <p class="ux-event-caveat">Custos e riscos aparecem somente quando informados pela simulação. Variações posteriores serão observadas, sem presumir causalidade.</p>
+            </section>
           </div>
 
           <div id="overviewAlertsContainer" class="overview-alerts-container hidden"></div>
 
         <section class="view-panel active" data-view-panel="overview" aria-label="Visão geral">
+          <section class="ux-overview-pulse" id="overviewPulse" aria-label="Indicadores do último fechamento" aria-live="polite"></section>
           <section class="calendar-board" id="calendarBoard" aria-label="Calendário do Vilarejo">
             <div class="calendar-primary">
-              <div class="calendar-date-card">
-                <div class="eyebrow">CALENDÁRIO CIVIL</div>
-                <div class="calendar-date-weekday" id="calendarWeekday">SEXTA-FEIRA</div>
-                <div class="calendar-date-number" id="calendarDayNumber">29</div>
-                <div class="calendar-date-month" id="calendarMonthYear">MAIO 2026</div>
-                <div class="calendar-date-simday" id="calendarSimDay">Dia 149 da simulação</div>
-              </div>
               <div class="calendar-month-card">
                 <div class="calendar-month-heading">
                   <div>
-                    <div class="eyebrow">DIAS DA COMUNIDADE · CALENDÁRIO GREGORIANO</div>
+                    <div class="eyebrow">CALENDÁRIO CIVIL · DATAS GREGORIANAS</div>
                     <h2 id="calendarMonthHeading">Maio de 2026</h2>
+                    <p class="ux-calendar-caption">Data visual derivada do dia absoluto; não altera o mês econômico.</p>
                   </div>
                   <div class="calendar-heading-actions">
                     <span class="calendar-current-tag is-current" id="calendarCurrentTag">MÊS ATUAL</span>
@@ -106,6 +112,7 @@
                   <span><i class="legend-swatch is-today"></i> Hoje</span>
                   <span><i class="legend-swatch is-harvest-day"></i> Safra</span>
                   <span><i class="legend-dot-close">●</i> Fechamento mensal</span>
+                  <span><i class="legend-dot-event" aria-hidden="true">◆</i> Acontecimento com dia registrado</span>
                 </div>
               </div>
             </div>
@@ -120,20 +127,25 @@
                 <div class="econ-badge-item"><small>MÊS ECONÔMICO</small><strong id="calendarEconomicMonth">Mês 05</strong></div>
                 <div class="econ-badge-item"><small>DIA ECONÔMICO</small><strong id="calendarEconomicDay">Dia 29 / 30</strong></div>
               </div>
+              <div class="ux-calendar-events">
+                <div class="eyebrow">ACONTECIMENTOS REGISTRADOS</div>
+                <ul id="calendarEventList" class="ux-calendar-event-list"><li>Sem evento datado disponível.</li></ul>
+                <small class="ux-data-limit">Lista limitada ao histórico recente publicado pelo Core.</small>
+              </div>
             </aside>
           </section>
           <div class="cycle-strip" id="cycleBar" aria-label="Ritmo produtivo e ciclo econômico"></div>
-          <div class="kpi-grid" id="pillars" aria-label="Indicadores principais"></div>
+          <div class="kpi-grid" id="pillars" aria-hidden="true" hidden></div>
           <div id="stats" hidden></div>
 
           <section class="village-card">
             <div class="section-heading map-heading">
-              <div><div class="eyebrow">MAPA DO TERRITÓRIO</div><h2>O lugar onde tudo acontece</h2><p>Selecione um distrito para explorar a comunidade.</p></div>
-              <span class="live-tag"><i></i> MUNDO SIMULADO</span>
+              <div><div class="eyebrow">MAPA ESQUEMÁTICO</div><h2>Setores da comunidade</h2><p>Selecione um setor para consultar agregados observados; o desenho não representa lotes ou endereços reais.</p></div>
+              <span class="live-tag"><i></i> VISUALIZAÇÃO ILUSTRATIVA</span>
             </div>
             <div class="map-layout">
               <div class="map-stage">
-                <svg id="villageMap" class="village-map" viewBox="0 0 1000 620" role="img" aria-label="Ilustração isométrica do vilarejo com fazenda, casas, mercado, oficina e prefeitura">
+                <svg id="villageMap" class="village-map" viewBox="0 0 1000 620" role="img" aria-label="Mapa ilustrativo e não georreferenciado, com setores selecionáveis de produção, moradias, centro, comércio e serviços">
                   <defs>
                     <linearGradient id="groundGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9edcf"/><stop offset="1" stop-color="#cdddbb"/></linearGradient>
                     <linearGradient id="waterGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9bc9c5"/><stop offset="1" stop-color="#68a7a6"/></linearGradient>
@@ -172,9 +184,9 @@
                     <text x="675" y="292" class="map-label">MERCADO</text>
                   </g>
 
-                  <g data-district="Oficinas e serviços" class="map-district district-workshop" tabindex="0" role="button" aria-label="Selecionar Oficinas e serviços">
+                  <g data-district="Serviços" class="map-district district-workshop" tabindex="0" role="button" aria-label="Selecionar Serviços">
                     <g transform="translate(380 405) scale(.62)" filter="url(#mapShadow)"><path d="M0 0 63 36 0 72 -63 36Z" fill="#b5b9a8"/><path d="M-63 36 0 72 0 132 -63 96Z" fill="#899b91"/><path d="M0 72 63 36 63 96 0 132Z" fill="#687e74"/><path d="M-73 34 0 -10 73 32 0 77Z" fill="#647a71"/><path d="M-16 85 1 95 1 119 -16 109Z" fill="#414b45"/><path d="M25 78 45 67 45 89 25 100Z" fill="#d9e8d5"/></g>
-                    <text x="376" y="356" class="map-label">OFICINAS</text>
+                    <text x="376" y="356" class="map-label">SERVIÇOS</text>
                   </g>
 
                   <g fill="#638d5d" stroke="#47784f" stroke-width="2">
@@ -183,33 +195,33 @@
                   <g fill="#dce8c9"><circle cx="109" cy="258" r="5"/><circle cx="840" cy="292" r="6"/><circle cx="470" cy="115" r="4"/></g>
                   <g class="map-pin" transform="translate(515 455)"><circle r="24" fill="#ffffff"/><circle r="17" fill="#2f6b53"/><text y="6" text-anchor="middle" fill="#ffffff" font-size="18">V</text></g>
                 </svg>
-                <div class="map-legend"><span><i class="legend-dot green"></i> Área produtiva</span><span><i class="legend-dot gold"></i> Área residencial</span><span><i class="legend-dot blue"></i> Água e circulação</span></div>
+                <div class="map-legend"><span><i class="legend-dot green"></i> Produção ilustrativa</span><span><i class="legend-dot gold"></i> Moradias ilustrativas</span><span><i class="legend-dot blue"></i> Traçado ilustrativo</span></div>
               </div>
               <aside class="map-summary">
-                <div class="summary-top"><span class="summary-label">DISTRITO SELECIONADO</span><strong id="districtLabel">Visão do território</strong></div>
-                <div class="map-stat"><span>População</span><strong><b id="map-population">10</b><small> / <span id="map-housing">12</span> vagas</small></strong></div>
-                <div class="capacity-track"><span id="housingFill"></span></div>
-                <div class="map-stat"><span>Trabalhadores ocupados</span><strong id="map-workers">—</strong></div>
-                <div class="map-stat"><span>Obras em andamento</span><strong id="map-buildings">0</strong></div>
-                <div class="map-stat"><span>Lotes disponíveis</span><strong id="map-lots">10</strong></div>
-                <div class="map-note"><span class="note-spark">✦</span><span>O território reage às suas decisões. Moradia, infraestrutura e produção moldam o futuro da comunidade.</span></div>
+                <div class="summary-top"><span class="summary-label">SETOR SELECIONADO</span><strong id="districtLabel">Visão do território</strong></div>
+                <p id="mapSectorDescription" class="map-sector-description">Escolha uma área ilustrada para ver os indicadores agregados disponíveis.</p>
+                <div id="mapSectorMetrics" class="ux-sector-metrics"><p>Os dados do setor ainda não foram observados.</p></div>
+                <div class="map-note"><span class="note-spark">i</span><span>Sem geometrias públicas do motor: propriedades, bairros, estradas, instalações e expansão territorial não são individualmente rastreáveis.</span></div>
               </aside>
             </div>
           </section>
 
-          <section class="control-panel">
-            <div><div class="eyebrow">CONTROLE DO TEMPO</div><strong>O próximo mês começa com as decisões de hoje.</strong></div>
-            <div class="control-buttons no-print">
-              <button class="btn-primary" id="start">Começar</button>
-              <button class="btn-secondary" id="pause" disabled>Pausar</button>
-              <button class="btn-secondary" id="speed">Acelerar</button>
-              <button class="btn-quiet" id="reset">Reiniciar</button>
+          <details class="ux-technical-details">
+            <summary>Como ler esta tela e seus limites</summary>
+            <div class="ux-technical-content">
+              <p>O calendário civil usa datas gregorianas convertidas do dia absoluto. O relógio econômico continua operando em meses de 30 dias e anos de 360 dias; navegar pelo calendário visual não altera a simulação.</p>
+              <p>O mapa é uma ilustração setorial selecionável, não uma planta cadastral. O motor não expõe geometrias de propriedades, bairros, estradas, instalações ou expansão urbana individualizada.</p>
+              <p>O acompanhamento usa snapshots reais da execução. Variações após escolhas não estabelecem causalidade. Índice de Gini e indicadores específicos de serviços públicos permanecem indisponíveis quando não são publicados pelo motor.</p>
             </div>
-          </section>
+          </details>
 
           <section class="content-card action-card">
-            <div class="section-heading"><div><div class="eyebrow">SUA PRÓXIMA JOGADA</div><h2>Decisões para mudar o vilarejo</h2><p>Use os recursos disponíveis para expandir e fortalecer a comunidade.</p></div><span class="section-symbol">✳</span></div>
+            <div class="section-heading"><div><div class="eyebrow">SUA PRÓXIMA DECISÃO</div><h2>Ações disponíveis no motor</h2><p>Alternativas e custos são os publicados pela simulação; efeitos futuros não são presumidos.</p></div><span class="section-symbol">✳</span></div>
             <div class="action-buttons" id="actions"></div>
+          </section>
+          <section class="content-card ux-decision-follow-up">
+            <div class="section-heading"><div><div class="eyebrow">ACOMPANHAMENTO</div><h2>O que foi observado depois das escolhas</h2><p>Comparações medem variações no fechamento posterior; não provam que uma decisão foi a causa.</p></div></div>
+            <div id="decisionSummary" class="ux-decision-summary">As escolhas serão acompanhadas nesta execução.</div>
           </section>
 
 
@@ -257,12 +269,12 @@
           </div>
         </section>
 
-        <section class="view-panel" data-view-panel="services" aria-label="Serviços públicos">
+        <section class="view-panel" data-view-panel="services" aria-label="Serviços">
           <div class="section-heading">
             <div>
               <div class="eyebrow">INFRAESTRUTURA E BEM-ESTAR PÚBLICO</div>
               <h2>Serviços essenciais e capacidade urbana</h2>
-              <p>Habitação, capacidade urbana, lotes públicos, abastecimento alimentar e prestação de serviços.</p>
+              <p>Capacidade urbana e abastecimento são exibidos quando o motor os publica; indicadores setoriais ausentes seguem indisponíveis.</p>
             </div>
           </div>
           <div id="servicesDashboard" class="services-host"></div>
@@ -339,23 +351,6 @@
           </div>
         </section>
 
-        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência">
-          <div class="section-heading">
-            <div>
-              <div class="eyebrow">LEITURA TEMPORAL E SÉRIES HISTÓRICAS</div>
-              <h2>Central de Inteligência</h2>
-              <p>Análise de trajetórias, tendências estatísticas e central de alertas monitorada.</p>
-            </div>
-          </div>
-          <div id="intelligenceDashboard" class="intelligence-host">
-            <div class="module-empty-state">
-              <span class="module-empty-icon">◈</span>
-              <h3>Central de Inteligência</h3>
-              <p>Os indicadores, tendências e alertas são consolidados a cada fechamento mensal da simulação.</p>
-            </div>
-          </div>
-        </section>
-
         <section class="view-panel" data-view-panel="newspaper" aria-label="Jornal do Vilarejo">
           <div class="section-heading">
             <div>
@@ -375,6 +370,11 @@
 
         <section class="view-panel" data-view-panel="records" aria-label="Histórico">
           <div class="section-heading"><div><div class="eyebrow">MEMÓRIA DA PARTIDA</div><h2>Histórico e Rastreabilidade Financeira</h2><p>Acompanhe todos os acontecimentos registrados e movimentações do livro-caixa.</p></div></div>
+          <section class="content-card ux-decision-history">
+            <div class="section-heading"><div><div class="eyebrow">ESCOLHAS E OBSERVAÇÕES</div><h2>Acompanhamento das decisões</h2><p>Registros separados por execução, comparados apenas com valores disponíveis no primeiro fechamento posterior.</p></div></div>
+            <p id="decisionStorageWarning" class="ux-storage-warning hidden" role="status"></p>
+            <div id="decisionHistory" class="ux-decision-history-list"><p>Sem decisões registradas nesta execução.</p></div>
+          </section>
           <div class="records-grid"><article class="content-card"><div class="eyebrow">DIÁRIO DO VILAREJO</div><h2>Decisões e acontecimentos</h2><ul id="feed" class="feed-list scroll"></ul></article><article class="content-card ledger-card"><div class="eyebrow">RASTREABILIDADE FINANCEIRA</div><h2>Livro-caixa</h2><p class="card-description">Últimas 60 movimentações registradas.</p><div class="scroll ledger-scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div></article></div>
         </section>
 

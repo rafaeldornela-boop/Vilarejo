@@ -41,6 +41,20 @@
   let activeGovTab = "executivo";
   let lastSnapshot = null;
   let lastChartSignature = "";
+  let activeMapSector = "Visão do território";
+  let decisionObserver = null;
+  let lastDecisionRunId = null;
+
+  const UNAVAILABLE = "Indisponível";
+
+  function finiteValue(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
+  function formatObserved(value, formatter = number) {
+    const metric = finiteValue(value);
+    return metric === null ? UNAVAILABLE : formatter(metric);
+  }
 
   function getFirstWeekdayOfMonth(year, month) {
     // month: 1..12; returns 0=Segunda, 1=Terça, ..., 6=Domingo
@@ -119,10 +133,15 @@
         const core = typeof window.VilarejoTest.getCoreSnapshot === "function"
           ? window.VilarejoTest.getCoreSnapshot()
           : (window.VilarejoRuntime?.snapshot() || null);
+        const intelligence = window.VilarejoIntelligenceRuntime?.service;
+        const society = window.VilarejoSocietyRuntime?.getSnapshot?.() ||
+          core?.modules?.society?.snapshot || null;
         const labor = typeof window.VilarejoTest.getLaborStats === "function"
           ? window.VilarejoTest.getLaborStats()
           : s?.laborStats;
-        const pop = labor ? (labor.occupied + labor.unemployedSeeking + labor.outOfLaborForce) : 10;
+        const societyPopulation = finiteValue(society?.demographic?.population);
+        const corePopulation = finiteValue(core?.population?.totals?.total);
+        const pop = societyPopulation === null ? corePopulation : societyPopulation;
         const bs = typeof window.VilarejoTest.generateBalanceSheets === "function"
           ? window.VilarejoTest.generateBalanceSheets()
           : s?.balanceSheets;
@@ -133,30 +152,40 @@
           ? window.VilarejoTest.calculateNationalAccounts()
           : s?.nationalAccounts;
 
-        const currentSessionId = (core?.session?.id || s?.sessionId || "session-1").toString();
+        const currentSessionId = core?.session?.id || s?.sessionId || null;
+        const absoluteDay = finiteValue(core?.calendar?.absoluteDay) ?? finiteValue(s?.day);
+        const economicMonthNumber = finiteValue(core?.calendar?.economicMonthNumber) ?? finiteValue(s?.monthNumber);
+        const currentRunId = intelligence?.getCurrentRunId?.() || currentSessionId;
+        const events = core?.recentEvents || window.VilarejoRuntime?.events?.getHistory?.({ limit: 30 }) || [];
+
+        if (absoluteDay === null) return null;
 
         return {
-          day: s?.day || (core?.calendar?.absoluteDay ?? 149),
-          monthNumber: s?.monthNumber || (core?.calendar?.economicMonthNumber ?? 0),
-          sessionId: currentSessionId,
+          day: absoluteDay,
+          monthNumber: economicMonthNumber,
+          sessionId: currentSessionId ? String(currentSessionId) : null,
+          runId: currentRunId ? String(currentRunId) : null,
           gameOver: s?.gameOver || null,
           running: core?.session?.status === "running",
-          history: window.VilarejoIntelligenceRuntime?.service?.getCurrentHistory?.() || [],
+          history: intelligence?.getCurrentHistory?.() || [],
+          events: Array.isArray(events) ? events : [],
+          society,
+          core,
           population: pop,
-          housingCapacity: s?.housingCapacity || (pop + 2),
-          buildings: s?.buildings?.length || 0,
-          lots: s?.lotCount ?? s?.lots ?? 10,
-          employed: labor?.occupied || s?.employed || 0,
+          housingCapacity: finiteValue(s?.housingCapacity),
+          buildings: Array.isArray(s?.buildings) ? s.buildings.length : null,
+          lots: finiteValue(s?.lotCount) ?? finiteValue(s?.lots),
+          employed: finiteValue(labor?.occupied) ?? finiteValue(s?.employed),
           laborStats: labor,
           balanceSheets: bs,
           fiscalReport: fiscal,
           nationalAccounts: macro,
-          urbanInfra: s?.urbanInfra,
-          marketPrice: s?.marketPrice,
-          servicePrice: s?.servicePrice,
-          marketStock: s?.marketStock,
-          approval: s?.approval,
-          wage: s?.wage,
+          urbanInfra: s?.urbanInfra && typeof s.urbanInfra === "object" ? s.urbanInfra : null,
+          marketPrice: finiteValue(s?.marketPrice),
+          servicePrice: finiteValue(s?.servicePrice),
+          marketStock: finiteValue(s?.marketStock),
+          approval: finiteValue(s?.approval),
+          wage: finiteValue(s?.wage),
           raw: s
         };
       }
@@ -194,7 +223,7 @@
       button.setAttribute("aria-current", selected ? "page" : "false");
     });
     const titles = {
-      overview: ["Visão geral", "Acompanhe o território e o pulso da comunidade."],
+      overview: ["Visão geral", "O que mudou, o que merece atenção e quais decisões estão disponíveis."],
       economy: ["Economia", "Produção, preços, trabalho e atividade ao longo do tempo."],
       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
       politics: ["Política", "Grupos de interesse, influência, satisfação e relações com o governo."],
@@ -205,7 +234,7 @@
     };
     const item = titles[name] || titles.overview;
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
-    if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "O vilarejo é seu." : item[0] + ".";
+    if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "Panorama do município" : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
     refreshDomainPanels();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -239,7 +268,7 @@
         '</strong><span>Os pontos surgem a cada fechamento mensal. Nenhum dado anterior foi inventado.</span></div>';
       return;
     }
-    const hasSeriesData = rows.some((row) => series.some((item) => Number.isFinite(Number(row[item.key]))));
+    const hasSeriesData = rows.some((row) => series.some((item) => finiteValue(row[item.key]) !== null));
     if (!hasSeriesData) {
       target.innerHTML = '<div class="chart-empty"><span class="chart-empty-mark">⌁</span><strong>Indicador sem histórico disponível</strong><span>Esta referência não produz uma série para este indicador; nenhum valor foi estimado.</span></div>';
       return;
@@ -252,8 +281,8 @@
     const plotH = height - pad.top - pad.bottom;
     const allValues = [];
     series.forEach((item) => rows.forEach((row) => {
-      const value = Number(row[item.key]);
-      if (Number.isFinite(value)) allValues.push(value);
+      const value = finiteValue(row[item.key]);
+      if (value !== null) allValues.push(value);
     }));
     if (!allValues.length) {
       target.innerHTML = '<div class="chart-empty"><strong>Dados ainda não disponíveis</strong><span>Este indicador será preenchido nos próximos fechamentos.</span></div>';
@@ -275,8 +304,8 @@
 
     const paths = series.map((item) => {
       const pts = rows.map((row, index) => {
-        const value = Number(row[item.key]);
-        return Number.isFinite(value) ? [x(index), y(value), value, row.label || ("M" + row.month)] : null;
+        const value = finiteValue(row[item.key]);
+        return value !== null ? [x(index), y(value), value, row.label || ("M" + row.month)] : null;
       }).filter(Boolean);
       if (!pts.length) return "";
       const polyline = pts.map((point) => point[0] + "," + point[1]).join(" ");
@@ -332,26 +361,199 @@
     ], history, (v) => number(v, 1), "A distribuição de renda começa a ser observada agora");
   }
 
-  function refreshMap(data) {
-    const values = {
-      "map-population": number(data.population),
-      "map-housing": number(data.housingCapacity),
-      "map-buildings": number(data.buildings),
-      "map-lots": number(data.lots),
-      "map-workers": number(data.employed)
+  function formatMetricDelta(metric, current, previous) {
+    const delta = current - previous;
+    if (delta === 0) return "Sem variação em relação ao fechamento anterior";
+    const sign = delta > 0 ? "+" : "−";
+    const absolute = Math.abs(delta);
+    if (metric === "population") return `${sign}${number(absolute)} pessoas vs. fechamento anterior`;
+    if (metric === "unemployment") return `${sign}${number(absolute, 1)} p.p. vs. fechamento anterior`;
+    return `${sign}${compact(absolute)} vs. fechamento anterior`;
+  }
+
+  function renderOverviewPulse(data) {
+    const host = $("overviewPulse");
+    if (!host) return;
+    if (!data) {
+      host.innerHTML = '<div class="ux-observation-empty"><span class="eyebrow">PANORAMA</span><strong>Aguardando snapshot da simulação</strong><p>Os indicadores ficam indisponíveis até a inicialização do motor.</p></div>';
+      return;
+    }
+    const rows = Array.isArray(data.history) ? data.history : [];
+    if (!rows.length) {
+      host.innerHTML = '<div class="ux-observation-empty"><span class="eyebrow">PANORAMA</span><strong>Ainda sem fechamento observado</strong><p>Os indicadores aparecem após o primeiro mês fechado pela simulação.</p></div>';
+      return;
+    }
+
+    const current = rows[rows.length - 1];
+    const previous = rows.length > 1 ? rows[rows.length - 2] : null;
+    const cards = [
+      { key: "population", label: "População observada", format: (value) => `${number(value)} pessoas` },
+      { key: "gdp", label: "Produção no mês", format: compact },
+      { key: "unemployment", label: "Desocupação", format: (value) => `${number(value, 1)}%` },
+      { key: "primaryResult", label: "Resultado primário", format: compact }
+    ];
+
+    host.innerHTML = '<div class="ux-overview-pulse-heading"><div><span class="eyebrow">ÚLTIMO FECHAMENTO</span><h2>O município em números</h2></div><span class="ux-period-chip">Mês econômico ' + escapeHtml(current.month ?? UNAVAILABLE) + '</span></div>' +
+      '<div class="ux-overview-metrics">' + cards.map((metric) => {
+        const value = finiteValue(current[metric.key]);
+        const prior = previous ? finiteValue(previous[metric.key]) : null;
+        const comparison = value === null
+          ? "Sem observação disponível neste fechamento"
+          : prior === null
+            ? "Primeiro valor observado; sem base de comparação"
+            : formatMetricDelta(metric.key, value, prior);
+        const formatted = value === null ? UNAVAILABLE : metric.format(value);
+        return '<article class="ux-overview-metric"><span class="eyebrow">' + escapeHtml(metric.label) + '</span><strong>' +
+          escapeHtml(formatted) + '</strong><small>' + escapeHtml(comparison) + '</small></article>';
+      }).join("") + '</div><p class="ux-data-provenance">Fonte: snapshots mensais desta execução, registrados pela Central de Inteligência. Valores ausentes não são estimados.</p>';
+  }
+
+  function sectorMetricsFor(data, sector) {
+    const raw = data.raw || {};
+    const infra = data.urbanInfra || {};
+    const society = data.society || {};
+    const demographic = society.demographic || {};
+    const metric = (label, value, formatter = number, source = "Snapshot da Economia") => ({ label, value: finiteValue(value), formatter, source });
+    const overview = [
+      metric("Moradores", data.population, number, society.demographic ? "Sociedade" : "Core"),
+      metric("Caixa público", raw.treasuryCash, money),
+      metric("Estoque do comércio", raw.marketStock, (value) => `${number(value, 1)} unidades`)
+    ];
+    const profiles = {
+      "Visão do território": { description: "Indicadores agregados disponíveis para a execução atual.", metrics: overview },
+      "Fazenda e produção": {
+        description: "Valores da atividade rural expostos pelo snapshot; o desenho da lavoura é apenas ilustrativo.",
+        metrics: [
+          metric("Estoque da fazenda", raw.farmInventory, (value) => number(value, 1)),
+          metric("Caixa da fazenda", raw.farmCash, money),
+          metric("Trabalhadores ativos no setor", raw.farmWorkers, number)
+        ]
+      },
+      "Moradias": {
+        description: "Contagens demográficas da Sociedade; não há endereços ou unidades habitacionais georreferenciadas.",
+        metrics: [
+          metric("Moradores", demographic.population ?? data.population, number, "Sociedade/Core"),
+          metric("Domicílios", demographic.households, number, "Sociedade"),
+          metric("População em idade de trabalho", demographic.workingAge, number, "Sociedade")
+        ]
+      },
+      "Centro e prefeitura": {
+        description: "Leitura fiscal agregada, não vinculada a um prédio ou endereço real.",
+        metrics: [
+          metric("Caixa do Tesouro", raw.treasuryCash, money),
+          metric("Receitas tributárias", raw.fiscalReport?.taxRevenue, money),
+          metric("Resultado primário", raw.fiscalReport?.primaryResult, money)
+        ]
+      },
+      "Comércio local": {
+        description: "Indicadores de estoque e preços publicados pela Economia.",
+        metrics: [
+          metric("Estoque comercial", raw.marketStock, (value) => `${number(value, 1)} unidades`),
+          metric("Preço de mercado", raw.marketPrice, money),
+          metric("Preço de serviços locais", raw.servicePrice, money)
+        ]
+      },
+      "Serviços": {
+        description: "Infraestrutura urbana agregada. Os indicadores específicos de saúde, educação e segurança não são publicados pela referência atual.",
+        metrics: [
+          metric("Capacidade urbana", infra.capacity),
+          metric("Demanda urbana", infra.demand),
+          metric("Congestionamento", infra.congestionRatio, (value) => `${number(value, 2)}×`),
+          metric("Fator de produtividade urbana", infra.tfpFactor, (value) => number(value, 2))
+        ]
+      }
     };
-    Object.entries(values).forEach(([id, value]) => {
-      const node = $(id);
-      if (node) node.textContent = value;
+    return profiles[sector] || profiles["Visão do território"];
+  }
+
+  function selectMapSector(sector, data = lastSnapshot) {
+    activeMapSector = sector || "Visão do território";
+    if (typeof document !== "undefined") {
+      const map = $("villageMap");
+      map?.querySelectorAll("[data-district]").forEach((item) => {
+        const selected = item.dataset.district === activeMapSector;
+        item.classList.toggle("selected", selected);
+        item.setAttribute("aria-pressed", selected ? "true" : "false");
+      });
+    }
+    const label = $("districtLabel");
+    const description = $("mapSectorDescription");
+    const host = $("mapSectorMetrics");
+    if (label) label.textContent = activeMapSector;
+    const profile = data ? sectorMetricsFor(data, activeMapSector) : null;
+    if (description) description.textContent = profile?.description || "Aguardando um snapshot da simulação.";
+    if (host) {
+      host.innerHTML = profile
+        ? profile.metrics.map((item) => '<div class="ux-sector-metric"><div><strong>' + escapeHtml(item.label) + '</strong><small>' + escapeHtml(item.source) + '</small></div><b>' +
+          escapeHtml(item.value === null ? UNAVAILABLE : item.formatter(item.value)) + '</b></div>').join("")
+        : '<p>Os dados deste setor ainda não estão disponíveis.</p>';
+    }
+    return profile;
+  }
+
+  function refreshMap(data) {
+    selectMapSector(activeMapSector, data);
+  }
+
+  function getCalendarEvents(data) {
+    const events = [];
+    const societyLabels = {
+      birth: "Nascimento",
+      death: "Falecimento",
+      household_added: "Domicílio registrado",
+      household_removed: "Domicílio removido",
+      economy_population_adjustment: "Ajuste demográfico"
+    };
+    (Array.isArray(data.society?.recentEvents) ? data.society.recentEvents : []).forEach((event) => {
+      if (!event || typeof event !== "object") return;
+      const label = event.message || societyLabels[event.type];
+      if (typeof label !== "string" || !label.trim()) return;
+      events.push({
+        id: event.id || `society:${event.type}:${event.month}:${label}`,
+        label: label.trim(),
+        source: "Sociedade",
+        day: finiteValue(event.day),
+        month: finiteValue(event.month ?? event.monthNumber)
+      });
     });
-    const ratio = data.housingCapacity > 0 ? Math.min(100, (data.population / data.housingCapacity) * 100) : 0;
-    const bar = $("housingFill");
-    if (bar) bar.style.width = ratio.toFixed(1) + "%";
+
+    const technicalTopics = /^(core\.modules?$|world:|population:|game:|intelligence:|economy:month-closed$|society:month-closed$|politics:month-closed$|institutions:month-closed$)/;
+    (Array.isArray(data.events) ? data.events : []).forEach((event) => {
+      if (!event || typeof event !== "object" || technicalTopics.test(String(event.topic || "")) || /^core\.modules?$/i.test(String(event.source || ""))) return;
+      const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
+      const label = payload.title || payload.name || payload.message || event.message;
+      if (typeof label !== "string" || !label.trim()) return;
+      events.push({
+        id: event.id || `${event.topic || "event"}:${event.day || "undated"}:${label}`,
+        label: label.trim(),
+        source: String(event.source || "Core"),
+        day: finiteValue(event.day),
+        month: finiteValue(payload.monthNumber ?? payload.month)
+      });
+    });
+
+    const unique = new Map();
+    events.forEach((event) => {
+      const key = `${event.source}|${event.day}|${event.month}|${event.label}`;
+      if (!unique.has(key)) unique.set(key, event);
+    });
+    return [...unique.values()].sort((a, b) => {
+      if (a.day !== null && b.day !== null) return b.day - a.day;
+      if (a.month !== null && b.month !== null) return b.month - a.month;
+      return String(b.id).localeCompare(String(a.id));
+    }).slice(0, 12);
   }
 
   function refreshCalendar(data) {
     const currentSimDay = Math.max(1, Math.round(Number(data.day) || 1));
     const todayInfo = simulationDayToCivilDate(currentSimDay);
+    const calendarEvents = getCalendarEvents(data);
+    const eventDays = new Map();
+    calendarEvents.forEach((event) => {
+      if (event.day === null) return;
+      if (!eventDays.has(event.day)) eventDays.set(event.day, []);
+      eventDays.get(event.day).push(event);
+    });
 
     // Se o usuário não estiver folheando explicitamente, acompanha o mês da simulação
     if (!isBrowsingCivilCalendar) {
@@ -434,6 +636,8 @@
 
       // Regras de Fechamento Econômico (a cada 30 dias de simulação)
       const isCloseDay = (cellSimDay >= 1 && cellSimDay % 30 === 0);
+      const dayEvents = eventDays.get(cellSimDay) || [];
+      const hasRecordedEvent = dayEvents.length > 0;
 
       // Regras de Safra (dias econômicos 150 a 209 em cada ciclo de 360 dias)
       const econDayInYear = cellSimDay >= 1 ? (((cellSimDay - 1) % 360) + 1) : 0;
@@ -445,6 +649,7 @@
         isPast ? "is-past" : "",
         isWeekend ? "is-weekend" : "",
         isCloseDay ? "is-close-day" : "",
+        hasRecordedEvent ? "has-recorded-event" : "",
         isCellHarvest ? "is-harvest-day" : ""
       ].filter(Boolean).join(" ");
 
@@ -462,17 +667,33 @@
       if (isToday) tooltipParts.push("Hoje (Dia atual da simulação)");
       if (isCloseDay) tooltipParts.push("Fechamento mensal da economia");
       if (isCellHarvest) tooltipParts.push("Período de safra agrícola");
+      dayEvents.forEach((event) => tooltipParts.push(`Acontecimento (${event.source}): ${event.label}`));
 
       const tooltip = tooltipParts.join(" · ");
 
       cells.push(
         `<span class="${classes}" title="${escapeHtml(tooltip)}"` +
         (isToday ? ' aria-current="date"' : '') +
-        `>${d}${isCloseDay ? '<i class="close-marker">●</i>' : ''}</span>`
+        `>${d}${isCloseDay ? '<i class="close-marker">●</i>' : ''}${hasRecordedEvent ? '<i class="event-marker" aria-hidden="true">◆</i>' : ''}</span>`
       );
     }
 
     if ($("calendarDays")) $("calendarDays").innerHTML = cells.join("");
+    const eventList = $("calendarEventList");
+    if (eventList) {
+      eventList.innerHTML = calendarEvents.length
+        ? calendarEvents.slice(0, 6).map((event) => {
+          let dateLabel = "Data não informada";
+          if (event.day !== null) {
+            const eventDate = simulationDayToCivilDate(event.day);
+            dateLabel = `${eventDate.civilDay} ${eventDate.monthName} ${eventDate.civilYear}`;
+          } else if (event.month !== null) {
+            dateLabel = `Mês econômico ${event.month} · dia civil não informado`;
+          }
+          return `<li><time>${escapeHtml(dateLabel)}</time><span>${escapeHtml(event.label)}</span><small>${escapeHtml(event.source)}</small></li>`;
+        }).join("")
+        : "<li>Sem acontecimento recente com data ou período informado pelo motor.</li>";
+    }
 
     // Agenda: Relógio da Economia
     if ($("calendarSeason")) $("calendarSeason").textContent = seasonTitle;
@@ -500,15 +721,15 @@
       const snap = window.VilarejoSociety.getSnapshot(sState);
       const d = snap.demographic;
       const q = snap.qualityOfLife?.current || {};
-      const m = snap.migration?.monthly || { incoming: 0, outgoing: 0, net: 0 };
-      const cumM = snap.migration?.cumulative || { incoming: 0, outgoing: 0, net: 0 };
-      const vital = snap.demographicEvents || { births: 0, deaths: 0, agingTransitions: 0 };
-      const lastMonthVital = vital.lastMonth || { births: 0, deaths: 0, agingTransitions: 0 };
-      const culture = snap.culture || { diversityIndex: 0, groups: [] };
-
-      const score = Number.isFinite(q.score) ? q.score.toFixed(1) : "n/d";
-      const qLevel = q.level || (q.score >= 70 ? "Favorável" : q.score >= 50 ? "Regular" : "Crítico");
-      const coverage = q.measuredDimensions ? `${q.measuredDimensions}/6 dimensões` : "em consolidação";
+      const m = snap.migration?.monthly || null;
+      const cumM = snap.migration?.cumulative || null;
+      const vital = snap.demographicEvents || null;
+      const lastMonthVital = vital?.lastMonth || null;
+      const culture = snap.culture || null;
+      const qScore = finiteValue(q.score);
+      const qLevel = q.level || (qScore === null ? UNAVAILABLE : qScore >= 70 ? "Favorável" : qScore >= 50 ? "Regular" : "Crítico");
+      const measuredDimensions = finiteValue(q.measuredDimensions);
+      const coverage = measuredDimensions === null ? "cobertura não informada" : `${number(measuredDimensions)}/6 dimensões`;
 
       const cultureNames = {
         local: "Cultura local",
@@ -517,24 +738,43 @@
         rural: "Origem rural"
       };
 
-      const cultureRows = (culture.groups || []).map((grp) => {
-        const share = grp.share ? grp.share.toFixed(1) : "0.0";
+      const cultureRows = (culture?.groups || []).map((grp) => {
+        const share = finiteValue(grp.share);
+        const count = finiteValue(grp.count);
+        const bar = share === null
+          ? '<div class="society-bar-track is-unavailable" aria-label="Participação indisponível"></div>'
+          : `<div class="society-bar-track"><span style="width:${Math.min(100, share)}%"></span></div>`;
         return `
           <div class="society-bar-row">
-            <div class="society-bar-label"><span>${escapeHtml(cultureNames[grp.id] || grp.id)}</span><b>${grp.count} hab. (${share}%)</b></div>
-            <div class="society-bar-track"><span style="width:${Math.min(100, grp.share)}%"></span></div>
+            <div class="society-bar-label"><span>${escapeHtml(cultureNames[grp.id] || grp.id)}</span><b>${count === null ? UNAVAILABLE : number(count)} hab. (${share === null ? UNAVAILABLE : number(share, 1) + "%"})</b></div>
+            ${bar}
           </div>
         `;
-      }).join("") || '<p class="society-muted">Sem dados culturais consolidados.</p>';
+      }).join("") || '<p class="society-muted">Nenhum grupo cultural registrado neste snapshot.</p>';
 
-      const ageTotal = (d.children || 0) + (d.workingAge || 0) + (d.elderly || 0) || 1;
-      const childShare = (((d.children || 0) / ageTotal) * 100).toFixed(1);
-      const activeShare = (((d.workingAge || 0) / ageTotal) * 100).toFixed(1);
-      const elderShare = (((d.elderly || 0) / ageTotal) * 100).toFixed(1);
+      const children = finiteValue(d.children);
+      const workingAge = finiteValue(d.workingAge);
+      const elderly = finiteValue(d.elderly);
+      const ageTotal = children !== null && workingAge !== null && elderly !== null ? children + workingAge + elderly : null;
+      const share = (value) => ageTotal !== null && ageTotal > 0 && value !== null ? value / ageTotal * 100 : null;
+      const childShare = share(children);
+      const activeShare = share(workingAge);
+      const elderShare = share(elderly);
+      const shareLabel = (value) => value === null ? UNAVAILABLE : `${number(value, 1)}%`;
+      const ageBar = (value, className) => value === null
+        ? `<div class="society-bar-track ${className} is-unavailable" aria-label="Proporção indisponível"></div>`
+        : `<div class="society-bar-track ${className}"><span style="width:${Math.min(100, value)}%"></span></div>`;
+      const cumulativeMigration = finiteValue(cumM?.net);
+      const diversityIndex = finiteValue(culture?.diversityIndex);
+      const integrationIndex = finiteValue(culture?.integrationIndex);
+      const foreignBorn = finiteValue(d.foreignBorn);
+      const foreignBornShare = finiteValue(d.foreignBornShare);
 
       const recentEvents = (snap.recentEvents || []).slice(-4).map((evt) => {
-        return `<li><small>Mês ${evt.month || 0}</small><span>${escapeHtml(evt.text || evt.title || "Evento social")}</span></li>`;
-      }).join("") || '<li class="society-muted">Nenhum evento extraordinário registrado recentemente.</li>';
+        const eventMonth = finiteValue(evt.month);
+        const period = eventMonth === null ? "Período não informado" : `Mês econômico ${eventMonth}`;
+        return `<li><small>${escapeHtml(period)}</small><span>${escapeHtml(evt.message || evt.text || evt.title || "Acontecimento social")}</span></li>`;
+      }).join("") || '<li class="society-muted">Nenhum acontecimento demográfico recente registrado.</li>';
 
       host.innerHTML = `
         <div class="society-dashboard">
@@ -542,41 +782,45 @@
           <div class="society-kpis-grid">
             <article class="content-card society-card">
               <div class="eyebrow">POPULAÇÃO TOTAL</div>
-              <strong class="society-huge">${d.population || 0}</strong>
+              <strong class="society-huge">${formatObserved(d.population)}</strong>
               <span class="society-sub">moradores residentes</span>
               <div class="society-stat-meta">
                 <span>Razão de dependência:</span>
-                <b>${d.dependencyRatio !== null && d.dependencyRatio !== undefined ? Number(d.dependencyRatio).toFixed(1) : "n/d"} / 100 ativos</b>
+                <b>${formatObserved(d.dependencyRatio, (value) => number(value, 1))} / 100 ativos</b>
               </div>
             </article>
 
             <article class="content-card society-card">
               <div class="eyebrow">QUALIDADE DE VIDA</div>
-              <strong class="society-huge ${q.score >= 60 ? 'good' : 'amber'}">${score}<small>/100</small></strong>
+              <strong class="society-huge ${qScore === null ? 'is-unavailable' : qScore >= 60 ? 'good' : 'amber'}">${qScore === null ? UNAVAILABLE : number(qScore, 1)}${qScore === null ? '' : '<small>/100</small>'}</strong>
               <span class="society-sub">Nível ${escapeHtml(qLevel)} (${coverage})</span>
               <div class="society-stat-meta">
                 <span>Bem-estar domiciliar:</span>
-                <b>${q.components?.householdWellbeing ? Number(q.components.householdWellbeing).toFixed(0) + '/100' : 'n/d'}</b>
+                <b>${formatObserved(q.components?.householdWellbeing, (value) => `${number(value, 0)}/100`)}</b>
               </div>
             </article>
 
             <article class="content-card society-card">
               <div class="eyebrow">DINÂMICA VITAL</div>
-              <strong class="society-huge">${vital.births || 0} <small class="vital-div">/</small> ${vital.deaths || 0}</strong>
+              <strong class="society-huge">${formatObserved(vital?.births)} <small class="vital-div">/</small> ${formatObserved(vital?.deaths)}</strong>
               <span class="society-sub">nascimentos / óbitos acumulados</span>
               <div class="society-stat-meta">
                 <span>Último mês:</span>
-                <b>${lastMonthVital.births || 0} nascidos · ${lastMonthVital.deaths || 0} falecidos</b>
+                <b>${lastMonthVital ? `${formatObserved(lastMonthVital.births)} nascidos · ${formatObserved(lastMonthVital.deaths)} falecidos` : "Sem fechamento mensal observado"}</b>
               </div>
             </article>
 
             <article class="content-card society-card">
               <div class="eyebrow">MOBILIDADE E MIGRAÇÃO</div>
-              <strong class="society-huge">${cumM.net >= 0 ? '+' : ''}${cumM.net || 0}</strong>
+              <strong class="society-huge">${cumulativeMigration === null ? UNAVAILABLE : `${cumulativeMigration >= 0 ? "+" : ""}${number(cumulativeMigration)}`}</strong>
               <span class="society-sub">saldo migratório líquido acumulado</span>
               <div class="society-stat-meta">
-                <span>Imigrantes:</span>
-                <b>${d.foreignBorn || 0} (${Number(d.foreignBornShare || 0).toFixed(1)}%)</b>
+                <span>Movimento no mês observado:</span>
+                <b>${m ? `${formatObserved(m.incoming)} entradas · ${formatObserved(m.outgoing)} saídas` : UNAVAILABLE}</b>
+              </div>
+              <div class="society-stat-meta">
+                <span>Moradores nascidos fora:</span>
+                <b>${foreignBorn === null ? UNAVAILABLE : number(foreignBorn)} (${foreignBornShare === null ? UNAVAILABLE : `${number(foreignBornShare, 1)}%`})</b>
               </div>
             </article>
           </div>
@@ -593,19 +837,19 @@
               </div>
               <div class="society-bars-group">
                 <div class="society-bar-row">
-                  <div class="society-bar-label"><span>População em Idade Ativa (15 a 64 anos)</span><b>${d.workingAge || 0} hab. (${activeShare}%)</b></div>
-                  <div class="society-bar-track active-track"><span style="width:${activeShare}%"></span></div>
+                  <div class="society-bar-label"><span>População em Idade Ativa (15 a 64 anos)</span><b>${formatObserved(workingAge)} hab. (${shareLabel(activeShare)})</b></div>
+                  ${ageBar(activeShare, "active-track")}
                 </div>
                 <div class="society-bar-row">
-                  <div class="society-bar-label"><span>Crianças e Jovens (0 a 14 anos)</span><b>${d.children || 0} hab. (${childShare}%)</b></div>
-                  <div class="society-bar-track child-track"><span style="width:${childShare}%"></span></div>
+                  <div class="society-bar-label"><span>Crianças e Jovens (0 a 14 anos)</span><b>${formatObserved(children)} hab. (${shareLabel(childShare)})</b></div>
+                  ${ageBar(childShare, "child-track")}
                 </div>
                 <div class="society-bar-row">
-                  <div class="society-bar-label"><span>Idosos (65 anos ou mais)</span><b>${d.elderly || 0} hab. (${elderShare}%)</b></div>
-                  <div class="society-bar-track elder-track"><span style="width:${elderShare}%"></span></div>
+                  <div class="society-bar-label"><span>Idosos (65 anos ou mais)</span><b>${formatObserved(elderly)} hab. (${shareLabel(elderShare)})</b></div>
+                  ${ageBar(elderShare, "elder-track")}
                 </div>
               </div>
-              <div class="society-data-note">A transição demográfica e a entrada na vida adulta ocorrem organicamente a cada ciclo mensal, alimentando o mercado de trabalho do vilarejo sem inflar artificialmente a economia.</div>
+              <div class="society-data-note">A composição por idade usa a população registrada pela Sociedade. A proporção fica indisponível quando não há denominador válido.</div>
             </article>
 
             <article class="content-card">
@@ -613,7 +857,7 @@
                 <div>
                   <div class="eyebrow">DIVERSIDADE CULTURAL E INTEGRAÇÃO</div>
                   <h3>Origem dos Moradores</h3>
-                  <p>Diversidade: <b>${culture.diversityIndex.toFixed(1)}/100</b> · Integração: <b>${culture.integrationIndex !== null && culture.integrationIndex !== undefined ? culture.integrationIndex.toFixed(1) + '/100' : 'Sem migração externa'}</b></p>
+                  <p>Diversidade: <b>${formatObserved(diversityIndex, (value) => `${number(value, 1)}/100`)}</b> · Integração: <b>${integrationIndex !== null ? `${number(integrationIndex, 1)}/100` : foreignBorn === 0 ? "Sem moradores migrantes registrados" : UNAVAILABLE}</b></p>
                 </div>
               </div>
               <div class="society-bars-group">${cultureRows}</div>
@@ -637,47 +881,46 @@
       const snap = snapshot();
       if (!snap) return;
       const s = snap.raw || {};
-      const infra = s.urbanInfra || { capacity: 20, demand: snap.population, congestionRatio: 0.8, tfpFactor: 1.0 };
-      const congestion = Number(infra.congestionRatio || 1.0).toFixed(2);
-      const tfp = Math.round(Number(infra.tfpFactor || 1.0) * 100);
-      const lots = s.lotCount ?? s.lots ?? 10;
-      const buildings = s.buildings?.length || 0;
-      const housingCap = s.housingCapacity || (snap.population + 2);
-      const housingRate = housingCap > 0 ? Math.min(100, (snap.population / housingCap) * 100) : 0;
-      const marketStock = Number(s.marketStock || 0).toFixed(1);
-      const marketPrice = money(s.marketPrice || 50);
-      const servicePrice = money(s.servicePrice || 180);
-      const shortage = Number(s.lastShortage || 0);
-      const unmet = s.lastUnmetHouseholds || 0;
-      const npvLandlord = s.lastProjectNPV?.landlord?.viable ? "Viável (" + money(s.lastProjectNPV.landlord.npv) + ")" : "Cautela / Retração";
-      const npvFarm = s.lastProjectNPV?.farm?.viable ? "Viável (" + money(s.lastProjectNPV.farm.npv) + ")" : "Cautela / Retração";
+      const infra = snap.urbanInfra;
+      const hasClosedMonth = snap.history.length > 0;
+      const metricValue = (value, formatter = number) => {
+        const finite = finiteValue(value);
+        return finite === null ? UNAVAILABLE : formatter(finite);
+      };
+      const row = (label, value, formatter = number, source = "Snapshot da Economia") => {
+        const finite = finiteValue(value);
+        return `<div class="services-stat-row"><span>${escapeHtml(label)}<small class="ux-data-source">${escapeHtml(source)}</small></span><b class="${finite === null ? "is-unavailable" : ""}">${escapeHtml(finite === null ? UNAVAILABLE : formatter(finite))}</b></div>`;
+      };
+      const shortage = hasClosedMonth ? finiteValue(s.lastShortageUnits ?? s.lastShortage) : null;
+      const unmet = hasClosedMonth ? finiteValue(s.lastUnmetHouseholds) : null;
+      const housingCapacity = finiteValue(snap.housingCapacity);
+      const lots = finiteValue(snap.lots);
 
       host.innerHTML = `
         <div class="services-dashboard-content">
           <div class="services-kpi-grid">
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">HABITAÇÃO E MORADIA</div>
-              <strong>${snap.population} / ${housingCap}</strong>
-              <span>moradores / capacidade residencial</span>
-              <div class="capacity-track"><span style="width: ${housingRate.toFixed(1)}%"></span></div>
+              <div class="eyebrow">CAPACIDADE RESIDENCIAL</div>
+              <strong class="${housingCapacity === null ? "is-unavailable" : ""}">${metricValue(housingCapacity)}</strong>
+              <span>${housingCapacity === null ? "O snapshot atual não expõe capacidade habitacional." : "Capacidade agregada publicada pelo snapshot; sem localização individualizada."}</span>
             </article>
 
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">TERRENOS E EXPANSÃO</div>
-              <strong>${lots}</strong>
-              <span>lotes públicos disponíveis para obras</span>
+              <div class="eyebrow">LOTEAMENTO</div>
+              <strong class="${lots === null ? "is-unavailable" : ""}">${metricValue(lots)}</strong>
+              <span>Valor agregado de lotes no snapshot; não indica localização.</span>
             </article>
 
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">MALHA URBANA E CONGESTIONAMENTO</div>
-              <strong class="${congestion > 1.0 ? 'bad' : 'good'}">${congestion}x</strong>
-              <span>Capacidade da malha: ${infra.capacity || 20} hab. (Demanda: ${infra.demand || snap.population})</span>
+              <div class="eyebrow">CONGESTIONAMENTO URBANO</div>
+              <strong class="${finiteValue(infra?.congestionRatio) === null ? "is-unavailable" : ""}">${metricValue(infra?.congestionRatio, (value) => `${number(value, 2)}×`)}</strong>
+              <span>Razão publicada pela infraestrutura urbana.</span>
             </article>
 
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">PRODUTIVIDADE TFP URBANA</div>
-              <strong class="${tfp >= 100 ? 'good' : 'amber'}">${tfp}%</strong>
-              <span>Eficiência dos fatores e mobilidade local</span>
+              <div class="eyebrow">FATOR URBANO</div>
+              <strong class="${finiteValue(infra?.tfpFactor) === null ? "is-unavailable" : ""}">${metricValue(infra?.tfpFactor, (value) => number(value, 2))}</strong>
+              <span>Fator de produtividade publicado pelo motor; sem conversão para indicador de serviço público.</span>
             </article>
           </div>
 
@@ -685,35 +928,35 @@
             <article class="content-card">
               <div class="section-heading compact-heading">
                 <div>
-                  <div class="eyebrow">ABASTECIMENTO E COMÉRCIO</div>
-                  <h3>Segurança Alimentar e Serviços Básicos</h3>
-                  <p>Condição de abastecimento de cestas essenciais e serviços gerais.</p>
+                  <div class="eyebrow">MERCADO LOCAL</div>
+                  <h3>Abastecimento observado</h3>
+                  <p>Estoque e preços do mercado da simulação, sem confundi-los com cobertura de serviço público.</p>
                 </div>
               </div>
               <div class="services-stat-list">
-                <div class="services-stat-row"><span>Estoque de alimentos no comércio local</span><b>${marketStock} unidades</b></div>
-                <div class="services-stat-row"><span>Preço da cesta básica alimentar</span><b>${marketPrice}</b></div>
-                <div class="services-stat-row"><span>Tarifa da oficina e serviços locais</span><b>${servicePrice}</b></div>
-                <div class="services-stat-row"><span>Situação do abastecimento alimentar</span><b class="${shortage > 0 ? 'bad' : 'good'}">${shortage > 0 ? 'Escassez parcial' : 'Totalmente abastecido'}</b></div>
-                <div class="services-stat-row"><span>Famílias afetadas por racionamento</span><b class="${unmet > 0 ? 'bad' : 'good'}">${unmet}</b></div>
+                ${row("Estoque comercial", s.marketStock, (value) => `${number(value, 1)} unidades`)}
+                ${row("Preço de mercado", s.marketPrice, money)}
+                ${row("Preço de serviços locais", s.servicePrice, money)}
+                ${row("Déficit de oferta no último fechamento", shortage, (value) => `${number(value, 1)} unidade(s)`)}
+                ${row("Domicílios afetados no último fechamento", unmet, number)}
               </div>
             </article>
 
             <article class="content-card">
               <div class="section-heading compact-heading">
                 <div>
-                  <div class="eyebrow">OBRAS E MANUTENÇÃO URBANA</div>
-                  <h3>Capacidade Construtiva e Expansão</h3>
-                  <p>Obras públicas em andamento e viabilidade financeira de projetos.</p>
+                  <div class="eyebrow">INFRAESTRUTURA DISPONÍVEL</div>
+                  <h3>Valores agregados do motor</h3>
+                  <p>Dados sem geometrias públicas; não representam obras, ruas ou instalações individualizadas.</p>
                 </div>
               </div>
               <div class="services-stat-list">
-                <div class="services-stat-row"><span>Obras de moradia em construção</span><b>${buildings} obra(s)</b></div>
-                <div class="services-stat-row"><span>Manutenção predial e urbana</span><b>Contratos ativos com a oficina local</b></div>
-                <div class="services-stat-row"><span>Prestação de serviços mecânicos e reparos</span><b>Oficina operacional permanente</b></div>
-                <div class="services-stat-row"><span>Viabilidade VPL Imobiliário (14k)</span><b class="${s.lastProjectNPV?.landlord?.viable ? 'good' : 'bad'}">${npvLandlord}</b></div>
-                <div class="services-stat-row"><span>Viabilidade VPL Lote Agrícola (8k)</span><b class="${s.lastProjectNPV?.farm?.viable ? 'good' : 'bad'}">${npvFarm}</b></div>
+                ${row("Capacidade urbana", infra?.capacity)}
+                ${row("Demanda urbana", infra?.demand)}
+                ${row("Lotes agregados", s.lotCount, number)}
+                ${row("Caixa público", s.treasuryCash, money)}
               </div>
+              <div class="ux-public-services-unavailable"><strong>Indicadores de serviços públicos: indisponíveis</strong><p>Saúde, educação e segurança não têm séries próprias publicadas pela referência atual; nenhum índice é estimado.</p></div>
             </article>
           </div>
         </div>
@@ -823,6 +1066,7 @@
     const data = snapshot();
     if (!data) return;
     lastSnapshot = data;
+    syncDecisionRunLifecycle(data);
     refreshStatus(data);
     refreshAlerts();
     refreshMap(data);
@@ -842,6 +1086,116 @@
         }
     }
     refreshDomainPanels();
+  }
+
+  function captureDecisionClick(event) {
+    if (!decisionObserver || !event?.target?.closest) return;
+    const button = event.target.closest("#actions button, #eventOptions button[data-choice]");
+    if (!button || button.disabled) return;
+    const data = snapshot();
+    const monthNumber = finiteValue(data?.monthNumber);
+    if (!data?.runId || monthNumber === null) return;
+    syncDecisionRunLifecycle(data);
+
+    const eventChoice = Boolean(button.closest("#eventOptions"));
+    const eventTitle = eventChoice ? $("eventTitle")?.textContent?.trim() : "";
+    const labelText = String(button.textContent || "").replace(/\s+/g, " ").trim();
+    if (!labelText) return;
+    const label = eventChoice && eventTitle ? `${eventTitle}: ${labelText}` : labelText;
+    const contextParts = [];
+    if (eventChoice && $("eventText")?.textContent?.trim()) contextParts.push($("eventText").textContent.trim());
+    if (button.title?.trim()) contextParts.push(button.title.trim());
+    let token;
+    try {
+      token = decisionObserver.begin({
+        runId: data.runId,
+        source: eventChoice ? "event" : "action",
+        label,
+        context: contextParts.join(" ") || undefined,
+        monthNumber,
+        day: finiteValue(data.day) ?? undefined,
+        measures: decisionMeasures(data)
+      });
+    } catch (error) {
+      console.warn("Não foi possível registrar a escolha:", error);
+      return;
+    }
+
+    window.setTimeout(() => {
+      const after = snapshot();
+      if (after?.runId === data.runId) decisionObserver.recordImmediate(token, decisionMeasures(after));
+      refreshActiveView();
+    }, 0);
+  }
+
+  let eventModalWasOpen = false;
+  let previousModalFocus = null;
+
+  function syncEventModalVisibility() {
+    const modal = $("event");
+    if (!modal || typeof document === "undefined") return;
+    const isOpen = !modal.classList.contains("hidden");
+    if (isOpen && !eventModalWasOpen) {
+      previousModalFocus = document.activeElement;
+      document.body?.classList.add("event-modal-open");
+      eventModalWasOpen = true;
+      window.setTimeout(() => {
+        const choice = $("eventOptions")?.querySelector("button:not([disabled])");
+        const title = $("eventTitle");
+        if (choice) choice.focus();
+        else if (title) {
+          title.setAttribute("tabindex", "-1");
+          title.focus();
+        }
+      }, 0);
+    } else if (!isOpen && eventModalWasOpen) {
+      document.body?.classList.remove("event-modal-open");
+      eventModalWasOpen = false;
+      if (previousModalFocus?.isConnected) previousModalFocus.focus();
+      previousModalFocus = null;
+    }
+  }
+
+  function trapEventModalFocus(event) {
+    if (!eventModalWasOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const modal = $("event");
+    const focusable = Array.from(modal?.querySelectorAll("button:not([disabled]), [tabindex='0']") || [])
+      .filter((element) => element.offsetParent !== null);
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function initDecisionTracking() {
+    if (typeof document === "undefined" || !window.VilarejoDecisionObserver?.createDecisionObserver) return;
+    decisionObserver = window.VilarejoDecisionObserver.createDecisionObserver();
+    document.addEventListener("click", captureDecisionClick, true);
+  }
+
+  function initEventModal() {
+    const modal = $("event");
+    if (!modal || typeof document === "undefined") return;
+    if (typeof window.MutationObserver === "function") {
+      const observer = new window.MutationObserver(syncEventModalVisibility);
+      observer.observe(modal, { attributes: true, attributeFilter: ["class"] });
+    }
+    document.addEventListener("keydown", trapEventModalFocus);
+    syncEventModalVisibility();
   }
 
   function initNavigation() {
@@ -914,10 +1268,7 @@
     if (!map) return;
     map.querySelectorAll("[data-district]").forEach((district) => {
       const selectDistrict = () => {
-        map.querySelectorAll("[data-district]").forEach((item) => item.classList.remove("selected"));
-        district.classList.add("selected");
-        const label = $("districtLabel");
-        if (label) label.textContent = district.dataset.district;
+        selectMapSector(district.dataset.district);
       };
       district.addEventListener("click", selectDistrict);
       district.addEventListener("keydown", (event) => {
@@ -928,14 +1279,28 @@
 
   function initEventSubscriptions() {
     if (typeof window !== "undefined" && window.VilarejoRuntime && window.VilarejoRuntime.events) {
+      const handleMonthClosure = () => {
+        const data = snapshot();
+        if (decisionObserver && data?.runId) {
+          const currentRecord = data.history[data.history.length - 1];
+          const monthNumber = finiteValue(currentRecord?.month) ?? finiteValue(data.monthNumber);
+          if (monthNumber !== null && monthNumber > 0) {
+            decisionObserver.observeMonthClose({
+              runId: data.runId,
+              monthNumber,
+              day: finiteValue(data.day) ?? undefined,
+              measures: decisionMeasures(data)
+            });
+          }
+        }
+        refreshAlerts();
+        refresh();
+      };
       window.VilarejoRuntime.events.on("world:synchronized", () => {
         refreshAlerts();
         refresh();
       });
-      window.VilarejoRuntime.events.on("economy:month-closed", () => {
-        refreshAlerts();
-        refresh();
-      });
+      window.VilarejoRuntime.events.on("economy:month-closed", handleMonthClosure);
       window.VilarejoRuntime.events.on("intelligence:month-closed", () => {
         refreshAlerts();
         refresh();
@@ -956,6 +1321,8 @@
   function init() {
     initNavigation();
     initMapDetails();
+    initDecisionTracking();
+    initEventModal();
     initEventSubscriptions();
     refreshAlerts();
     setView(activeView);
@@ -979,6 +1346,8 @@
       setView,
       setGovTab,
       getSnapshot: snapshot,
+      selectMapSector,
+      getDecisionRecords: () => decisionObserver ? decisionObserver.getRecords() : [],
       recordMonthClosure,
       refreshAlerts
     };
@@ -1006,6 +1375,8 @@
       setView,
       setGovTab,
       getSnapshot: snapshot,
+      selectMapSector,
+      getDecisionRecords: () => decisionObserver ? decisionObserver.getRecords() : [],
       recordMonthClosure,
       refreshAlerts
     };
