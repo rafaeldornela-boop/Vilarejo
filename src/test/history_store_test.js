@@ -71,6 +71,24 @@ test("retorna séries numéricas por caminho de métrica", () => {
   );
 });
 
+test("preserva metadados de qualidade e proveniência fora das métricas", () => {
+  const store = createHistoryStore();
+  store.append({
+    ...snapshot(0, { population: 10 }),
+    metadata: {
+      day: 150,
+      metricQuality: { qualityOfLifeScore: "provisório; cobertura 25%" },
+      sources: { population: "Core" }
+    }
+  });
+  const record = store.getLatest();
+  assert.equal(record.metrics.population, 10);
+  assert.equal(record.metadata.day, 150);
+  assert.equal(record.metadata.metricQuality.qualityOfLifeScore, "provisório; cobertura 25%");
+  assert.equal(record.metadata.sources.population, "Core");
+  assert.equal(store.getSeries("population")[0].value, 10);
+});
+
 test("limita histórico sem alterar a ordem", () => {
   const store = createHistoryStore({ maxRecords: 2 });
   store.appendMany([

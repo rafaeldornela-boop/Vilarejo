@@ -9,6 +9,7 @@ const ROOT = path.join(__dirname, "../../");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const coreCode = fs.readFileSync(path.join(ROOT, "src/core/vilarejo_core.js"), "utf8");
 const historyStoreCode = fs.readFileSync(path.join(ROOT, "src/shared/vilarejo_history_store.js"), "utf8");
+const intelligenceCode = fs.readFileSync(path.join(ROOT, "src/intelligence/vilarejo_intelligence.js"), "utf8");
 const dashboardCode = fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8");
 
 let passed = 0;
@@ -103,7 +104,8 @@ function createDOMContext() {
       }
       if (selector === ".gov-tab-pane") {
         return ["executivo", "camara", "politica"].map((tab) => {
-          const el = makeMockElement(`gov-tab-${tab}`);
+          const el = getElementById(`gov-tab-${tab}`);
+          el.dataset.govPane = tab;
           return el;
         });
       }
@@ -153,6 +155,7 @@ function createDOMContext() {
   vm.createContext(context);
   vm.runInContext(coreCode, context, { filename: "vilarejo_core.js" });
   vm.runInContext(historyStoreCode, context, { filename: "vilarejo_history_store.js" });
+  vm.runInContext(intelligenceCode, context, { filename: "vilarejo_intelligence.js" });
   vm.runInContext(dashboardCode, context, { filename: "dashboard.js" });
 
   return context;
@@ -193,14 +196,23 @@ test("index.html carrega o histórico compartilhado antes do dashboard", () => {
   assert.ok(histIdx < dashIdx, "Histórico compartilhado é carregado antes do dashboard");
 });
 
-test("Dashboard instancia singleton compartilhado em window.VilarejoSharedHistoryStore", () => {
+test("Central usa o contrato HistoryStore por execução sem criar repositório paralelo no dashboard", () => {
   const ctx = createDOMContext();
-  const store = ctx.window.VilarejoDashboard.getSharedHistoryStore();
-  assert.ok(store, "Store foi instanciado com sucesso");
-  assert.equal(store, ctx.window.VilarejoSharedHistoryStore, "Mesma referência global única");
-  assert.equal(typeof store.append, "function", "Store possui método append");
-  assert.equal(typeof store.getRecords, "function", "Store possui método getRecords");
-  assert.equal(typeof store.removeSession, "function", "Store possui método removeSession");
+  const storage = { value: null, getItem() { return this.value; }, setItem(_key, value) { this.value = value; } };
+  const service = ctx.window.VilarejoIntelligence.createService({
+    storage,
+    idFactory: () => "partida-alfa",
+    capture: (payload) => ({ ...payload, month: payload.monthNumber, metrics: payload.metrics })
+  });
+  const record = service.recordMonthClosure({ monthNumber: 1, day: 150, metrics: { population: 11 } });
+  assert.equal(record.month, 1);
+  assert.equal(service.getRunHistory("partida-alfa")[0].metrics.population, 11);
+  assert.equal(service.getHistoryStoreSnapshot("partida-alfa").activeSessionId, "partida-alfa");
+  const saved = JSON.parse(storage.value);
+  assert.equal(saved.runs[0].records, undefined, "Snapshots não ficam em arrays paralelos");
+  assert.equal(saved.runs[0].historySnapshot.records.length, 1);
+  assert.equal(ctx.window.VilarejoSharedHistoryStore, undefined, "Dashboard não instancia segunda store");
+  assert.equal(typeof ctx.window.VilarejoHistoryStore.createHistoryStore, "function");
 });
 
 test("Dashboard utiliza session.id do Core e não depende de session.startTime", () => {
@@ -218,42 +230,19 @@ test("Dashboard utiliza session.id do Core e não depende de session.startTime",
   const snap = ctx.window.VilarejoTest.stateSnapshot();
   assert.equal(snap.sessionId, "session-1", "Session ID corresponde à API atual do Core (session-1)");
   assert.equal(runtime.snapshot().session.startTime, undefined, "Core não possui session.startTime");
+  assert.equal(ctx.window.VilarejoDashboard.getSnapshot().sessionId, "session-1", "Dashboard identifica a execução pela API pública do Core");
 });
 
-test("Fechamento mensal grava histórico isolado por sessionId na store compartilhada", () => {
+test("Dashboard encaminha o fechamento à Central sem produzir um segundo snapshot", () => {
   const ctx = createDOMContext();
-  const store = ctx.window.VilarejoDashboard.getSharedHistoryStore();
-
-  ctx.window.VilarejoTest = {
-    stateSnapshot: () => ({
-      day: 150,
-      monthNumber: 5,
-      sessionId: "partida-alfa",
-      approval: 75,
-      costOfLivingIndex: 102
-    }),
-    getCoreSnapshot: () => ({
-      session: { id: "partida-alfa" },
-      calendar: { absoluteDay: 150, economicMonthNumber: 5 }
-    }),
-    getLaborStats: () => ({ occupied: 8, unemployedSeeking: 1, outOfLaborForce: 2, unemploymentRate: 11.1 }),
-    calculateFiscalReport: () => ({ primaryResult: 450, tributaryRevenue: 1200, primaryExpenditure: 750 }),
-    calculateNationalAccounts: () => ({ approaches: { production: 15000 } }),
-    generateBalanceSheets: () => ({ government: { liabilities: 200 } })
+  const payload = { monthNumber: 5, day: 150 };
+  let received = null;
+  ctx.window.VilarejoIntelligenceRuntime = {
+    service: { recordMonthClosure(value) { received = value; return { month: value.monthNumber }; } }
   };
-
-  ctx.window.VilarejoDashboard.recordMonthClosure({ monthNumber: 5, day: 150 });
-
-  const recordsAlfa = store.getRecords({ sessionId: "partida-alfa" });
-  assert.equal(recordsAlfa.length, 1, "Um registro adicionado para partida-alfa");
-  assert.equal(recordsAlfa[0].sessionId, "partida-alfa");
-  assert.equal(recordsAlfa[0].period.monthNumber, 5);
-  assert.equal(recordsAlfa[0].metrics.gdp, 15000);
-  assert.equal(recordsAlfa[0].metrics.approval, 75);
-
-  // Consulta por outra sessão não retorna dados da primeira
-  const recordsBeta = store.getRecords({ sessionId: "partida-beta" });
-  assert.equal(recordsBeta.length, 0, "Partida beta isolada não recebe dados de partida alfa");
+  assert.equal(ctx.window.VilarejoDashboard.recordMonthClosure(payload).month, 5);
+  assert.equal(received, payload);
+  assert.equal(ctx.window.VilarejoSharedHistoryStore, undefined);
 });
 
 test("Navegação setView suporta as 8 telas e mapeia legados institutions e politics para Governo", () => {
@@ -268,6 +257,12 @@ test("Navegação setView suporta as 8 telas e mapeia legados institutions e pol
 
   dash.setView("newspaper");
   assert.equal(ctx.document.getElementById("pageTitle").textContent, "Jornal do Vilarejo");
+
+  dash.setView("government");
+  dash.setGovTab("camara");
+  assert.equal(ctx.document.getElementById("gov-tab-camara").classList.contains("active"), true);
+  dash.setGovTab("politica");
+  assert.equal(ctx.document.getElementById("gov-tab-politica").classList.contains("active"), true);
 
   // Alias retrocompatível
   dash.setView("institutions");
@@ -287,6 +282,7 @@ test("Central de Alertas consome serviço real e atualiza badge e painel", () =>
   const count0 = ctx.document.getElementById("topbarAlertCount");
   assert.equal(count0.textContent, "0");
   assert.equal(badge0.classList.contains("has-alerts"), false);
+  assert.equal(badge0.classList.contains("hidden"), true);
 
   // Com serviço de inteligência retornando alertas reais
   ctx.window.VilarejoIntelligenceRuntime = {
@@ -298,6 +294,7 @@ test("Central de Alertas consome serviço real e atualiza badge e painel", () =>
           title: "Alta persistente do desemprego",
           message: "Taxa observada de 18% excede o limiar de alerta.",
           severity: "critico",
+          status: "ativo",
           occurrenceMonth: 6
         }
       ]
@@ -307,16 +304,17 @@ test("Central de Alertas consome serviço real e atualiza badge e painel", () =>
   dash.refreshAlerts();
   assert.equal(count0.textContent, "1");
   assert.equal(badge0.classList.contains("has-alerts"), true);
+  assert.equal(badge0.classList.contains("hidden"), false);
   const container = ctx.document.getElementById("overviewAlertsContainer");
   assert.ok(container.innerHTML.includes("Alta persistente do desemprego"), "Título do alerta exibido");
   assert.ok(container.innerHTML.includes("severity-critico"), "Classe de severidade crítica aplicada");
 });
 
-test("Empty states seguros são exibidos quando Inteligência ou Jornal não possuem módulo", () => {
+test("Empty states seguros são exibidos quando os renderizadores de Inteligência ou Jornal não estão disponíveis", () => {
   const ctx = createDOMContext();
   const dash = ctx.window.VilarejoDashboard;
 
-  // Intelligence view sem window.VilarejoIntelligence
+  // Sem renderer de visualização de Inteligência
   dash.setView("intelligence");
   const intelHost = ctx.document.getElementById("intelligenceDashboard");
   assert.ok(intelHost.innerHTML.includes("Central de Inteligência"), "Título do empty state presente");

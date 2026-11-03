@@ -36,6 +36,12 @@
     return new Date(Date.UTC(Number(year) || 2026, Number(month) || 1, 0)).getUTCDate();
   }
 
+  let visibleMonths = 12;
+  let activeView = "overview";
+  let activeGovTab = "executivo";
+  let lastSnapshot = null;
+  let lastChartSignature = "";
+
   function getFirstWeekdayOfMonth(year, month) {
     // month: 1..12; returns 0=Segunda, 1=Terça, ..., 6=Domingo
     const day = new Date(Date.UTC(Number(year) || 2026, (Number(month) || 1) - 1, 1)).getUTCDay();
@@ -101,24 +107,6 @@
   }
 
   const getCivilDateInfo = simulationDayToCivilDate;
-
-  let visibleMonths = 12;
-  let activeView = "overview";
-  let activeGovTab = "executivo";
-  let lastSnapshot = null;
-  let lastChartSignature = "";
-  const monthlyHistory = [];
-
-  function getSharedHistoryStore() {
-    if (typeof window !== "undefined") {
-      if (!window.VilarejoSharedHistoryStore && window.VilarejoHistoryStore && typeof window.VilarejoHistoryStore.createHistoryStore === "function") {
-        window.VilarejoSharedHistoryStore = window.VilarejoHistoryStore.createHistoryStore({ maxRecords: 240 });
-      }
-      return window.VilarejoSharedHistoryStore || null;
-    }
-    return null;
-  }
-
   // Estado de navegação do calendário civil
   let viewedCivilYear = 2026;
   let viewedCivilMonth = 5; // 1..12
@@ -153,7 +141,7 @@
           sessionId: currentSessionId,
           gameOver: s?.gameOver || null,
           running: core?.session?.status === "running",
-          history: monthlyHistory,
+          history: window.VilarejoIntelligenceRuntime?.service?.getCurrentHistory?.() || [],
           population: pop,
           housingCapacity: s?.housingCapacity || (pop + 2),
           buildings: s?.buildings?.length || 0,
@@ -180,86 +168,7 @@
   }
 
   function recordMonthClosure(payload) {
-    if (!payload || typeof window === "undefined" || !window.VilarejoTest || typeof window.VilarejoTest.stateSnapshot !== "function") return;
-    try {
-      const s = window.VilarejoTest.stateSnapshot();
-      const core = typeof window.VilarejoTest.getCoreSnapshot === "function"
-        ? window.VilarejoTest.getCoreSnapshot()
-        : (window.VilarejoRuntime?.snapshot() || null);
-      const labor = typeof window.VilarejoTest.getLaborStats === "function" ? window.VilarejoTest.getLaborStats() : s?.laborStats;
-      const fiscal = typeof window.VilarejoTest.calculateFiscalReport === "function" ? window.VilarejoTest.calculateFiscalReport() : s?.fiscalReport;
-      const macro = typeof window.VilarejoTest.calculateNationalAccounts === "function" ? window.VilarejoTest.calculateNationalAccounts() : s?.nationalAccounts;
-      const bs = typeof window.VilarejoTest.generateBalanceSheets === "function" ? window.VilarejoTest.generateBalanceSheets() : s?.balanceSheets;
-
-      const month = payload.monthNumber || s?.monthNumber || (monthlyHistory.length + 1);
-      const existing = monthlyHistory.find((entry) => entry.month === month);
-
-      const entry = {
-        month,
-        label: "Mês " + month,
-        gdp: macro?.approaches?.production ?? (macro?.gdp ?? (s?.lastNationalAccounts?.approaches?.production || 0)),
-        unemployment: labor?.unemploymentRate ?? (s?.unemploymentHistory?.[s?.unemploymentHistory?.length - 1] || 0),
-        approval: s?.approval ?? 50,
-        costIndex: s?.costOfLivingIndex ?? 100,
-        realWageIndex: Math.round(((s?.wage || 1800) / ((s?.costOfLivingIndex || 100) / 100)) / 18),
-        primaryResult: fiscal?.primaryResult ?? 0,
-        inflation: s?.monthlyInflation ?? 0,
-        consumption: s?.lastConsumption ?? ((s?.lastFoodConsumption || 0) + (s?.lastServiceConsumption || 0)),
-        population: payload.population?.total ?? (labor ? (labor.occupied + labor.unemployedSeeking + labor.outOfLaborForce) : 10),
-        taxRevenue: fiscal?.tributaryRevenue ?? 0,
-        primaryExpenditure: fiscal?.primaryExpenditure ?? 0,
-        governmentDebt: bs?.government?.liabilities ?? 0,
-        incomeGini: 28.5
-      };
-
-      if (existing) {
-        Object.assign(existing, entry);
-      } else {
-        monthlyHistory.push(entry);
-      }
-      if (monthlyHistory.length > 60) monthlyHistory.shift();
-
-      // Gravação no histórico compartilhado persistente
-      const store = getSharedHistoryStore();
-      if (store) {
-        const currentSimDay = Math.max(1, Math.round(Number(payload?.day || s?.day || (core?.calendar?.absoluteDay ?? 149))));
-        const todayInfo = simulationDayToCivilDate(currentSimDay);
-        const activeSessionId = (core?.session?.id || s?.sessionId || "session-1").toString();
-        store.setActiveSession(activeSessionId);
-        try {
-          store.append({
-            sessionId: activeSessionId,
-            period: {
-              monthNumber: month,
-              absoluteDay: currentSimDay,
-              year: todayInfo.economicYear,
-              month: todayInfo.economicMonth,
-              label: "Mês " + month
-            },
-            metrics: {
-              gdp: entry.gdp,
-              unemployment: entry.unemployment,
-              approval: entry.approval,
-              costIndex: entry.costIndex,
-              realWageIndex: entry.realWageIndex,
-              primaryResult: entry.primaryResult,
-              inflation: entry.inflation,
-              consumption: entry.consumption,
-              population: entry.population,
-              taxRevenue: entry.taxRevenue,
-              primaryExpenditure: entry.primaryExpenditure,
-              governmentDebt: entry.governmentDebt,
-              incomeGini: entry.incomeGini
-            },
-            source: "economy:month-closed"
-          });
-        } catch (storeErr) {
-          console.warn("Aviso ao salvar no histórico compartilhado:", storeErr);
-        }
-      }
-    } catch (e) {
-      console.warn("Erro ao registrar fechamento mensal no histórico:", e);
-    }
+    return window.VilarejoIntelligenceRuntime?.service?.recordMonthClosure?.(payload) || null;
   }
 
   function setView(name, subTab) {
@@ -290,6 +199,8 @@
       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
       government: ["Governo", "Câmara de representação, coalizões, grupos de poder e políticas públicas."],
       services: ["Serviços públicos", "Infraestrutura urbana, abastecimento, habitação e obras."],
+      politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
+      institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
       intelligence: ["Central de Inteligência", "Análise preditiva, sinais de risco e leitura integrada da simulação."],
       newspaper: ["Jornal do Vilarejo", "Notícias, crônicas e fatos da comunidade a cada mês."],
       records: ["Histórico", "Decisões, acontecimentos e movimentações financeiras."]
@@ -316,7 +227,7 @@
       btn.setAttribute("aria-selected", isSelected ? "true" : "false");
     });
     document.querySelectorAll(".gov-tab-pane").forEach((pane) => {
-      pane.classList.toggle("active", pane.id === `gov-tab-${activeGovTab}`);
+      pane.classList.toggle("active", pane.dataset.govPane === activeGovTab || pane.id === `gov-tab-${activeGovTab}`);
     });
     renderGovernmentSubView();
   }
@@ -350,22 +261,25 @@
     if (!host || typeof window === "undefined") return;
     try {
       const instRuntime = window.VilarejoInstitutionsRuntime;
-      const polRuntime = window.VilarejoPoliticsRuntime;
-      const instState = instRuntime?.state;
-      const polState = polRuntime?.state;
-
-      const seats = instState?.seats || {};
-      const totalSeats = instState?.totalSeats || 21;
-      const neededMajority = instState?.neededMajority || 11;
-      const coalition = instState?.coalition || [];
-      const status = instState?.status || "not_formed";
-      const monthInTerm = instState?.monthInTerm || 1;
-      const termMonths = instState?.termMonths || 48;
-      const remainingMonths = Math.max(0, termMonths - monthInTerm);
-
-      let coalitionSeats = 0;
-      coalition.forEach((gid) => { coalitionSeats += (seats[gid] || 0); });
-      const oppositionSeats = Math.max(0, totalSeats - coalitionSeats);
+      const instState = instRuntime?.getSnapshot?.() || instRuntime?.state || {};
+      const legislature = instState.legislature || {};
+      const coalitionData = instState.coalition || {};
+      const summary = instState.summary || {};
+      const totalSeats = Number(legislature.totalSeats || summary.totalSeats || instState.settings?.totalSeats || 21);
+      const neededMajority = Number(legislature.majoritySeats || summary.quorumSeats || Math.floor(totalSeats / 2) + 1);
+      const coalitionIds = Array.isArray(coalitionData.groupIds) ? coalitionData.groupIds : [];
+      const coalitionGroups = Array.isArray(coalitionData.groups) ? coalitionData.groups : [];
+      const coalitionCount = coalitionIds.length || coalitionGroups.length;
+      const coalitionSeats = Number(coalitionData.seats ?? summary.coalitionSeats ?? 0);
+      const status = coalitionData.status || summary.coalitionStatus || "not_formed";
+      const termMonths = Number(instState.settings?.termMonths || 48);
+      const currentMonth = Number(instState.currentMonth || 0);
+      const nextElectionMonth = Number(instState.nextElectionMonth || currentMonth + termMonths);
+      const monthInTerm = Math.max(1, currentMonth - (nextElectionMonth - termMonths) + 1);
+      const remainingMonths = Math.max(0, nextElectionMonth - currentMonth);
+      const oppositionSeats = Number(
+        instState.alignment?.oppositionSeats ?? instState.opposition?.seats ?? Math.max(0, totalSeats - coalitionSeats)
+      );
 
       const statusBadge = status === "majority"
         ? '<span class="gov-badge is-majority">Maioria absoluta</span>'
@@ -386,7 +300,7 @@
             <div class="gov-kpi-item">
               <small>BASE DO GOVERNO</small>
               <strong>${coalitionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
-              <span>${coalition.length > 0 ? coalition.length + ' grupo(s) na coalizão' : 'Nenhum grupo coligado'}</span>
+              <span>${coalitionCount > 0 ? coalitionCount + ' grupo(s) na coalizão' : 'Nenhum grupo coligado'}</span>
             </div>
             <div class="gov-kpi-item">
               <small>OPOSIÇÃO / INDEPENDENTES</small>
@@ -464,6 +378,11 @@
         '</strong><span>Os pontos surgem a cada fechamento mensal. Nenhum dado anterior foi inventado.</span></div>';
       return;
     }
+    const hasSeriesData = rows.some((row) => series.some((item) => Number.isFinite(Number(row[item.key]))));
+    if (!hasSeriesData) {
+      target.innerHTML = '<div class="chart-empty"><span class="chart-empty-mark">⌁</span><strong>Indicador sem histórico disponível</strong><span>Esta referência não produz uma série para este indicador; nenhum valor foi estimado.</span></div>';
+      return;
+    }
 
     const width = 760;
     const height = 248;
@@ -515,22 +434,7 @@
   }
 
   function refreshCharts(data) {
-    let history = data.history || [];
-    const store = getSharedHistoryStore();
-    if (store && data.sessionId) {
-      try {
-        const records = store.getRecords({ sessionId: data.sessionId, limit: visibleMonths });
-        if (records && records.length > 0) {
-          history = records.map((r) => ({
-            month: r.period?.monthNumber ?? 0,
-            label: r.period?.label || ("Mês " + (r.period?.monthNumber ?? 0)),
-            ...r.metrics
-          }));
-        }
-      } catch (err) {
-        console.warn("Aviso ao consultar histórico compartilhado:", err);
-      }
-    }
+    const history = Array.isArray(data.history) ? data.history : [];
     makeChart("chart-gdp", [
       { key: "gdp", label: "PIB mensal", className: "series-green" }
     ], history, compact, "O PIB histórico começa no primeiro fechamento");
@@ -983,10 +887,13 @@
       }
     }
 
-    const activeAlerts = Array.isArray(alerts) ? alerts : [];
+    const activeAlerts = Array.isArray(alerts)
+      ? alerts.filter((alert) => alert && alert.status === "ativo" && alert.severity !== "informativo")
+      : [];
     const alertCount = activeAlerts.length;
 
     if (badge) {
+      badge.classList.toggle("hidden", alertCount === 0);
       badge.classList.toggle("has-alerts", alertCount > 0);
       badge.title = alertCount > 0
         ? `${alertCount} alerta(s) na Central de Inteligência`
@@ -997,6 +904,7 @@
     }
 
     if (container) {
+      container.classList.toggle("hidden", alertCount === 0);
       if (alertCount > 0) {
         const itemsHtml = activeAlerts.slice(0, 3).map((a) => {
           const sev = (a.severity || "").toLowerCase();
@@ -1043,7 +951,7 @@
                 Central de Inteligência →
               </button>
             </div>
-            <p class="society-muted" style="margin-top:0.35rem">Nenhum alerta crítico ativo. Os indicadores econômicos e sociais operam dentro das referências de normalidade.</p>
+            <p class="society-muted" style="margin-top:0.35rem">Nenhum alerta persistente ativo entre os indicadores observados. Dados ausentes permanecem indisponíveis e não são tratados como normais.</p>
           </div>
         `;
       }
@@ -1156,29 +1064,19 @@
         refreshAlerts();
         refresh();
       });
-      window.VilarejoRuntime.events.on("economy:month-closed", (event) => {
-        recordMonthClosure(event?.payload);
+      window.VilarejoRuntime.events.on("economy:month-closed", () => {
         refreshAlerts();
         refresh();
       });
       window.VilarejoRuntime.events.on("intelligence:month-closed", () => {
         refreshAlerts();
-        refreshActiveView();
+        refresh();
       });
       window.VilarejoRuntime.events.on("game:initialized", () => {
-        monthlyHistory.length = 0;
         refreshAlerts();
         refresh();
       });
-      window.VilarejoRuntime.events.on("game:reset", (event) => {
-        monthlyHistory.length = 0;
-        const sid = event?.payload?.sessionId || lastSnapshot?.sessionId;
-        const store = getSharedHistoryStore();
-        if (store && sid) {
-          try {
-            store.removeSession(sid);
-          } catch (_) {}
-        }
+      window.VilarejoRuntime.events.on("game:reset", () => {
         refreshAlerts();
         refresh();
       });
@@ -1212,9 +1110,9 @@
       refresh,
       setView,
       setGovTab,
+      getSnapshot: snapshot,
       recordMonthClosure,
-      refreshAlerts,
-      getSharedHistoryStore
+      refreshAlerts
     };
     if (typeof document !== "undefined") {
       if (document.readyState === "loading") {
@@ -1239,9 +1137,9 @@
       refresh,
       setView,
       setGovTab,
+      getSnapshot: snapshot,
       recordMonthClosure,
-      refreshAlerts,
-      getSharedHistoryStore
+      refreshAlerts
     };
   }
 })();
