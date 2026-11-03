@@ -226,310 +226,34 @@
       overview: ["Visão geral", "O que mudou, o que merece atenção e quais decisões estão disponíveis."],
       economy: ["Economia", "Produção, preços, trabalho e atividade ao longo do tempo."],
       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
-      government: ["Governo", "Câmara de representação, coalizões, grupos de poder e políticas públicas."],
-      services: ["Serviços", "Infraestrutura urbana e indicadores que o motor realmente publica."],
-      politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
-      institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
-      intelligence: ["Central de Inteligência", "Tendências, alertas e séries históricas observadas na simulação."],
-      newspaper: ["Jornal do Vilarejo", "Notícias, crônicas e fatos da comunidade a cada mês."],
-      records: ["Histórico", "Decisões, acontecimentos e movimentações registrados por execução."]
+      politics: ["Política", "Grupos de interesse, influência, satisfação e relações com o governo."],
+      institutions: ["Instituições", "Representação, bancadas, coalizões, oposição e mandatos."],
+      services: ["Serviços e desenvolvimento", "Capacidade pública, bem-estar, infraestrutura e recursos estratégicos."],
+      government: ["Governo", "Políticas, orçamento e patrimônio público."],
+      records: ["Registros", "Decisões, acontecimentos e movimentações financeiras."]
     };
     const item = titles[name] || titles.overview;
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
     if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "Panorama do município" : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
-
-    if (subTab && name === "government") {
-      setGovTab(subTab);
-    } else {
-      refreshActiveView();
-    }
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    refreshDomainPanels();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function setGovTab(tabName) {
-    activeGovTab = tabName || "executivo";
-    if (typeof document === "undefined") return;
-    document.querySelectorAll("[data-gov-tab]").forEach((btn) => {
-      const isSelected = btn.dataset.govTab === activeGovTab;
-      btn.classList.toggle("active", isSelected);
-      btn.setAttribute("aria-selected", isSelected ? "true" : "false");
-    });
-    document.querySelectorAll(".gov-tab-pane").forEach((pane) => {
-      pane.classList.toggle("active", pane.dataset.govPane === activeGovTab || pane.id === `gov-tab-${activeGovTab}`);
-    });
-    renderGovernmentSubView();
-  }
-
-  function renderGovernmentSubView() {
-    if (activeGovTab === "executivo") {
-      renderGovernmentOverview();
-    } else if (activeGovTab === "camara") {
-      const host = $("institutionsDashboard");
-      if (host) {
-        if (typeof window !== "undefined" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
-          window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
-        } else if (!host.children.length) {
-          host.innerHTML = '<div class="module-empty-state"><div class="module-empty-icon">▥</div><h3>Câmara Municipal</h3><p>A representação parlamentar e formação de coalizão estarão disponíveis com a sincronização institucional.</p></div>';
-        }
-      }
-    } else if (activeGovTab === "politica") {
+  function refreshDomainPanels() {
+    if (activeView === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
       const host = $("politicsDashboard");
+      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+    }
+    if (activeView === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+      const host = $("institutionsDashboard");
+      if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+    }
+    if (activeView === "services" && window.VilarejoServices && window.VilarejoServicesRuntime) {
+      const host = $("servicesDashboard");
       if (host) {
-        if (typeof window !== "undefined" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
-          window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
-        } else if (!host.children.length) {
-          host.innerHTML = '<div class="module-empty-state"><div class="module-empty-icon">⚖</div><h3>Grupos de Interesse</h3><p>A correlação de forças e influência dos grupos de poder será carregada a cada ciclo político.</p></div>';
-        }
-      }
-    }
-  }
-
-  function renderGovernmentOverview() {
-    const host = $("governmentSummaryCard");
-    if (!host || typeof window === "undefined") return;
-    try {
-      const instRuntime = window.VilarejoInstitutionsRuntime;
-      const instState = instRuntime?.getSnapshot?.() || instRuntime?.state || {};
-      const legislature = instState.legislature || {};
-      const coalitionData = instState.coalition || {};
-      const summary = instState.summary || {};
-      const totalSeats = Number(legislature.totalSeats || summary.totalSeats || instState.settings?.totalSeats || 21);
-      const neededMajority = Number(legislature.majoritySeats || summary.quorumSeats || Math.floor(totalSeats / 2) + 1);
-      const coalitionIds = Array.isArray(coalitionData.groupIds) ? coalitionData.groupIds : [];
-      const coalitionGroups = Array.isArray(coalitionData.groups) ? coalitionData.groups : [];
-      const coalitionCount = coalitionIds.length || coalitionGroups.length;
-      const coalitionSeats = Number(coalitionData.seats ?? summary.coalitionSeats ?? 0);
-      const status = coalitionData.status || summary.coalitionStatus || "not_formed";
-      const termMonths = Number(instState.settings?.termMonths || 48);
-      const currentMonth = Number(instState.currentMonth || 0);
-      const nextElectionMonth = Number(instState.nextElectionMonth || currentMonth + termMonths);
-      const monthInTerm = Math.max(1, currentMonth - (nextElectionMonth - termMonths) + 1);
-      const remainingMonths = Math.max(0, nextElectionMonth - currentMonth);
-      const oppositionSeats = Number(
-        instState.alignment?.oppositionSeats ?? instState.opposition?.seats ?? Math.max(0, totalSeats - coalitionSeats)
-      );
-
-      const statusBadge = status === "majority"
-        ? '<span class="gov-badge is-majority">Maioria absoluta</span>'
-        : status === "minority"
-        ? '<span class="gov-badge is-minority">Governo de minoria</span>'
-        : '<span class="gov-badge is-not-formed">Sem coalizão formada</span>';
-
-      host.innerHTML = `
-        <div class="gov-summary-content">
-          <div class="gov-summary-header">
-            <div>
-              <div class="eyebrow">PODER EXECUTIVO E PARLAMENTAR</div>
-              <h3>Situação da Base de Governo</h3>
-            </div>
-            ${statusBadge}
-          </div>
-          <div class="gov-kpi-row">
-            <div class="gov-kpi-item">
-              <small>BASE DO GOVERNO</small>
-              <strong>${coalitionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
-              <span>${coalitionCount > 0 ? coalitionCount + ' grupo(s) na coalizão' : 'Nenhum grupo coligado'}</span>
-            </div>
-            <div class="gov-kpi-item">
-              <small>OPOSIÇÃO / INDEPENDENTES</small>
-              <strong>${oppositionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
-              <span>Maioria necessária: ${neededMajority}</span>
-            </div>
-            <div class="gov-kpi-item">
-              <small>MANDATO DA CÂMARA</small>
-              <strong>${monthInTerm}º <small>mês de ${termMonths}</small></strong>
-              <span>${remainingMonths} meses até renovação</span>
-            </div>
-          </div>
-          <div class="gov-actions-row">
-            <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('camara')">
-              <span>▥</span> Gerenciar coalizão e cadeiras da Câmara
-            </button>
-            <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('politica')">
-              <span>⚖</span> Avaliar influência dos grupos políticos
-            </button>
-          </div>
-        </div>
-      `;
-    } catch (e) {
-      console.warn("Erro ao renderizar resumo governamental:", e);
-    }
-  }
-
-  function decisionMeasures(data) {
-    const raw = data?.raw || {};
-    const urban = data?.urbanInfra || {};
-    const candidates = {
-      population: data?.population,
-      treasuryCash: raw.treasuryCash,
-      farmCash: raw.farmCash,
-      marketStock: raw.marketStock,
-      costIndex: raw.costOfLivingIndex,
-      lotCount: raw.lotCount,
-      farmInventory: raw.farmInventory,
-      urbanCapacity: urban.capacity,
-      urbanDemand: urban.demand,
-      urbanCongestion: urban.congestionRatio,
-      urbanTFP: urban.tfpFactor
-    };
-    return Object.fromEntries(Object.entries(candidates).filter(([, value]) => finiteValue(value) !== null));
-  }
-
-  function syncDecisionRunLifecycle(data) {
-    const runId = data?.runId;
-    if (!decisionObserver || !runId) return;
-    if (lastDecisionRunId && lastDecisionRunId !== runId) {
-      decisionObserver.markRunEnded(lastDecisionRunId, "A execução anterior foi reiniciada antes da próxima comparação.");
-    }
-
-    const service = window.VilarejoIntelligenceRuntime?.service;
-    const runStatuses = service?.getRunList?.() || [];
-    const statusesById = new Map(runStatuses.map((run) => [String(run.id), run.status]));
-    decisionObserver.getRecords().forEach((record) => {
-      if (record.runId !== runId && record.status === "awaiting-close" && statusesById.get(record.runId) === "arquivada") {
-        decisionObserver.markRunEnded(record.runId, "Execução arquivada antes do fechamento posterior.");
-      }
-    });
-    lastDecisionRunId = runId;
-  }
-
-  const DECISION_MEASURE_LABELS = Object.freeze({
-    population: ["População", "count"],
-    treasuryCash: ["Caixa do Tesouro", "money"],
-    farmCash: ["Caixa da fazenda", "money"],
-    marketStock: ["Estoque comercial", "units"],
-    costIndex: ["Custo de vida", "index"],
-    lotCount: ["Lotes agregados", "count"],
-    farmInventory: ["Estoque da fazenda", "units"],
-    urbanCapacity: ["Capacidade urbana", "count"],
-    urbanDemand: ["Demanda urbana", "count"],
-    urbanCongestion: ["Congestionamento urbano", "index"],
-    urbanTFP: ["Fator urbano", "index"]
-  });
-
-  function formatDecisionDelta(key, value) {
-    const definition = DECISION_MEASURE_LABELS[key];
-    if (!definition) return UNAVAILABLE;
-    const [, unit] = definition;
-    const amount = Math.abs(value);
-    if (unit === "money") return money(amount);
-    if (unit === "units") return `${number(amount, 1)} unidades`;
-    if (unit === "index") return number(amount, 2);
-    return number(amount);
-  }
-
-  function renderDecisionDelta(delta, title) {
-    const entries = delta && typeof delta === "object" ? Object.entries(delta) : [];
-    if (!entries.length) return `<div class="ux-decision-delta"><strong>${escapeHtml(title)}</strong><p>Não há métricas comuns disponíveis para esta comparação.</p></div>`;
-    return `<div class="ux-decision-delta"><strong>${escapeHtml(title)}</strong><ul>${entries.map(([key, value]) => {
-      const definition = DECISION_MEASURE_LABELS[key];
-      if (!definition || finiteValue(value) === null) return "";
-      const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-      return `<li><span>${escapeHtml(definition[0])}</span><b>${sign}${escapeHtml(formatDecisionDelta(key, value))}</b></li>`;
-    }).join("")}</ul></div>`;
-  }
-
-  function renderDecisionSummary(data = lastSnapshot) {
-    const host = $("decisionSummary");
-    if (!host) return;
-    const runId = data?.runId;
-    const records = decisionObserver && runId ? decisionObserver.getRecords({ runId }) : [];
-    const awaiting = records.filter((record) => record.status === "awaiting-close").length;
-    const compared = records.filter((record) => record.status === "compared").length;
-    const noComparison = records.filter((record) => record.status === "no-comparison").length;
-    const latest = records.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
-    const warning = decisionObserver?.getStorageWarning?.();
-    host.innerHTML = `<div class="ux-decision-summary-grid"><div><strong>${number(awaiting)}</strong><span>Aguardando fechamento</span></div><div><strong>${number(compared)}</strong><span>Com comparação observada</span></div><div><strong>${number(noComparison)}</strong><span>Encerradas sem comparação</span></div></div>` +
-      (latest ? `<p class="ux-last-decision"><span>Última escolha:</span> <b>${escapeHtml(latest.label)}</b> · ${escapeHtml(latest.statusLabel)}</p>` : `<p class="ux-last-decision">Nenhuma decisão registrada nesta execução.</p>`) +
-      (warning ? `<p class="ux-storage-warning" role="status">${escapeHtml(warning)}</p>` : "");
-  }
-
-  function renderDecisionHistory() {
-    const host = $("decisionHistory");
-    if (!host || !decisionObserver) return;
-    const warningNode = $("decisionStorageWarning");
-    const warning = decisionObserver.getStorageWarning?.();
-    if (warningNode) {
-      warningNode.textContent = warning || "";
-      warningNode.classList.toggle("hidden", !warning);
-    }
-    const records = decisionObserver.getRecords().slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    if (!records.length) {
-      host.innerHTML = "<p>Sem decisões registradas. Escolhas futuras serão associadas à execução ativa.</p>";
-      return;
-    }
-    host.innerHTML = records.map((record) => {
-      const source = record.source === "event" ? "Evento" : "Ação";
-      const previousClosures = record.monthNumber === 1
-        ? "1 fechamento anterior"
-        : `${number(record.monthNumber)} fechamentos anteriores`;
-      const executionPeriod = record.day === undefined
-        ? previousClosures
-        : `Dia absoluto ${record.day} · ${previousClosures}`;
-      const immediate = record.afterImmediate !== undefined
-        ? renderDecisionDelta(record.immediateDelta, "Variação imediatamente após a escolha")
-        : '<div class="ux-decision-delta"><strong>Variação imediata</strong><p>Snapshot imediato não disponível.</p></div>';
-      let followUp;
-      if (record.status === "compared" && record.closure) {
-        const closurePeriod = record.closure.day === undefined
-          ? "fechamento posterior"
-          : `fechamento posterior no dia absoluto ${record.closure.day}`;
-        followUp = renderDecisionDelta(record.closure.deltaFromBefore, `Variação até o ${closurePeriod}`);
-        if (Object.keys(record.closure.deltaFromImmediate || {}).length) {
-          followUp += renderDecisionDelta(record.closure.deltaFromImmediate, "Variação entre o snapshot imediato e o fechamento");
-        }
-      } else if (record.status === "no-comparison") {
-        followUp = `<div class="ux-decision-delta"><strong>Sem comparação posterior</strong><p>${escapeHtml(record.endedReason || "A execução terminou antes do fechamento seguinte.")}</p></div>`;
-      } else {
-        followUp = '<div class="ux-decision-delta"><strong>Aguardando fechamento</strong><p>A comparação aparecerá após o próximo fechamento mensal desta execução.</p></div>';
-      }
-      const context = record.context ? `<p class="ux-decision-context">${escapeHtml(record.context)}</p>` : '<p class="ux-decision-context">O motor não publicou contexto textual adicional para esta escolha.</p>';
-      return `<details class="ux-decision-record"><summary><span class="ux-decision-source">${escapeHtml(source)}</span><strong>${escapeHtml(record.label)}</strong><span class="ux-decision-status status-${escapeHtml(record.status)}">${escapeHtml(record.statusLabel)}</span><small>${escapeHtml(executionPeriod)} · execução ${escapeHtml(record.runId)}</small></summary><div class="ux-decision-record-body">${context}${immediate}${followUp}<p class="ux-causality-note">Variações observadas no estado do jogo; não estabelecem causalidade.</p></div></details>`;
-    }).join("");
-  }
-
-  function refreshActiveView() {
-    if (activeView === "overview") {
-      renderOverviewPulse(lastSnapshot || snapshot());
-      renderDecisionSummary(lastSnapshot || snapshot());
-    } else if (activeView === "records") {
-      renderDecisionHistory();
-    } else if (activeView === "society") {
-      renderSocietyView();
-    } else if (activeView === "services") {
-      renderServicesView();
-    } else if (activeView === "government") {
-      renderGovernmentSubView();
-    } else if (activeView === "intelligence") {
-      const host = $("intelligenceDashboard");
-      if (host) {
-        if (typeof window !== "undefined" && window.VilarejoIntelligence && typeof window.VilarejoIntelligence.renderDashboard === "function") {
-          window.VilarejoIntelligence.renderDashboard(host);
-        } else {
-          host.innerHTML = `
-            <div class="module-empty-state">
-              <div class="module-empty-icon">💡</div>
-              <h3>Central de Inteligência</h3>
-              <p>O módulo de análise preditiva e inteligência executiva será carregado aqui conforme o fechamento dos primeiros meses de simulação.</p>
-            </div>
-          `;
-        }
-      }
-    } else if (activeView === "newspaper") {
-      const host = $("newspaperDashboard");
-      if (host) {
-        if (typeof window !== "undefined" && window.VilarejoNewspaper && typeof window.VilarejoNewspaper.renderDashboard === "function") {
-          window.VilarejoNewspaper.renderDashboard(host);
-        } else {
-          host.innerHTML = `
-            <div class="module-empty-state">
-              <div class="module-empty-icon">📰</div>
-              <h3>Jornal do Vilarejo</h3>
-              <p>A redação do Vilarejo está preparando as próximas edições mensais. As crônicas e notícias da comunidade serão publicadas aqui.</p>
-            </div>
-          `;
-        }
+        host.__serviceSetLever = (domainId, leverId, value) => window.VilarejoServicesRuntime.setLever(domainId, leverId, value);
+        window.VilarejoServices.renderDashboard(window.VilarejoServicesRuntime.state, host);
       }
     }
   }
@@ -1354,8 +1078,14 @@
       refreshCharts(data);
       lastChartSignature = signature;
     }
-
-    refreshActiveView();
+    
+    if (activeView === 'society' && window.VilarejoSociety && window.VilarejoSocietyRuntime) {
+        const host = document.querySelector('[data-view-panel="society"]');
+        if (host) {
+            window.VilarejoSociety.renderDashboard(window.VilarejoSocietyRuntime.state, host);
+        }
+    }
+    refreshDomainPanels();
   }
 
   function captureDecisionClick(event) {
@@ -1473,6 +1203,7 @@
       button.addEventListener("click", () => {
         setView(button.dataset.view);
         document.body.classList.remove("menu-open");
+        refresh();
       });
     });
     document.querySelectorAll("[data-gov-tab]").forEach((button) => {

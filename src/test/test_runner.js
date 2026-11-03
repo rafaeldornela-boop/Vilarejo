@@ -2,14 +2,12 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
 const EventosV3 = require("../events/eventos_v3.js");
 const VilarejoCore = require("../core/vilarejo_core.js");
+const { createSimulationContext } = require("./simulation_context.js");
 
 const ROOT = path.join(__dirname, "../../");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-const scriptCode = fs.readFileSync(path.join(ROOT, "src/economy/vilarejo_economy.js"), "utf8");
-const coreCode = fs.readFileSync(path.join(ROOT, "src/core/vilarejo_core.js"), "utf8");
 const loadedScripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
 const failures = [];
 let passed = 0;
@@ -24,107 +22,17 @@ function report(name, ok, detail = "") {
   }
 }
 
-function makeElement(id) {
-  return {
-    id,
-    innerHTML: "",
-    textContent: "",
-    value: "",
-    disabled: false,
-    onclick: null,
-    oninput: null,
-    onchange: null,
-    dataset: {},
-    style: {},
-    classList: {
-      add() {},
-      remove() {},
-      contains() { return false; },
-      toggle() { return false; }
-    },
-    closest() { return null; },
-    appendChild() {},
-    removeChild() {},
-    setAttribute() {},
-    getAttribute() { return null; },
-    querySelector(selector) { return makeElement(`${id}:${selector}`); },
-    querySelectorAll() { return []; }
-  };
-}
-
-function createSimulationContext() {
-  const elements = new Map();
-  const getElementById = (id) => {
-    if (!elements.has(id)) elements.set(id, makeElement(id));
-    return elements.get(id);
-  };
-  const document = {
-    getElementById,
-    querySelector: getElementById,
-    querySelectorAll: () => [],
-    createElement: (tag) => makeElement(tag),
-    activeElement: null,
-    body: getElementById("body"),
-    documentElement: getElementById("html")
-  };
-  const window = { document, EventosV3 };
-  const context = {
-    window,
-    document,
-    console,
-    Math,
-    Date,
-    JSON,
-    Object,
-    Array,
-    Number,
-    String,
-    Boolean,
-    Map,
-    Set,
-    Intl,
-    RegExp,
-    Error,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    Infinity,
-    NaN,
-    setInterval: () => 1,
-    clearInterval: () => {},
-    setTimeout: () => 1,
-    clearTimeout: () => {}
-  };
-  vm.createContext(context);
-  vm.runInContext(coreCode, context, { filename: "vilarejo_core.js", timeout: 30000 });
-  vm.runInContext(scriptCode, context, { filename: "script.js", timeout: 30000 });
-  return context;
-}
-
 console.log("\n=== VERIFICAÇÕES ESTRUTURAIS ===");
 report("A página carrega o núcleo central exatamente uma vez", loadedScripts.filter((src) => src === "src/core/vilarejo_core.js").length === 1);
 report("O núcleo central vem antes dos eventos e da economia", loadedScripts.indexOf("src/core/vilarejo_core.js") >= 0 && loadedScripts.indexOf("src/core/vilarejo_core.js") < loadedScripts.indexOf("src/events/eventos_v3.js") && loadedScripts.indexOf("src/events/eventos_v3.js") < loadedScripts.indexOf("src/economy/vilarejo_economy.js"));
 report("A página carrega vilarejo_economy.js exatamente uma vez", loadedScripts.filter((src) => src === "src/economy/vilarejo_economy.js").length === 1);
-report("A página carrega Política exatamente uma vez após Sociedade", loadedScripts.filter((src) => src === "src/politics/vilarejo_politics.js").length === 1 && loadedScripts.indexOf("src/society/vilarejo_society.js") < loadedScripts.indexOf("src/politics/vilarejo_politics.js"));
-report("A página carrega Instituições exatamente uma vez após Política", loadedScripts.filter((src) => src === "src/institutions/vilarejo_institutions.js").length === 1 && loadedScripts.indexOf("src/politics/vilarejo_politics.js") < loadedScripts.indexOf("src/institutions/vilarejo_institutions.js"));
-report("History Store é carregado uma vez depois do Core e antes da Central", loadedScripts.filter((src) => src === "src/shared/vilarejo_history_store.js").length === 1 && loadedScripts.filter((src) => src === "src/intelligence/vilarejo_intelligence.js").length === 1 && loadedScripts.indexOf("src/core/vilarejo_core.js") < loadedScripts.indexOf("src/shared/vilarejo_history_store.js") && loadedScripts.indexOf("src/shared/vilarejo_history_store.js") < loadedScripts.indexOf("src/intelligence/vilarejo_intelligence.js"));
-report("Central e dashboard carregam uma vez na ordem correta", loadedScripts.filter((src) => src === "src/intelligence/intelligence_view.js").length === 1 && loadedScripts.indexOf("src/intelligence/vilarejo_intelligence.js") < loadedScripts.indexOf("src/intelligence/intelligence_view.js") && loadedScripts.indexOf("src/intelligence/intelligence_view.js") < loadedScripts.indexOf("src/ui/dashboard.js"));
-report("Observador de decisões carrega uma vez antes do dashboard", loadedScripts.filter((src) => src === "src/ui/decision_observer.js").length === 1 && loadedScripts.indexOf("src/ui/decision_observer.js") < loadedScripts.indexOf("src/ui/dashboard.js"));
-const declaredIds = [...html.matchAll(/\bid=["']([^"']+)["']/g)].map((match) => match[1]);
-const duplicateIds = declaredIds.filter((id, index) => declaredIds.indexOf(id) !== index);
-const declaredPanels = [...html.matchAll(/data-view-panel=["']([^"']+)["']/g)].map((match) => match[1]);
-report("Cada host do dashboard e painel de navegação tem ID/rota único", duplicateIds.length === 0 && declaredPanels.length === new Set(declaredPanels).size && declaredPanels.length === 8);
-report("A Central tem rota e painel SPA correspondente", /data-view="intelligence"/.test(html) && /data-view-panel="intelligence"/.test(html) && /id="intelligenceDashboard"/.test(html));
-report("Dashboard usa o histórico canônico da Central, sem buffer paralelo", !/monthlyHistory/.test(fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8")) && /getCurrentHistory/.test(fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8")));
-report("Visão geral oferece agenda civil, setores selecionáveis e acompanhamento das escolhas", /id="calendarEventList"/.test(html) && /data-district="Fazenda e produção"/.test(html) && /id="decisionSummary"/.test(html) && /id="decisionHistory"/.test(html));
-report("Eventos são apresentados em modal com alternativas do motor e contexto explícito", /id="event"[^>]*event-modal/.test(html) && /id="eventOptions"/.test(html) && /Custos e riscos aparecem somente quando informados/.test(html));
-report("Ilustração do modal é arte contextual identificada como não representativa do evento", fs.existsSync(path.join(ROOT, "public/assets/interface/community-decision-illustration.jpg")) && /src="public\/assets\/interface\/community-decision-illustration\.jpg"/.test(html) && /não retrata este evento nem qualquer resultado observado/.test(html));
-report("Interfaces técnicas recolhíveis e Serviços preservam indisponibilidades", /<details class="ux-technical-details">/.test(html) && /data-view="services"/.test(html) && /indicadores setoriais ausentes seguem indisponíveis/.test(html));
-report("Dashboard preserva conversão civil gregoriana e ciclo econômico de 360 dias", /function isLeapYear/.test(fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8")) && /function simulationDayToCivilDate/.test(fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8")) && /economicYear = Math\.floor\(\(dayNum - 1\) \/ 360\)/.test(fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8")));
-report("Índice de Gini não é preenchido com valor fictício na série antiga", !/incomeGini\s*:\s*28\.5/.test(fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8")) && /não são produzidos pela referência atual/.test(html));
-report("O servidor permite servir o núcleo central", /src\//.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
-report("Servidor permite somente a folha CSS raiz já vinculada pelo HTML", /href="style\.css"/.test(html) && /new Set\(\["index\.html",\s*"style\.css"\]\)/.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
+const expectedScripts = ["src/core/vilarejo_core.js", "src/events/eventos_v3.js", "src/economy/vilarejo_economy.js", "src/society/vilarejo_society.js", "src/politics/vilarejo_politics.js", "src/institutions/vilarejo_institutions.js", "src/services/vilarejo_services.js", "src/ui/dashboard.js"];
+report("Todos os scripts carregam uma única vez na ordem completa do contrato", JSON.stringify(loadedScripts) === JSON.stringify(expectedScripts));
+report("A página inclui o stylesheet principal liberado explicitamente pelo servidor", /<link\b[^>]*href=["']style\.css["']/i.test(html) && /new Set\(\["index\.html",\s*"style\.css"\]\)/.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
+const serverSource = fs.readFileSync(path.join(ROOT, "server.js"), "utf8");
+const runtimeDirectorySource = serverSource.match(/const RUNTIME_SRC_DIRS = new Set\(\[([\s\S]*?)\]\);/)?.[1] || "";
+const requiredRuntimeDirectories = ["core", "economy", "events", "institutions", "politics", "services", "society", "ui"];
+report("O servidor permite somente módulos de runtime e assets públicos", requiredRuntimeDirectories.every((name) => runtimeDirectorySource.includes(`\"${name}\"`)) && !runtimeDirectorySource.includes("\"test\"") && /PUBLIC_ASSET_EXTENSIONS/.test(serverSource));
 report("A página declara idioma português", /<html\s+lang=["']pt-BR["']/i.test(html));
 report("O executor de testes não depende de jsdom", !/require\(["']jsdom["']\)/.test(fs.readFileSync(path.join(ROOT, "src/test/test_runner.js"), "utf8")));
 
@@ -150,6 +58,39 @@ try {
     { id: 2, name: "Grupo B", adults: 1, children: 2, jobs: 1, happiness: 50 }
   ], 151);
   report("Diretório populacional consolida famílias sem depender de dados de interface", population.totals.total === 6 && population.totals.adults === 3 && population.totals.children === 3);
+  const populationBeforeDuplicate = JSON.stringify(core.population.getSnapshot());
+  let duplicateIdsRejected = false;
+  try { core.population.syncFromEconomy([{ id: 7, adults: 1 }, { id: "7", adults: 2 }], 152); } catch (error) { duplicateIdsRejected = /duplicado/.test(error.message); }
+  report("Diretório rejeita IDs duplicados após normalização sem mutação parcial", duplicateIdsRejected && JSON.stringify(core.population.getSnapshot()) === populationBeforeDuplicate);
+  const atomicCore = VilarejoCore.createRuntime();
+  atomicCore.modules.register({ id: "economia", version: "3.0.0", dependencies: ["core"] });
+  const originalHouseholds = [
+    { id: 1, name: "Família Original A", type: "family", adults: 2, children: 1, jobs: 1, happiness: 60 },
+    { id: 2, name: "Família Original B", type: "family", adults: 1, children: 2, jobs: 1, happiness: 55 }
+  ];
+  const validEconomicState = { day: 149, monthNumber: 0, owner: "state", accounts: { treasury: 100 }, marketPrice: 10, fx: 5, households: originalHouseholds };
+  atomicCore.syncFromEconomy(validEconomicState, "atomic-baseline");
+  atomicCore.population.addExtension("1", "test", { retained: true });
+  const beforeInvalidSync = JSON.stringify(atomicCore.snapshot());
+  const invalidEconomicStates = [
+    { ...validEconomicState, day: 180, monthNumber: 1, households: null },
+    { ...validEconomicState, day: 180, monthNumber: 1, households: [originalHouseholds[0], { ...originalHouseholds[1], id: "1" }] },
+    { ...validEconomicState, day: 180, monthNumber: 1, households: [{ ...originalHouseholds[0], adults: -1 }, originalHouseholds[1]] },
+    { ...validEconomicState, day: 180, monthNumber: 1, accounts: { treasury: "100" } },
+    { ...validEconomicState, day: 180, monthNumber: 1, fx: Infinity },
+    { ...validEconomicState, day: 180.5, monthNumber: 1 },
+    { ...validEconomicState, day: 180, monthNumber: "1" },
+    { ...validEconomicState, day: 180, monthNumber: 1, gameOver: true }
+  ];
+  let rejectedEveryInvalidSync = true;
+  let stateUnchangedAfterInvalidSyncs = true;
+  for (const invalidState of invalidEconomicStates) {
+    try { atomicCore.syncFromEconomy(invalidState, "invalid-regression"); rejectedEveryInvalidSync = false; } catch (_) {}
+    if (JSON.stringify(atomicCore.snapshot()) !== beforeInvalidSync) stateUnchangedAfterInvalidSyncs = false;
+  }
+  report("syncFromEconomy rejeita entradas inválidas sem alterar calendário, população, eventos ou snapshots", rejectedEveryInvalidSync && stateUnchangedAfterInvalidSyncs);
+  const preservedHouseholds = atomicCore.population.getSnapshot().groups;
+  report("Sincronização inválida preserva os domicílios originais e extensões", preservedHouseholds.length === 2 && preservedHouseholds[0].label === "Família Original A" && preservedHouseholds[0].extensions.test.retained === true && preservedHouseholds[1].label === "Família Original B");
   report("Diretório preserva extensões de outros módulos", core.population.addExtension("1", "sociedade", { escolaridade: "média" }) && core.population.getSnapshot().groups[0].extensions.sociedade.escolaridade === "média");
   core.session.reset({ day: 40 });
   report("Reiniciar a partida limpa os dados populacionais e reinicia a sessão", core.population.getSnapshot().totals.total === 0 && core.clock.snapshot().absoluteDay === 40 && core.session.get().status === "ready");

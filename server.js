@@ -4,42 +4,107 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const ROOT = path.resolve(__dirname);
-const HOST = process.env.HOST || "0.0.0.0";
+const ROOT = fs.realpathSync(__dirname);
+const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".md": "text/markdown; charset=utf-8",
   ".png": "image/png",
+  ".bmp": "image/bmp",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
-  ".txt": "text/plain; charset=utf-8"
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf"
 };
 
-function resolveRequestPath(requestUrl) {
+// index.html e style.css são os únicos arquivos permitidos na raiz.
+const allowedRootFiles = new Set(["index.html", "style.css"]);
+const RUNTIME_SRC_DIRS = new Set([
+  "core", "economy", "events", "institutions", "politics", "services", "society", "ui"
+]);
+const PUBLIC_ASSET_EXTENSIONS = new Set([
+  ".avif", ".bmp", ".css", ".gif", ".ico", ".jpeg", ".jpg", ".mp3", ".m4a", ".ogg", ".png",
+  ".svg", ".wav", ".webm", ".webp", ".mp4", ".aac", ".otf", ".ttf", ".woff", ".woff2"
+]);
+const BLOCKED_FILE_PATTERNS = [
+  /^\.env(?:\..*)?$/i,
+  /^package(?:-lock)?\.json$/i,
+  /^npm-shrinkwrap\.json$/i,
+  /^(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/i,
+  /^tsconfig(?:\..*)?\.json$/i,
+  /^(?:vite|webpack|rollup|eslint|postcss|tailwind|babel|jest|vitest)\.config\./i,
+  /\.config\.(?:[cm]?js|json|ts|ya?ml)$/i,
+  /(?:^|[._-])config(?:uration)?(?:[._-]|$)/i,
+  /\.(?:map|log|bak|old|orig|swp|tmp)$/i
+];
+
+function isAllowedRelativePath(relativePath) {
+  if (!relativePath || relativePath.startsWith("/") || relativePath.includes("\\")) return false;
+  const segments = relativePath.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === ".." || segment.startsWith("."))) return false;
+  const basename = segments[segments.length - 1];
+  if (BLOCKED_FILE_PATTERNS.some((pattern) => pattern.test(basename))) return false;
+
+  if (allowedRootFiles.has(relativePath)) return true;
+
+  if (segments[0] === "src") {
+    if (segments.length < 3 || !RUNTIME_SRC_DIRS.has(segments[1])) return false;
+    return path.posix.extname(relativePath).toLowerCase() === ".js";
+  }
+
+  if (segments[0] === "public") {
+    if (segments.length < 2) return false;
+    return PUBLIC_ASSET_EXTENSIONS.has(path.posix.extname(relativePath).toLowerCase());
+  }
+
+  return false;
+}
+
+function resolveRequestPath(requestTarget) {
+  const delimiter = requestTarget.search(/[?#]/);
+  const rawPath = delimiter === -1 ? requestTarget : requestTarget.slice(0, delimiter);
+  if (!rawPath.startsWith("/") || rawPath.startsWith("//")) return { error: 400 };
+
   let pathname;
   try {
-    pathname = decodeURIComponent(new URL(requestUrl, "http://localhost").pathname);
+    pathname = decodeURIComponent(rawPath);
   } catch {
     return { error: 400 };
   }
 
-  if (pathname.includes("\\") || pathname.includes("\0")) return { error: 400 };
-  const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  const segments = relativePath.split(/[\\/]/);
-  if (segments.some((segment) => segment.startsWith("."))) return { error: 404 };
-  const allowedRootFiles = new Set(["index.html", "style.css"]);
-  if (!allowedRootFiles.has(relativePath) && !relativePath.startsWith("src/") && !relativePath.startsWith("public/")) return { error: 404 };
+  if (pathname.includes("\\") || pathname.includes("\0") || pathname.startsWith("//")) return { error: 400 };
+  if (pathname === "/") pathname = "/index.html";
+  const relativePath = pathname.slice(1);
+  if (!isAllowedRelativePath(relativePath)) return { error: 404 };
 
   const filePath = path.resolve(ROOT, relativePath);
-  if (filePath !== ROOT && !filePath.startsWith(`${ROOT}${path.sep}`)) return { error: 403 };
-  return { filePath };
+  const relativeToRoot = path.relative(ROOT, filePath);
+  if (!relativeToRoot || relativeToRoot === ".." || relativeToRoot.startsWith(`..${path.sep}`) || path.isAbsolute(relativeToRoot)) {
+    return { error: 403 };
+  }
+  return { filePath, relativePath };
+}
+
+function isInsideRoot(filePath) {
+  const relative = path.relative(ROOT, filePath);
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
 function sendText(response, status, message) {
@@ -64,31 +129,43 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  fs.stat(resolved.filePath, (statError, stats) => {
-    if (statError || !stats.isFile()) {
+  fs.realpath(resolved.filePath, (realpathError, realPath) => {
+    if (realpathError || !isInsideRoot(realPath)) {
+      sendText(response, 404, "Arquivo não encontrado");
+      return;
+    }
+    const actualRelativePath = path.relative(ROOT, realPath).split(path.sep).join("/");
+    if (!isAllowedRelativePath(actualRelativePath) || path.posix.extname(actualRelativePath).toLowerCase() !== path.posix.extname(resolved.relativePath).toLowerCase()) {
       sendText(response, 404, "Arquivo não encontrado");
       return;
     }
 
-    const contentType = MIME_TYPES[path.extname(resolved.filePath).toLowerCase()] || "application/octet-stream";
-    response.writeHead(200, {
-      "Content-Type": contentType,
-      "Content-Length": stats.size,
-      "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "no-cache"
-    });
+    fs.stat(realPath, (statError, stats) => {
+      if (statError || !stats.isFile()) {
+        sendText(response, 404, "Arquivo não encontrado");
+        return;
+      }
 
-    if (request.method === "HEAD") {
-      response.end();
-      return;
-    }
+      const contentType = MIME_TYPES[path.extname(actualRelativePath).toLowerCase()];
+      response.writeHead(200, {
+        "Content-Type": contentType,
+        "Content-Length": stats.size,
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-cache"
+      });
 
-    const stream = fs.createReadStream(resolved.filePath);
-    stream.on("error", () => {
-      if (!response.headersSent) sendText(response, 500, "Erro ao ler o arquivo");
-      else response.destroy();
+      if (request.method === "HEAD") {
+        response.end();
+        return;
+      }
+
+      const stream = fs.createReadStream(realPath);
+      stream.on("error", () => {
+        if (!response.headersSent) sendText(response, 500, "Erro ao ler o arquivo");
+        else response.destroy();
+      });
+      stream.pipe(response);
     });
-    stream.pipe(response);
   });
 });
 

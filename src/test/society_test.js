@@ -26,6 +26,60 @@ function baseGroups() {
 
 console.log("\n=== SOCIEDADE 1.0.0 ===");
 
+test("rejeita domicílios duplicados sem mutar a semente nem a reconciliação", () => {
+  const state = Society.createState({ seed: 101 });
+  const duplicateGroups = [{ id: 7, adults: 1 }, { id: "7", adults: 2 }];
+  const beforeSeed = JSON.stringify(state);
+  assert.throws(() => Society.seedFromEconomy(state, duplicateGroups), /domicílio duplicado/);
+  assert.equal(JSON.stringify(state), beforeSeed);
+  Society.seedFromEconomy(state, baseGroups());
+  const beforeReconcile = JSON.stringify(state);
+  assert.throws(() => Society.reconcileFromEconomy(state, duplicateGroups, { month: 1 }), /domicílio duplicado/);
+  assert.equal(JSON.stringify(state), beforeReconcile);
+});
+
+test("reconhece imigrante marcado pela Economia no cadastro demográfico", () => {
+  const state = Society.createState({ seed: 102 });
+  Society.seedFromEconomy(state, [{ id: "migrant-1", label: "Migrante migrant-1", category: "single", migrant: true, adults: 1, children: 0 }]);
+  const person = state.households[0].members[0];
+  assert.equal(person.bornHere, false);
+  assert.equal(person.origin, "migração econômica");
+  assert.equal(person.integration, 42);
+  assert.equal(person.arrivalMonth, state.currentMonth);
+  assert.equal(Society.getDemographicSnapshot(state).foreignBorn, 1);
+});
+
+test("migração reconciliada usa o mês efetivo de chegada e não antecipa residência ou integração", () => {
+  const state = Society.createState({ seed: 104 });
+  Society.seedFromEconomy(state, baseGroups());
+  Society.advanceMonth(state, { month: 1, birthProbability: 0, mortalityRates: { child: 0, adult: 0, elderly: 0 }, random: () => 0.99 });
+  const incoming = { id: "migrant-month-2", name: "Migrante", type: "single", migrant: true, adults: 1, children: 0, jobs: 0, happiness: 55 };
+  Society.reconcileFromEconomy(state, [...baseGroups(), incoming], { month: 2 });
+  const migrant = state.households.find((household) => household.id === incoming.id).members[0];
+  const ageAtArrival = migrant.age;
+  assert.equal(migrant.arrivalMonth, 2);
+  assert.equal(migrant.monthsInVillage, 0);
+  assert.equal(state.migration.monthly.month, 2);
+  assert.equal(state.migration.monthly.incoming, 1);
+
+  Society.advanceMonth(state, { month: 2, birthProbability: 0, mortalityRates: { child: 0, adult: 0, elderly: 0 }, householdHappiness: 100, shortageRatio: 0, random: () => 0.99 });
+  assert.equal(migrant.age, ageAtArrival);
+  assert.equal(migrant.monthsInVillage, 0);
+  assert.equal(migrant.integration, 42);
+
+  Society.advanceMonth(state, { month: 3, birthProbability: 0, mortalityRates: { child: 0, adult: 0, elderly: 0 }, householdHappiness: 100, shortageRatio: 0, random: () => 0.99 });
+  assert.equal(migrant.monthsInVillage, 1);
+  assert.ok(Math.abs(migrant.age - (ageAtArrival + 1 / 12)) < 1e-9);
+  assert.ok(Math.abs(migrant.integration - 42.85) < 1e-9);
+});
+
+test("não aceita identificadores de pessoa explícitos em duplicidade", () => {
+  const state = Society.createState({ seed: 103 });
+  Society.seedFromEconomy(state, [{ id: "pessoas", adults: 0, children: 0 }]);
+  state.households[0].members.push(Society.createPerson(state, { id: "p-custom", age: 30 }));
+  assert.throws(() => Society.createPerson(state, { id: "p-custom", age: 31 }), /pessoa duplicado/);
+});
+
 test("inicializa pessoas sem alterar os domicílios da Economia", () => {
   const groups = baseGroups();
   const before = JSON.stringify(groups);

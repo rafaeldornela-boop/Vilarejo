@@ -1,5 +1,7 @@
 # Release 3.1.0 | Economia 3.0 + Núcleo Central 0.1
 
+> **Snapshot histórico da camada-base anterior à integração de Sociedade, Política, Instituições e Serviços.** Os números, nomes de arquivo e “o que não faz” abaixo registram aquela versão e não descrevem o estado atual. Veja [`HISTORICO_DE_VERSOES.md`](HISTORICO_DE_VERSOES.md) para a branch vigente; os diagramas anteriores foram preservados em `docs/history/design-snapshots/`.
+
 ## Escopo
 
 Esta release preserva o motor econômico 3.0 e acrescenta a primeira camada executável de arquitetura modular.
@@ -39,5 +41,5 @@ Esta release preserva o motor econômico 3.0 e acrescenta a primeira camada exec
 - `index.html`: ordem de carregamento.
 - `server.js`: allowlist de arquivos estáticos atualizada.
 - `test_runner.js`: 92 verificações automatizadas.
-- `docs/ARQUITETURA_MODULAR_V0.1.md`: visão da arquitetura.
-- `docs/CONTRATO_DE_MODULOS_V1.md`: padrão obrigatório para módulos futuros.
+- `docs/history/design-snapshots/ARQUITETURA_MODULAR_V0.1-HISTORICA.md`: visão da arquitetura naquela release.
+- `docs/architecture/CONTRATOS_E_EVENTOS_V1.md`: matriz de contratos vigente.
