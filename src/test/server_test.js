@@ -84,6 +84,11 @@ async function assertServedAsset(baseUrl, assetPath) {
       .filter((reference) => !reference.startsWith("#") && !/^(?:[a-z]+:|\/\/)/i.test(reference));
     const scriptReferences = localReferences.filter((reference) => /\.js(?:[?#]|$)/i.test(reference));
     assert.equal(scriptReferences.length, 13, "index deve referenciar os treze módulos JavaScript de runtime");
+    assert.ok(scriptReferences.includes("src/newspaper/vilarejo_newspaper.js"), "index carrega o módulo do Jornal");
+    const newspaperJs = await assertServedAsset(baseUrl, "/src/newspaper/vilarejo_newspaper.js");
+    assert.match(newspaperJs.headers.get("content-type"), /^text\/javascript\b/);
+    const newspaperBody = await newspaperJs.text();
+    assert.ok(newspaperBody.includes("VilarejoNewspaper"), "módulo do Jornal servido com conteúdo esperado");
     for (const reference of localReferences) {
       const assetUrl = new URL(reference, baseUrl);
       assert.equal(assetUrl.origin, baseUrl, `referência local permanece na origem ${reference}`);
