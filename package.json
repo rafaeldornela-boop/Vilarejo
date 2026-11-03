@@ -1,16 +1,7 @@
 {
-  "name": "vilarejo",
-  "version": "3.1.0",
+  "name": "vilarejo-gabinete-executivo",
+  "version": "2.0.0",
   "private": true,
-  "description": "Vilarejo: Economia 3.0 integrada ao Núcleo Central modular 0.1, com calendário, população compartilhada e barramento de eventos.",
-  "main": "server.js",
-  "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js",
-    "build": "node --check server.js && node --check src/core/vilarejo_core.js && node --check src/shared/vilarejo_history_store.js && node --check src/events/eventos_v3.js && node --check src/economy/vilarejo_economy.js && node --check src/society/vilarejo_society.js && node --check src/politics/vilarejo_politics.js && node --check src/institutions/vilarejo_institutions.js && node --check src/intelligence/vilarejo_intelligence.js && node --check src/intelligence/intelligence_view.js && node --check src/ui/dashboard.js && node --check src/test/test_runner.js && node --check src/test/society_test.js && node --check src/test/politics_test.js && node --check src/test/institutions_test.js && node --check src/test/calendar_test.js && node --check src/test/history_store_test.js && node --check src/test/interface_integration_test.js && node --check src/test/intelligence_test.js && node --check src/test/intelligence_integration_test.js",
-    "test": "node src/test/test_runner.js && node src/test/society_test.js && node src/test/politics_test.js && node src/test/institutions_test.js && node src/test/calendar_test.js && node src/test/history_store_test.js && node src/test/interface_integration_test.js && node src/test/intelligence_test.js && node src/test/intelligence_integration_test.js"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+  "description": "Módulo independente de administração executiva para o simulador Vilarejo",
+  "scripts": { "test": "node test/executive_test.js" }
 }

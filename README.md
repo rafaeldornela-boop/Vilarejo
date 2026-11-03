@@ -1,25 +1,77 @@
-# Serviços públicos e desenvolvimento 1.0.0
+# Vilarejo | Gabinete e Administração Executiva 2.0
 
-O pacote cria sete módulos registrados individualmente no Runtime, além de um módulo agregado para o painel do jogador:
+Módulo administrativo independente para simular **como o Executivo municipal se organiza, coordena pessoas, acompanha prioridades e cobra entregas**. Não substitui o Governo/Política, as Instituições, os serviços públicos nem o motor fiscal/econômico.
 
-- `saude`: acesso, capacidade assistencial, prevenção, resultados, força de trabalho e saúde mental;
-- `educacao`: acesso, frequência, aprendizagem, infraestrutura e qualificação;
-- `seguranca`: prevenção, resposta, investigação, capacidade de justiça e confiança pública;
-- `ciencia`: pesquisa básica e aplicada, inovação, difusão tecnológica e talentos;
-- `desenvolvimento`: infraestrutura, logística, habitação, produtividade e equilíbrio regional;
-- `cultura`: acesso, patrimônio, economia criativa, participação e diversidade;
-- `infraestrutura`: saneamento, água, eletricidade, petróleo e gás, mineração e governança de recursos.
+## O que ele faz
 
-## Contratos e limites
+1. **Estrutura administrativa:** criar, encerrar e fundir secretarias; transferir titularidade; manter histórico.
+2. **Equipe de governo:** nomear, substituir e exonerar secretários; registrar formação, competências, perfil qualitativo e avaliações periódicas.
+3. **Planejamento:** criar metas com indicador, linha de base, alvo, unidade, direção (aumentar/diminuir), prazo, evidências e situação.
+4. **Projetos:** organizar projetos por secretaria, prioridade, custo estimado, metas vinculadas, marcos e situação.
+5. **Coordenação:** reuniões, participantes, pautas, decisões, responsáveis, prazos e pendências.
+6. **Problemas administrativos:** registrar gargalos e conflitos entre secretarias, gravidade, responsáveis, prazo, andamento e solução.
+7. **Orçamento administrativo:** secretarias solicitam recursos; o Executivo registra aprovação, rejeição ou devolução. A aprovação **não** empenha nem gasta dinheiro. O módulo fiscal devolve a referência de empenho/execução.
+8. **Rotina mensal:** revisão de metas atrasadas, pendências vencidas, projetos ativos, solicitações pendentes e problemas abertos.
+9. **Rastreabilidade:** trilha de auditoria, caixa de saída de eventos (outbox), exportação/importação e migração do estado 1.0.
 
-Os sete domínios são registrados no Core. O módulo agregado `servicos` mantém o estado compartilhado, fecha mês a mês com `economy:month-closed` e publica `services:month-closed`. A interface apresenta indicadores, prioridades e controles de intensidade de política.
+## O que ele não faz, deliberadamente
 
-Os valores iniciais são parâmetros de cenário, não dados empíricos. Os indicadores são índices abstratos de 0 a 100. Petróleo e minerais têm reservas finitas no modelo; água possui recarga simplificada; eletricidade possui geração, demanda e confiabilidade. A extração mineral aumenta pressão ambiental, moderada pela governança. Produção mineral e governança mineral são alavancas separadas.
+- Não cria nem movimenta dinheiro, orçamento, dívida, receita, despesa ou folha.
+- Não contrata servidores, não altera emprego, salários ou produtividade automaticamente.
+- Não muda diretamente saúde, educação, segurança, infraestrutura, satisfação, aprovação popular, PIB ou qualquer indicador social/econômico.
+- Não aprova leis, não forma coalizões, não calcula apoio parlamentar e não substitui o módulo de Política/Instituições.
+- Não executa obras nem entrega serviços: registra planejamento e acompanha resultados que devem chegar por dados dos módulos responsáveis.
+- Não simula ainda intrigas, corrupção, lealdade dinâmica ou personalidade autônoma dos secretários. Os atributos de perfil são dados de contexto, não motores de efeito.
 
-As relações entre áreas são explícitas em `CROSS_EFFECTS`: saneamento e água afetam saúde; energia sustenta capacidade assistencial; educação forma talentos; ciência e qualificação afetam produtividade; cultura pode fortalecer participação e frequência escolar.
+Essas fronteiras são essenciais: o Gabinete organiza e coordena. Os módulos especializados continuam sendo a fonte da verdade sobre seus próprios resultados.
 
-## O que ainda não está conectado
+## Arquivos
 
-Os controles alteram prioridades/intensidade e os efeitos aparecem nos fechamentos mensais. Nesta versão, eles **não debitam dinheiro do caixa**, não contratam servidores, não criam obras físicas e não consomem insumos da Economia. O vínculo fiscal e operacional precisa ser feito depois, com contratos específicos de orçamento, folha, compras, estoque, infraestrutura e execução. Não se deve interpretar o índice de política como gasto realizado.
+- `src/executive/vilarejo_executive.js`: biblioteca UMD, sem dependências externas, compatível com Node e navegador.
+- `test/executive_test.js`: testes automatizados nativos do Node.
+- `docs/CONTRATO_INTEGRACAO.md`: contrato de integração e eventos.
+- `docs/CAPACIDADES_E_LIMITES.md`: definição funcional do módulo.
 
-Também não há ainda simulação epidemiológica detalhada, rede escolar por unidade, criminalidade por tipo, sistema de patentes, portfólio de projetos de P&D, cadeia completa de petróleo/mineração ou gestão ambiental abrangente. Esses são aprofundamentos futuros.
+## Testes
+
+```bash
+node test/executive_test.js
+```
+
+## Uso mínimo
+
+```js
+const Executive = require('./src/executive/vilarejo_executive.js');
+const gabinete = Executive.createState({ executiveTitle: 'Prefeito' });
+
+const titular = Executive.appointSecretary(gabinete, {
+  departmentId: 'health',
+  name: 'Ana Souza',
+  background: 'Gestora pública',
+  skills: { technical: 85, management: 80, integrity: 90 }
+});
+
+const meta = Executive.addGoal(gabinete, 'health', {
+  title: 'Reduzir tempo de espera', indicator: 'Espera média',
+  baseline: 90, target: 45, direction: 'decrease', unit: 'dias', deadlineMonth: 8
+});
+
+Executive.updateGoal(gabinete, 'health', meta.id, {
+  current: 72, evidence: 'Boletim mensal da Saúde', source: 'health-module'
+});
+
+console.log(Executive.getSnapshot(gabinete).summary);
+```
+
+## Regras importantes de implementação
+
+- Cada operação de escrita é transacional: valida em uma cópia, e só substitui o estado original se a operação inteira for válida.
+- Como a transação substitui os objetos internos, **não guarde referências diretas** a secretarias, pessoas ou metas entre operações. Guarde IDs e consulte `getSnapshot()`.
+- `getSnapshot()` devolve uma cópia. Alterar o snapshot não altera o estado do jogo.
+- O relógio administrativo é mensal e não retrocede. `advanceMonth(state, n)` processa cada mês intermediário.
+- Eventos ficam na outbox até o consumidor confirmar seu processamento com `acknowledgeEvents()`. O consumidor deve tratar o `id` do evento como chave de idempotência.
+- O estado 1.0 deve passar por `migrateV1ToV2()` antes de ser usado no motor 2.0.
+
+## Compatibilidade
+
+Versão do módulo: `2.0.0`. Schema: `2`. Não carregue esta versão junto com a 1.0 no mesmo runtime. A integração na aplicação principal deve ocorrer somente após revisão do contrato por quem mantém o runtime.
