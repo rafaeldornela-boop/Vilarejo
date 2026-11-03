@@ -155,7 +155,7 @@
 
     const electricityInvestment = l.electricity * 0.025 + l.energyTransition * 0.018;
     r.electricity.generation = clamp(r.electricity.generation + electricityInvestment - 0.15);
-    r.electricity.demand = clamp(45 + state.domains.development.indicators.productivity * 0.08 + state.domains.science.indicators.technologyDiffusion * 0.04, 0, 100);
+    r.electricity.demand = clamp(45 + state.domains.development.productivity * 0.08 + state.domains.science.technologyDiffusion * 0.04, 0, 100);
     r.electricity.reliability = clamp(45 + (r.electricity.generation - r.electricity.demand) * 0.7 + infra.indicators.electricityReliability * 0.25);
     r.electricity.renewableShare = clamp(r.electricity.renewableShare + l.energyTransition * 0.02);
 
@@ -246,11 +246,7 @@
   }
 
   function advanceMonth(state, options = {}) {
-    const month = Math.floor(numberOr(options.month, state.currentMonth + 1));
-    if (month === state.currentMonth) {
-      return { month, unchanged: true, crossEffects: {}, satisfaction: Object.fromEntries(DOMAIN_IDS.map((id) => [id, state.domains[id].satisfaction])) };
-    }
-    if (month < state.currentMonth) throw new RangeError("Serviços Públicos não pode retroceder no calendário.");
+    const month = Math.max(state.currentMonth + 1, Math.floor(numberOr(options.month, state.currentMonth + 1)));
     const before = {};
     for (const id of DOMAIN_IDS) before[id] = clone(state.domains[id].indicators);
     applyLevers(state);
@@ -265,7 +261,7 @@
       domain.history.push({ month, satisfaction: domain.satisfaction, indicators: clone(domain.indicators) });
       if (domain.history.length > 36) domain.history.shift();
     }
-    const summary = { month, unchanged: false, crossEffects: clone(crossEffects), satisfaction: Object.fromEntries(DOMAIN_IDS.map((id) => [id, state.domains[id].satisfaction])) };
+    const summary = { month, crossEffects: clone(crossEffects), satisfaction: Object.fromEntries(DOMAIN_IDS.map((id) => [id, state.domains[id].satisfaction])) };
     state.history.push(summary);
     if (state.history.length > 60) state.history.shift();
     return clone(summary);
@@ -334,8 +330,6 @@
     if (runtime.modules.has("servicos")) return { alreadyRegistered: true, state: null, dispose() {} };
     const moduleNames = { health: "saude", education: "educacao", security: "seguranca", science: "ciencia", development: "desenvolvimento", culture: "cultura", infrastructure: "infraestrutura" };
     const moduleTitles = { health: "Saúde", education: "Educação", security: "Segurança", science: "Ciência e Tecnologia", development: "Desenvolvimento", culture: "Cultura", infrastructure: "Infraestrutura e Recursos Estratégicos" };
-    const alreadyRegisteredDomains = Object.values(moduleNames).filter((id) => runtime.modules.has(id));
-    if (alreadyRegisteredDomains.length) throw new Error(`Registro parcial de Serviços Públicos detectado: ${alreadyRegisteredDomains.join(", ")}.`);
     for (const id of DOMAIN_IDS) runtime.modules.register({ id: moduleNames[id], version: VERSION, name: moduleTitles[id], dependencies: ["core", "economia", "sociedade"], description: DOMAIN_DEFINITIONS[id].description });
     runtime.modules.register({ id: "servicos", version: VERSION, name: "Serviços e desenvolvimento", dependencies: DOMAIN_IDS.map((id) => moduleNames[id]), description: "Painel integrado de políticas públicas e recursos estratégicos." });
     const state = createState(options);
@@ -349,9 +343,8 @@
     const unsubs = [];
     unsubs.push(runtime.events.on("game:reset", () => { resetState(state, options); publishSnapshot("servicos.reset"); }));
     unsubs.push(runtime.events.on("economy:month-closed", (event) => {
-      const month = Math.floor(numberOr(event?.payload?.monthNumber, runtime.clock?.snapshot?.().economicMonthNumber || state.currentMonth + 1));
+      const month = Math.max(state.currentMonth + 1, Math.floor(numberOr(event?.payload?.monthNumber, runtime.clock?.snapshot?.().economicMonthNumber || state.currentMonth + 1)));
       const result = advanceMonth(state, { month });
-      if (result.unchanged) return;
       const snapshot = publishSnapshot("servicos.month-closed");
       runtime.publish("services:month-closed", { ...result, snapshot }, "servicos");
     }));
