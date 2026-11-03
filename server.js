@@ -37,7 +37,7 @@ const MIME_TYPES = {
 // index.html e style.css são os únicos arquivos permitidos na raiz.
 const allowedRootFiles = new Set(["index.html", "style.css"]);
 const RUNTIME_SRC_DIRS = new Set([
-  "core", "economy", "events", "institutions", "intelligence", "politics", "services", "shared", "society", "ui"
+  "core", "economy", "events", "institutions", "intelligence", "newspaper", "politics", "services", "shared", "society", "ui"
 ]);
 const PUBLIC_ASSET_EXTENSIONS = new Set([
   ".avif", ".bmp", ".css", ".gif", ".ico", ".jpeg", ".jpg", ".mp3", ".m4a", ".ogg", ".png",
