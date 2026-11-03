@@ -17,6 +17,7 @@ const SCRIPT_PATHS = [
   "src/shared/vilarejo_history_store.js",
   "src/intelligence/vilarejo_intelligence.js",
   "src/intelligence/intelligence_view.js",
+  "src/ui/decision_observer.js",
   "src/ui/dashboard.js"
 ];
 const source = new Map(SCRIPT_PATHS.map((file) => [file, fs.readFileSync(path.join(ROOT, file), "utf8")]));
@@ -41,10 +42,21 @@ function memoryStorage() {
   };
 }
 function makeElement(id) {
+  const classes = new Set(id === "event" ? ["hidden"] : []);
   return {
     id, innerHTML: "", textContent: "", value: "", disabled: false,
     onclick: null, oninput: null, onchange: null, onkeyup: null, dataset: {}, style: {}, addEventListener() {},
-    classList: { add() {}, remove() {}, contains() { return false; }, toggle() { return false; } },
+    classList: {
+      add(...names) { names.forEach((name) => classes.add(name)); },
+      remove(...names) { names.forEach((name) => classes.delete(name)); },
+      contains(name) { return classes.has(name); },
+      toggle(name, force) {
+        if (force === true) { classes.add(name); return true; }
+        if (force === false) { classes.delete(name); return false; }
+        if (classes.has(name)) { classes.delete(name); return false; }
+        classes.add(name); return true;
+      }
+    },
     closest() { return null; }, appendChild() {}, removeChild() {}, setAttribute() {}, getAttribute() { return null; },
     querySelector(selector) { return makeElement(`${id}:${selector}`); }, querySelectorAll() { return []; }
   };
@@ -59,6 +71,7 @@ function createIntegratedSimulation(options = {}) {
     getElementById,
     querySelector: getElementById,
     querySelectorAll: () => [],
+    addEventListener() {},
     createElement: (tag) => makeElement(tag),
     activeElement: null,
     body: getElementById("body"),
@@ -145,6 +158,20 @@ for (const horizon of [12, 24, 60]) {
   });
 }
 
+test("calendário gregoriano visual não reinicia junto ao ano econômico de 360 dias", () => {
+  const day360 = app.window.VilarejoCalendar.simulationDayToCivilDate(360);
+  const day361 = app.window.VilarejoCalendar.simulationDayToCivilDate(361);
+  assert.equal(day360.economicDay, 30);
+  assert.equal(day360.economicMonth, 12);
+  assert.equal(day360.economicYear, 1);
+  assert.equal(day360.civilDay, 26);
+  assert.equal(day360.civilMonth, 12);
+  assert.equal(day361.economicDay, 1);
+  assert.equal(day361.economicMonth, 1);
+  assert.equal(day361.economicYear, 2);
+  assert.equal(day361.civilDay, 27, "calendário civil continua a partir da data gregoriana real");
+});
+
 test("Runtime registra Inteligência como adapter sem alterar o estado econômico", () => {
   const coreSnapshot = runtime.snapshot();
   assert.ok(coreSnapshot.modules.some((module) => module.id === "inteligencia" && module.version === "1.0.0"));
@@ -167,6 +194,44 @@ test("Dashboard mantém navegação Governo/Inteligência e renderiza gráficos,
   assert.match(governmentSummary, /Situação da Base de Governo/);
   assert.ok(governmentSummary.includes(`${institutionSnapshot.alignment.oppositionSeats} <small>/ ${institutionSnapshot.summary.totalSeats} cadeiras</small>`));
   assert.match(governmentSummary, /13º <small>mês de 48/);
+  app.window.VilarejoDashboard.setGovTab("camara");
+  assert.match(app.document.getElementById("institutionsDashboard").innerHTML, /Câmara|coalizão|Coalizão/i);
+  app.window.VilarejoDashboard.setGovTab("politica");
+  assert.match(app.document.getElementById("politicsDashboard").innerHTML, /interesse|grupos|políticos/i);
+
+  const dashboardSnapshot = app.window.VilarejoDashboard.getSnapshot();
+  assert.equal(dashboardSnapshot.runId, service.getCurrentRunId());
+  assert.equal(dashboardSnapshot.monthNumber, 60);
+  assert.equal(dashboardSnapshot.history.length, 60);
+  assert.equal(dashboardSnapshot.history[59].month, 60);
+  const civilNow = app.window.VilarejoCalendar.simulationDayToCivilDate(dashboardSnapshot.day);
+  assert.ok(app.document.getElementById("topbarCivilDate").textContent.includes(String(civilNow.civilYear)));
+  assert.match(app.document.getElementById("dateLabel").textContent, /Ano Econômico/);
+  assert.equal(app.document.getElementById("calendarEconomicMonth").textContent, `Mês ${String(civilNow.economicMonth).padStart(2, "0")}`);
+  assert.match(app.document.getElementById("calendarDays").innerHTML, /is-close-day/);
+  assert.ok(app.document.getElementById("calendarEventList").innerHTML.length > 0);
+  const farmSector = app.window.VilarejoDashboard.selectMapSector("Fazenda e produção", dashboardSnapshot);
+  assert.equal(farmSector.metrics.find((metric) => metric.label === "Estoque da fazenda").value, api.stateSnapshot().farmInventory);
+  assert.match(app.document.getElementById("mapSectorMetrics").innerHTML, /Estoque da fazenda/);
+
+  app.window.VilarejoDashboard.setView("overview");
+  const overview = app.document.getElementById("overviewPulse").innerHTML;
+  assert.match(overview, /ÚLTIMO FECHAMENTO/);
+  assert.match(overview, /População observada/);
+  assert.match(overview, /Mês econômico 60/);
+  assert.match(overview, /não são estimados/);
+
+  const societySnapshot = app.window.VilarejoSocietyRuntime.getSnapshot();
+  app.window.VilarejoDashboard.setView("society");
+  const societyPanel = app.document.getElementById("societyDashboard").innerHTML;
+  assert.match(societyPanel, /POPULAÇÃO TOTAL/);
+  assert.ok(societyPanel.includes(new Intl.NumberFormat("pt-BR").format(societySnapshot.demographic.population)));
+
+  app.window.VilarejoDashboard.setView("services");
+  const servicesPanel = app.document.getElementById("servicesDashboard").innerHTML;
+  assert.match(servicesPanel, /Indicadores de serviços públicos: indisponíveis/);
+  assert.match(servicesPanel, /nenhum índice é estimado/);
+  app.window.VilarejoDashboard.setView("government");
   app.window.VilarejoDashboard.setView("intelligence");
   assert.equal(app.document.getElementById("pageTitle").textContent, "Central de Inteligência");
   const rendered = app.document.getElementById("intelligenceDashboard").innerHTML;
