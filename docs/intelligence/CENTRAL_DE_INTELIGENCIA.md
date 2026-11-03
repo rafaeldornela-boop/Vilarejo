@@ -47,14 +47,18 @@ As regras completas, inclusive fórmulas, mensagens e IDs, estão em `ALERT_RULE
 
 ## Execuções e persistência
 
-Cada execução recebe um ID e mantém no máximo 60 registros mensais. O repositório de séries é versionado (`vilarejo:intelligence:history:v1`) e salvo em `localStorage`; a referência à execução ativa fica em `sessionStorage`. Execuções reiniciadas são arquivadas, em vez de sobrescritas. Se o estado econômico reaparece em um mês anterior ao último registro, o módulo conserva o histórico futuro como arquivo e cria uma execução derivada só com o prefixo de meses válido.
+Cada execução recebe um ID e mantém no máximo 60 registros mensais em uma instância do contrato canônico `src/shared/vilarejo_history_store.js`. A Central não mantém uma segunda lista paralela de snapshots: cada execução persiste um `historySnapshot` exportado pelo History Store. O envelope é versionado (`vilarejo:intelligence:history:v1`, versão 2) em `localStorage`; a referência à execução ativa fica em `sessionStorage`. Registros do formato legado v1 são migrados preservando valores, qualidade, fonte e ordem dos períodos. Execuções reiniciadas são arquivadas, em vez de sobrescritas. Se o estado econômico reaparece em um mês anterior ao último registro, o módulo conserva o histórico futuro como arquivo e cria uma execução derivada só com o prefixo de meses válido.
 
 A persistência analítica não salva nem restaura a partida econômica. Após recarregar o navegador, a simulação pode reiniciar enquanto as séries anteriores permanecem arquivadas. Se `localStorage` não estiver disponível, houver erro de quota ou o formato persistido for incompatível/ilegível, o módulo continua apenas em memória e informa essa condição; conteúdo incompatível ou ilegível não é sobrescrito. A quantidade de execuções arquivadas não é limitada pelo módulo; o limite de 60 aplica-se a cada execução.
+
+## Calendário civil e calendário econômico
+
+O período do History Store registra o número ordinal do mês fechado (`monthNumber`) e, quando disponível, o dia absoluto de simulação (`absoluteDay`). Ano econômico, proveniência e qualidade permanecem como metadados; o serial mensal não é convertido em mês/ano civil. O calendário gregoriano da interface calcula a data civil a partir do dia absoluto, enquanto o motor mantém seu próprio ciclo econômico de 360 dias (12 meses de 30 dias). Esses calendários continuam independentes; a Central não altera a contagem nem as regras do motor.
 
 ## Testes
 
 - `src/test/intelligence_test.js` é uma suíte **unitária**: usa séries sintéticas para testar algoritmos, limiares, persistência, reset e ausências.
-- `src/test/intelligence_integration_test.js` é uma suíte **integrada real**: carrega Core, Economia, Sociedade, Política, Instituições e Inteligência em VM; avança a Economia real por 12, 24 e 60 fechamentos; compara valores com snapshots e APIs públicas, reprocessa o último fechamento sem publicar evento, testa reset e reload.
-- `src/test/test_runner.js` preserva o ambiente econômico já existente e acrescenta verificações estruturais da ordem dos scripts e da fonte histórica única.
+- `src/test/intelligence_integration_test.js` é uma suíte **integrada real**: carrega Core, Economia, Sociedade, Política, Instituições, History Store, Inteligência e dashboard em um contexto que espelha `window === globalThis`; avança a Economia real por 12, 24 e 60 fechamentos; compara valores, meses e dias com snapshots/APIs públicas; testa navegação Governo–Inteligência, gráficos, alertas, indisponibilidades, reset e reload.
+- `src/test/calendar_test.js` e `src/test/history_store_test.js` verificam separadamente o calendário civil e o contrato canônico, inclusive metadados de proveniência/qualidade. `src/test/test_runner.js` preserva o ambiente econômico existente e verifica ordem de carregamento, calendário e fonte histórica única.
 
-Os comandos oficiais são `npm run build` e `npm test`. O teste integrado não injeta valores econômicos, não publica eventos mensais manualmente e não altera funções, parâmetros ou estruturas internas do motor para forçar resultados.
+Os comandos oficiais de validação são `npm ci`, `npm run build`, `npm test` e `git diff --check`. O teste integrado não injeta valores econômicos, não publica eventos mensais manualmente e não altera funções, parâmetros ou estruturas internas do motor para forçar resultados.

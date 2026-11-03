@@ -144,13 +144,19 @@
       throw new TypeError("metrics deve ser um objeto simples.");
     }
 
+    if (input.metadata !== undefined && input.metadata !== null && !isPlainObject(input.metadata)) {
+      throw new TypeError("metadata deve ser um objeto simples.");
+    }
+
     const metrics = cloneSerializable(input.metrics);
+    const metadata = input.metadata == null ? {} : cloneSerializable(input.metadata);
 
     return {
       id: periodKey(sessionId, period),
       sessionId,
       period,
       metrics,
+      metadata,
       source: input.source ? String(input.source) : "simulation",
       capturedAt: input.capturedAt ? String(input.capturedAt) : null,
       schemaVersion: SNAPSHOT_SCHEMA

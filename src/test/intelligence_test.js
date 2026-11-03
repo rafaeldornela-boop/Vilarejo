@@ -130,6 +130,11 @@ test("gravação mantém zeros observados, omite nulos e deduplica por mês", ()
   assert.equal(service.getRunHistory().length, 2);
   assert.equal(service.getCurrentHistory()[0].population, 99);
   assert.equal(service.getCurrentHistory()[0].gdp, 10);
+  const historySnapshot = service.getHistoryStoreSnapshot();
+  assert.equal(historySnapshot.records.length, 2);
+  assert.equal(historySnapshot.activeSessionId, service.getCurrentRunId());
+  const persisted = JSON.parse(pair.storage.getItem(Intelligence.STORAGE_KEY));
+  assert.ok(persisted.runs.every((run) => !Object.hasOwn(run, "records") && run.historySnapshot));
 });
 
 test("reload da mesma execução mantém histórico; mês retrocedido arquiva sem apagar", () => {
@@ -171,6 +176,47 @@ test("formato local incompatível ou ilegível não é sobrescrito", () => {
     assert.equal(service.getSummary().persistence, "somente memória");
     assert.ok(service.getSummary().persistenceWarning);
   }
+});
+
+test("migra histórico local v1 para um History Store por execução sem perder registros", () => {
+  const pair = storagePair();
+  pair.storage.setItem(Intelligence.STORAGE_KEY, JSON.stringify({
+    version: 1,
+    runs: [{
+      id: "legacy-run",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      endedAt: "2026-01-03T00:00:00.000Z",
+      startDay: 1,
+      lastMonth: 2,
+      status: "archived",
+      endReason: "execução anterior",
+      parentRunId: null,
+      records: [
+        { runId: "legacy-run", month: 1, day: 30, year: 1, metrics: { population: 10 }, metricQuality: { population: "observado" }, sources: { population: "Core" } },
+        { runId: "legacy-run", month: 2, day: 60, year: 1, metrics: { population: 11 }, metricQuality: {}, sources: { population: "Core" } }
+      ]
+    }]
+  }));
+  const service = Intelligence.createService({
+    storage: pair.storage,
+    sessionStorage: pair.sessionStorage,
+    idFactory: () => "new-run",
+    currentMonth: 0,
+    capture: (payload) => payload
+  });
+  const history = service.getRunHistory("legacy-run");
+  assert.deepEqual(history.map((item) => item.month), [1, 2]);
+  assert.equal(history[0].metrics.population, 10);
+  assert.equal(history[0].metricQuality.population, "observado");
+  assert.equal(history[0].sources.population, "Core");
+  const migrated = JSON.parse(pair.storage.getItem(Intelligence.STORAGE_KEY));
+  assert.equal(migrated.version, 2);
+  const oldRun = migrated.runs.find((run) => run.id === "legacy-run");
+  assert.equal(oldRun.records, undefined);
+  assert.equal(oldRun.historySnapshot.records.length, 2);
+  assert.equal(oldRun.historySnapshot.activeSessionId, "legacy-run");
+  assert.equal(oldRun.historySnapshot.records[0].period.absoluteDay, 30);
+  assert.equal(oldRun.historySnapshot.records[0].metadata.metricQuality.population, "observado");
 });
 
 test("reset separa execução e carregar checkpoint antigo cria ramo sem meses futuros", () => {

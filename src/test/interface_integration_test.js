@@ -104,7 +104,8 @@ function createDOMContext() {
       }
       if (selector === ".gov-tab-pane") {
         return ["executivo", "camara", "politica"].map((tab) => {
-          const el = makeMockElement(`gov-tab-${tab}`);
+          const el = getElementById(`gov-tab-${tab}`);
+          el.dataset.govPane = tab;
           return el;
         });
       }

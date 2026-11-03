@@ -14,8 +14,10 @@ const SCRIPT_PATHS = [
   "src/society/vilarejo_society.js",
   "src/politics/vilarejo_politics.js",
   "src/institutions/vilarejo_institutions.js",
+  "src/shared/vilarejo_history_store.js",
   "src/intelligence/vilarejo_intelligence.js",
-  "src/intelligence/intelligence_view.js"
+  "src/intelligence/intelligence_view.js",
+  "src/ui/dashboard.js"
 ];
 const source = new Map(SCRIPT_PATHS.map((file) => [file, fs.readFileSync(path.join(ROOT, file), "utf8")]));
 let passed = 0;
@@ -41,7 +43,7 @@ function memoryStorage() {
 function makeElement(id) {
   return {
     id, innerHTML: "", textContent: "", value: "", disabled: false,
-    onclick: null, oninput: null, onchange: null, onkeyup: null, dataset: {}, style: {},
+    onclick: null, oninput: null, onchange: null, onkeyup: null, dataset: {}, style: {}, addEventListener() {},
     classList: { add() {}, remove() {}, contains() { return false; }, toggle() { return false; } },
     closest() { return null; }, appendChild() {}, removeChild() {}, setAttribute() {}, getAttribute() { return null; },
     querySelector(selector) { return makeElement(`${id}:${selector}`); }, querySelectorAll() { return []; }
@@ -62,22 +64,22 @@ function createIntegratedSimulation(options = {}) {
     body: getElementById("body"),
     documentElement: getElementById("html")
   };
-  const window = {
+  const context = {
     document,
     console,
     EventosV3,
+    scrollTo() {},
     localStorage: options.localStorage || memoryStorage(),
-    sessionStorage: options.sessionStorage || memoryStorage()
+    sessionStorage: options.sessionStorage || memoryStorage(),
+    setInterval: () => 1,
+    clearInterval: () => {},
+    setTimeout: () => 1,
+    clearTimeout: () => {}
   };
-  const context = {
-    window, document, console, Math, Date, JSON, Object, Array, Number, String,
-    Boolean, Map, Set, Intl, RegExp, Error, parseInt, parseFloat, isNaN, isFinite,
-    Infinity, NaN, setInterval: () => 1, clearInterval: () => {},
-    setTimeout: () => 1, clearTimeout: () => {}
-  };
+  context.window = context;
   vm.createContext(context);
   for (const file of SCRIPT_PATHS) vm.runInContext(source.get(file), context, { filename: file, timeout: 30000 });
-  return { context, window, document };
+  return { context, window: context, document };
 }
 
 console.log("=== INTELIGÊNCIA: INTEGRAÇÃO REAL COM A SIMULAÇÃO ===");
@@ -98,7 +100,7 @@ for (const horizon of [12, 24, 60]) {
     assert.equal(result.monthNumber, horizon, `horizonte econômico esperado ${horizon}, obtido ${result.monthNumber}`);
     const history = service.getRunHistory(runId);
     assert.equal(history.length, horizon);
-    assert.deepEqual(history.map((record) => record.month), Array.from({ length: horizon }, (_, index) => index + 1));
+    assert.deepEqual(Array.from(history, (record) => record.month), Array.from({ length: horizon }, (_, index) => index + 1));
     assert.ok(history.every((record) => record.runId === runId));
 
     const latest = history[history.length - 1];
@@ -107,9 +109,24 @@ for (const horizon of [12, 24, 60]) {
     const labor = api.getLaborStats();
     const core = runtime.snapshot();
     const society = app.window.VilarejoSocietyRuntime.getSnapshot();
+    const politics = app.window.VilarejoPoliticsRuntime.getSnapshot();
+    const institutions = app.window.VilarejoInstitutionsRuntime.getSnapshot();
+    const storedHistory = service.getHistoryStoreSnapshot(runId);
+    const civilDate = app.window.VilarejoCalendar.simulationDayToCivilDate(latest.day);
     assert.equal(latest.month, state.monthNumber);
     assert.equal(latest.day, state.day);
     assert.ok(Number.isFinite(latest.day));
+    assert.equal(core.calendar.absoluteDay, latest.day);
+    assert.equal(core.calendar.economicMonthNumber, latest.month);
+    assert.equal(politics.currentMonth, latest.month);
+    assert.equal(institutions.currentMonth, latest.month);
+    assert.equal(society.demographicEvents.lastMonth.month, latest.month);
+    assert.equal(storedHistory.activeSessionId, runId);
+    assert.equal(storedHistory.records.length, horizon);
+    assert.equal(storedHistory.records[storedHistory.records.length - 1].period.monthNumber, latest.month);
+    assert.equal(storedHistory.records[storedHistory.records.length - 1].period.absoluteDay, latest.day);
+    assert.equal(civilDate.simDay, latest.day);
+    assert.ok(civilDate.civilYear >= 2026 && civilDate.civilMonth >= 1 && civilDate.civilMonth <= 12);
     assert.equal(latest.metrics.gdpProduction, macro.approaches.production);
     assert.equal(latest.metrics.gdpIncome, macro.approaches.income);
     assert.equal(latest.metrics.unemploymentRate, labor.unemploymentRate);
@@ -131,9 +148,35 @@ for (const horizon of [12, 24, 60]) {
 test("Runtime registra Inteligência como adapter sem alterar o estado econômico", () => {
   const coreSnapshot = runtime.snapshot();
   assert.ok(coreSnapshot.modules.some((module) => module.id === "inteligencia" && module.version === "1.0.0"));
+  assert.ok(coreSnapshot.modules.some((module) => module.id === "politica"));
+  assert.ok(coreSnapshot.modules.some((module) => module.id === "instituicoes"));
   assert.equal(service.getRunHistory().length, 60);
   assert.equal(api.stateSnapshot().monthNumber, 60);
   assert.equal(app.window.VilarejoServicesRuntime, undefined, "a main não publica módulo de serviços históricos");
+});
+
+test("Dashboard mantém navegação Governo/Inteligência e renderiza gráficos, alertas e indisponibilidades", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.ok(app.window.VilarejoDashboard);
+  assert.match(html, /data-view="government"/);
+  assert.match(html, /data-view-panel="government"/);
+  app.window.VilarejoDashboard.setView("government");
+  assert.equal(app.document.getElementById("pageTitle").textContent, "Governo");
+  const governmentSummary = app.document.getElementById("governmentSummaryCard").innerHTML;
+  const institutionSnapshot = app.window.VilarejoInstitutionsRuntime.getSnapshot();
+  assert.match(governmentSummary, /Situação da Base de Governo/);
+  assert.ok(governmentSummary.includes(`${institutionSnapshot.alignment.oppositionSeats} <small>/ ${institutionSnapshot.summary.totalSeats} cadeiras</small>`));
+  assert.match(governmentSummary, /13º <small>mês de 48/);
+  app.window.VilarejoDashboard.setView("intelligence");
+  assert.equal(app.document.getElementById("pageTitle").textContent, "Central de Inteligência");
+  const rendered = app.document.getElementById("intelligenceDashboard").innerHTML;
+  assert.match(rendered, /class="intel-shell"/);
+  assert.match(rendered, /<svg/);
+  assert.match(rendered, /ALERTAS/);
+  assert.match(rendered, /Série histórica indisponível/);
+  const active = service.getAlerts().filter((alert) => alert.status === "ativo" && alert.severity !== "informativo");
+  if (active.length === 0) assert.match(rendered, /Nenhum alerta persistente ativo/);
+  else active.forEach((alert) => assert.ok(rendered.includes(alert.indicator)));
 });
 
 test("reset cria nova execução e preserva a anterior para consulta", () => {
@@ -143,7 +186,9 @@ test("reset cria nova execução e preserva a anterior para consulta", () => {
   const newId = service.getCurrentRunId();
   assert.notEqual(newId, priorId);
   assert.equal(service.getRunHistory(newId).length, 0);
+  assert.equal(service.getHistoryStoreSnapshot(newId).records.length, 0);
   assert.equal(service.getRunHistory(priorId).length, priorHistory.length);
+  assert.equal(service.getHistoryStoreSnapshot(priorId).records.length, priorHistory.length);
   assert.equal(service.getRun(priorId).status, "archived");
 });
 
@@ -157,6 +202,7 @@ test("reload do app arquiva a série anterior quando o estado econômico reinici
   assert.equal(reloaded.window.VilarejoTest.stateSnapshot().monthNumber, 0);
   assert.equal(reloadedService.getRunHistory().length, 0);
   assert.equal(reloadedService.getRunHistory(previousId).length, previousRecords.length);
+  assert.equal(reloadedService.getHistoryStoreSnapshot(previousId).records.length, previousRecords.length);
   assert.equal(reloadedService.getRun(previousId).status, "archived");
 });
 

@@ -26,8 +26,19 @@
   ];
   const WEEKDAY_ABBR = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
 
+  function isLeapYear(year) {
+    const y = Number(year) || 2026;
+    return (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  }
+
+  function getDaysInGregorianMonth(year, month) {
+    // month: 1..12
+    return new Date(Date.UTC(Number(year) || 2026, Number(month) || 1, 0)).getUTCDate();
+  }
+
   let visibleMonths = 12;
   let activeView = "overview";
+  let activeGovTab = "executivo";
   let lastSnapshot = null;
   let lastChartSignature = "";
 
@@ -96,13 +107,6 @@
   }
 
   const getCivilDateInfo = simulationDayToCivilDate;
-
-  let visibleMonths = 12;
-  let activeView = "overview";
-  let activeGovTab = "executivo";
-  let lastSnapshot = null;
-  let lastChartSignature = "";
-
   // Estado de navegação do calendário civil
   let viewedCivilYear = 2026;
   let viewedCivilMonth = 5; // 1..12

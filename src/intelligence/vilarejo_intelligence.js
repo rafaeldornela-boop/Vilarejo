@@ -16,7 +16,8 @@
   "use strict";
 
   const VERSION = "1.0.0";
-  const STORE_VERSION = 1;
+  const STORE_VERSION = 2;
+  const LEGACY_STORE_VERSION = 1;
   const STORAGE_KEY = "vilarejo:intelligence:history:v1";
   const SESSION_KEY = "vilarejo:intelligence:run:v1";
   const MAX_MONTHS_PER_RUN = 60;
@@ -435,6 +436,11 @@
       return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     });
     const now = options.now || (() => new Date().toISOString());
+    const historyStoreAPI = options.historyStoreAPI || windowRef?.VilarejoHistoryStore ||
+      (typeof require === "function" ? require("../shared/vilarejo_history_store.js") : null);
+    if (!historyStoreAPI || typeof historyStoreAPI.createHistoryStore !== "function") {
+      throw new Error("A Central de Inteligência exige o contrato VilarejoHistoryStore.");
+    }
     let persistence = storage ? "localStorage" : "somente memória";
     let persistenceWarning = "";
     let store = { version: STORE_VERSION, runs: [] };
@@ -445,13 +451,122 @@
     let selectedCompareMetrics = ["gdpProduction", "unemploymentRate", "inflationMonthly"];
     let lastResetCount = null;
 
+    function createRunHistory(runId) {
+      return historyStoreAPI.createHistoryStore({ maxRecords: MAX_MONTHS_PER_RUN });
+    }
+
+    function toHistoryInput(runId, record) {
+      const month = Math.floor(Number(record?.month));
+      if (!Number.isSafeInteger(month) || month < 1) throw new TypeError("Mês do snapshot inválido.");
+      const day = finiteOrNull(record.day);
+      const year = finiteOrNull(record.year);
+      const period = { monthNumber: month, label: monthLabel(month) };
+      if (day !== null && Number.isSafeInteger(day) && day >= 1) period.absoluteDay = day;
+      return {
+        sessionId: runId,
+        period,
+        metrics: cleanMetrics(record.metrics),
+        metadata: {
+          day,
+          year,
+          metricQuality: record.metricQuality && typeof record.metricQuality === "object" ? clone(record.metricQuality) : {},
+          sources: record.sources && typeof record.sources === "object" ? clone(record.sources) : {}
+        },
+        source: record.source || "economy:month-closed",
+        capturedAt: record.capturedAt || null
+      };
+    }
+
+    function fromHistoryRecord(record) {
+      if (!record || !record.period || !Number.isFinite(Number(record.period.monthNumber))) return null;
+      const metadata = record.metadata && typeof record.metadata === "object" ? record.metadata : {};
+      return {
+        runId: record.sessionId,
+        month: Math.floor(Number(record.period.monthNumber)),
+        day: finiteOrNull(metadata.day) ?? finiteOrNull(record.period.absoluteDay),
+        year: finiteOrNull(metadata.year) ?? finiteOrNull(record.period.year),
+        metrics: cleanMetrics(record.metrics),
+        metricQuality: metadata.metricQuality && typeof metadata.metricQuality === "object" ? clone(metadata.metricQuality) : {},
+        sources: metadata.sources && typeof metadata.sources === "object" ? clone(metadata.sources) : {},
+        source: record.source || null,
+        capturedAt: record.capturedAt || null
+      };
+    }
+
+    function historyRecords(run) {
+      if (!run?.historyStore) return [];
+      return run.historyStore.getRecords({ sessionId: run.id }).map(fromHistoryRecord).filter(Boolean);
+    }
+
+    function hydrateRun(savedRun, savedVersion) {
+      if (!savedRun || typeof savedRun.id !== "string" || !savedRun.id.trim()) {
+        throw new TypeError("Execução persistida sem identificador válido.");
+      }
+      const runId = savedRun.id.trim();
+      const history = createRunHistory(runId);
+      if (savedVersion === LEGACY_STORE_VERSION) {
+        if (!Array.isArray(savedRun.records)) throw new TypeError("Histórico legado da execução inválido.");
+        history.setActiveSession(runId);
+        const legacyRecords = savedRun.records
+          .filter((record) => record && Number.isFinite(Number(record.month)) && Number(record.month) >= 1 && record.metrics && typeof record.metrics === "object")
+          .slice(-MAX_MONTHS_PER_RUN)
+          .map((record) => toHistoryInput(runId, record));
+        history.appendMany(legacyRecords);
+      } else {
+        if (!savedRun.historySnapshot || typeof savedRun.historySnapshot !== "object") {
+          throw new TypeError("Snapshot do History Store ausente na execução persistida.");
+        }
+        history.importSnapshot(savedRun.historySnapshot);
+        const sessions = history.stats().sessions;
+        if (sessions.some((sessionId) => sessionId !== runId) ||
+            (history.stats().activeSessionId && history.stats().activeSessionId !== runId)) {
+          throw new Error("O History Store da execução contém identificador de partida divergente.");
+        }
+        history.setActiveSession(runId);
+      }
+      const records = historyRecords({ id: runId, historyStore: history });
+      const lastMonth = Math.max(
+        0,
+        Math.floor(Number(savedRun.lastMonth) || 0),
+        ...records.map((record) => record.month)
+      );
+      return {
+        id: runId,
+        createdAt: String(savedRun.createdAt || ""),
+        endedAt: savedRun.endedAt ? String(savedRun.endedAt) : null,
+        startDay: finiteOrNull(savedRun.startDay),
+        lastMonth,
+        status: savedRun.status === "archived" ? "archived" : "active",
+        endReason: savedRun.endReason ? String(savedRun.endReason) : null,
+        parentRunId: savedRun.parentRunId ? String(savedRun.parentRunId) : null,
+        historyStore: history
+      };
+    }
+
+    function persistedStore() {
+      return {
+        version: STORE_VERSION,
+        runs: store.runs.map((run) => ({
+          id: run.id,
+          createdAt: run.createdAt,
+          endedAt: run.endedAt,
+          startDay: run.startDay,
+          lastMonth: run.lastMonth,
+          status: run.status,
+          endReason: run.endReason,
+          parentRunId: run.parentRunId,
+          historySnapshot: run.historyStore.exportSnapshot()
+        }))
+      };
+    }
+
     function loadStore() {
       if (!storage || typeof storage.getItem !== "function") return;
       try {
         const raw = storage.getItem(STORAGE_KEY);
         if (!raw) return;
         const parsed = JSON.parse(raw);
-        if (parsed?.version !== STORE_VERSION || !Array.isArray(parsed.runs)) {
+        if (![LEGACY_STORE_VERSION, STORE_VERSION].includes(parsed?.version) || !Array.isArray(parsed.runs)) {
           persistence = "somente memória";
           persistenceWarning = "O formato de histórico local não é compatível; o conteúdo existente não foi sobrescrito.";
           storage = null;
@@ -459,25 +574,7 @@
         }
         store = {
           version: STORE_VERSION,
-          runs: parsed.runs.filter((run) => run && typeof run.id === "string" && Array.isArray(run.records)).map((run) => ({
-            id: run.id,
-            createdAt: String(run.createdAt || ""),
-            endedAt: run.endedAt ? String(run.endedAt) : null,
-            startDay: finiteOrNull(run.startDay),
-            lastMonth: Math.max(0, Math.floor(Number(run.lastMonth) || 0)),
-            status: run.status === "archived" ? "archived" : "active",
-            endReason: run.endReason ? String(run.endReason) : null,
-            parentRunId: run.parentRunId ? String(run.parentRunId) : null,
-            records: run.records.filter((record) => record && Number.isFinite(Number(record.month)) && record.metrics && typeof record.metrics === "object").slice(-MAX_MONTHS_PER_RUN).map((record) => ({
-              runId: run.id,
-              month: Math.floor(Number(record.month)),
-              day: finiteOrNull(record.day),
-              year: finiteOrNull(record.year),
-              metrics: cleanMetrics(record.metrics),
-              metricQuality: record.metricQuality && typeof record.metricQuality === "object" ? record.metricQuality : {},
-              sources: record.sources && typeof record.sources === "object" ? record.sources : {}
-            }))
-          }))
+          runs: parsed.runs.map((run) => hydrateRun(run, parsed.version))
         };
       } catch (error) {
         persistence = "somente memória";
@@ -489,7 +586,7 @@
     function persist() {
       try {
         if (storage && typeof storage.setItem === "function") {
-          storage.setItem(STORAGE_KEY, JSON.stringify(store));
+          storage.setItem(STORAGE_KEY, JSON.stringify(persistedStore()));
           persistence = "localStorage";
         } else {
           persistence = "somente memória";
@@ -509,7 +606,13 @@
     function getActiveRun() { return findRun(activeRunId); }
 
     function makeRun(id, details = {}) {
-      const runId = id || idFactory();
+      const runId = String(id || idFactory()).trim();
+      const history = createRunHistory(runId);
+      history.setActiveSession(runId);
+      if (Array.isArray(details.records) && details.records.length) {
+        history.appendMany(details.records.map((record) => toHistoryInput(runId, record)));
+      }
+      const records = historyRecords({ id: runId, historyStore: history });
       const run = {
         id: runId,
         createdAt: now(),
@@ -519,9 +622,9 @@
         status: "active",
         endReason: null,
         parentRunId: details.parentRunId || null,
-        records: Array.isArray(details.records) ? details.records.map((record) => ({ ...clone(record), runId })) : []
+        historyStore: history
       };
-      if (run.records.length) run.lastMonth = Math.max(...run.records.map((record) => Number(record.month) || 0));
+      if (records.length) run.lastMonth = Math.max(...records.map((record) => record.month));
       store.runs.push(run);
       activeRunId = run.id;
       selectedRunId = run.id;
@@ -573,7 +676,7 @@
 
     function getRunHistory(runId = activeRunId) {
       const run = findRun(runId);
-      return run ? clone(run.records) : [];
+      return historyRecords(run);
     }
 
     function toDashboardHistory(runId = activeRunId) {
@@ -597,11 +700,30 @@
         status: run.id === activeRunId ? "execução atual" : (run.status === "archived" ? "arquivada" : "outra execução"),
         endReason: run.endReason,
         parentRunId: run.parentRunId,
-        recordCount: run.records.length
+        recordCount: run.historyStore.stats().records
       }));
     }
 
-    function getRun(runId = activeRunId) { return clone(findRun(runId)); }
+    function publicRun(run) {
+      if (!run) return null;
+      return {
+        id: run.id,
+        createdAt: run.createdAt,
+        endedAt: run.endedAt,
+        startDay: run.startDay,
+        lastMonth: run.lastMonth,
+        status: run.status,
+        endReason: run.endReason,
+        parentRunId: run.parentRunId,
+        records: historyRecords(run)
+      };
+    }
+
+    function getRun(runId = activeRunId) { return publicRun(findRun(runId)); }
+    function getHistoryStoreSnapshot(runId = activeRunId) {
+      const run = findRun(runId);
+      return run ? run.historyStore.exportSnapshot() : null;
+    }
 
     function selectRun(runId) {
       if (!findRun(runId)) return false;
@@ -627,7 +749,7 @@
       if (!captured || !Number.isFinite(Number(captured.month))) return null;
       const month = Math.floor(Number(captured.month));
       if (month < 1) return null;
-      const existing = run.records.find((record) => record.month === month);
+      const existing = historyRecords(run).find((record) => record.month === month);
       if (month < run.lastMonth) return existing ? clone(existing) : null;
       const record = {
         runId: run.id,
@@ -636,28 +758,29 @@
         year: finiteOrNull(captured.year),
         metrics: cleanMetrics(captured.metrics),
         metricQuality: captured.metricQuality && typeof captured.metricQuality === "object" ? clone(captured.metricQuality) : {},
-        sources: captured.sources && typeof captured.sources === "object" ? clone(captured.sources) : {}
+        sources: captured.sources && typeof captured.sources === "object" ? clone(captured.sources) : {},
+        source: "economy:month-closed",
+        capturedAt: now()
       };
-      if (existing) {
-        const position = run.records.indexOf(existing);
-        run.records[position] = record;
-      } else {
-        run.records.push(record);
+      try {
+        const result = run.historyStore.append(toHistoryInput(run.id, record));
+        const savedRecord = fromHistoryRecord(result.record);
+        run.lastMonth = Math.max(run.lastMonth, month);
+        persist();
+        return savedRecord ? clone(savedRecord) : null;
+      } catch (error) {
+        persistenceWarning = `Falha ao registrar snapshot mensal no History Store: ${error.message || error}`;
+        return null;
       }
-      run.records.sort((a, b) => a.month - b.month);
-      if (run.records.length > MAX_MONTHS_PER_RUN) run.records.splice(0, run.records.length - MAX_MONTHS_PER_RUN);
-      run.lastMonth = Math.max(run.lastMonth, month);
-      persist();
-      return clone(record);
     }
 
     function resetForNewGame(details = {}) {
       const resetCount = finiteOrNull(details.resetCount);
-      if (resetCount !== null && resetCount === lastResetCount) return getActiveRun();
+      if (resetCount !== null && resetCount === lastResetCount) return publicRun(getActiveRun());
       lastResetCount = resetCount;
       const run = archiveAndStart("reset explícito da partida", { startDay: finiteOrNull(details.day) });
       selectedRunId = run.id;
-      return clone(run);
+      return publicRun(run);
     }
 
     function activateGame(details = {}) {
@@ -665,12 +788,12 @@
       const currentMonth = Math.max(0, Math.floor(Number(details.monthNumber ?? getRuntimeMonth()) || 0));
       if (!requestedId) {
         const next = archiveAndStart("troca de partida sem identificador persistente", { startDay: finiteOrNull(details.day) });
-        return clone(next);
+        return publicRun(next);
       }
       let target = findRun(requestedId);
       if (target && currentMonth < target.lastMonth) {
         archiveRun(target, "carregamento de um ponto anterior; execução derivada separada para evitar misturar meses futuros");
-        const prefix = target.records.filter((record) => record.month <= currentMonth);
+        const prefix = historyRecords(target).filter((record) => record.month <= currentMonth);
         target = makeRun(null, { startDay: finiteOrNull(details.day), parentRunId: requestedId, records: prefix });
       } else if (!target) {
         target = makeRun(requestedId, { startDay: finiteOrNull(details.day) });
@@ -681,7 +804,7 @@
         selectedRunId = target.id;
         persist();
       }
-      return clone(target);
+      return publicRun(target);
     }
 
     function getAlerts(runId = activeRunId) { return analyzeAlerts(getRunHistory(runId)); }
@@ -698,7 +821,7 @@
         version: VERSION,
         runId: activeRunId,
         month: run?.lastMonth || 0,
-        recordCount: run?.records?.length || 0,
+        recordCount: run?.historyStore?.stats?.().records || 0,
         alerts: getAlerts(activeRunId).filter((alert) => alert.status === "ativo" || alert.status === "dados pendentes").length,
         persistence,
         persistenceWarning: persistenceWarning || null
@@ -714,6 +837,7 @@
       resetForNewGame,
       activateGame,
       getRunHistory,
+      getHistoryStoreSnapshot,
       getCurrentHistory: () => toDashboardHistory(activeRunId),
       getRunList,
       getRun,
