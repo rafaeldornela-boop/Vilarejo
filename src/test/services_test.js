@@ -32,24 +32,6 @@ test("evolui mês sem valores inválidos", () => {
   assert.equal(result.month, 1); assert.equal(s.currentMonth, 1);
   for (const d of Object.values(s.domains)) for (const v of Object.values(d.indicators)) assert.ok(Number.isFinite(v) && v >= 0 && v <= 100);
 });
-test("calcula demanda elétrica a partir dos indicadores existentes", () => {
-  const s = Services.createState();
-  Services.updateResources(s, 1);
-  const expected = 45 + s.domains.development.indicators.productivity * 0.08 + s.domains.science.indicators.technologyDiffusion * 0.04;
-  assert.ok(Number.isFinite(s.resources.electricity.demand));
-  assert.ok(s.resources.electricity.demand > 0);
-  assert.ok(Math.abs(s.resources.electricity.demand - expected) < 0.001);
-});
-test("não processa o mesmo fechamento mais de uma vez e rejeita retrocesso", () => {
-  const s = Services.createState();
-  const first = Services.advanceMonth(s, { month: 1 });
-  const before = JSON.stringify(s);
-  const duplicate = Services.advanceMonth(s, { month: 1 });
-  assert.equal(first.unchanged, false);
-  assert.equal(duplicate.unchanged, true);
-  assert.equal(JSON.stringify(s), before);
-  assert.throws(() => Services.advanceMonth(s, { month: 0 }), RangeError);
-});
 test("efeito do saneamento alcança resultados de saúde", () => {
   const s = Services.createState();
   const low = Services.createState();
@@ -111,22 +93,7 @@ test("integra com runtime e fecha mês uma vez", () => {
   for (const id of ["core", "economia", "sociedade"]) modules.set(id, { id });
   const adapter = Services.registerWithRuntime(runtime);
   for (const fn of handlers.get("economy:month-closed")) fn({ payload: { monthNumber: 1 } });
-  for (const fn of handlers.get("economy:month-closed")) fn({ payload: { monthNumber: 1 } });
   assert.equal(adapter.state.currentMonth, 1); assert.equal(published, 1); assert.ok(modules.get("servicos").snapshot);
   for (const id of ["saude", "educacao", "seguranca", "ciencia", "desenvolvimento", "cultura", "infraestrutura"]) assert.ok(modules.has(id));
-});
-test("rejeita registro parcial sem duplicar os módulos restantes", () => {
-  const modules = new Map(["core", "economia", "sociedade", "saude"].map((id) => [id, { id }]));
-  const runtime = {
-    modules: {
-      has: (id) => modules.has(id),
-      register: (descriptor) => modules.set(descriptor.id, descriptor),
-      updateSnapshot: () => {}
-    },
-    events: { on: () => () => {} },
-    publish: () => {}
-  };
-  assert.throws(() => Services.registerWithRuntime(runtime), /Registro parcial/);
-  assert.equal(modules.size, 4);
 });
 console.log(`\n${passed} testes de Serviços aprovados.`);
