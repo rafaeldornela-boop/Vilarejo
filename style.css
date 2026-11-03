@@ -57,7 +57,15 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid rgba(201, 15
 .breadcrumb { display: flex; align-items: center; gap: 10px; color: #9aa39c; font-size: 10px; font-weight: 800; letter-spacing: 1.1px; }
 .breadcrumb i { color: #c3c9c2; font-style: normal; }
 .breadcrumb strong { color: var(--ink); font-size: 12px; letter-spacing: 0; }
+.topbar-date-block { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #ffffff; border: 1px solid #e1e7dc; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.025); }
+.topbar-calendar-icon { font-size: 15px; }
+.topbar-date-text { display: flex; flex-direction: column; text-align: left; line-height: 1.25; }
+.topbar-date-text strong { font-size: 11px; font-weight: 800; color: var(--forest); }
+.topbar-date-text small { font-size: 9px; color: #7f8e83; font-weight: 600; }
 .date-label { color: #7a887f; font-size: 11px; font-weight: 600; }
+.season-badge { padding: 4px 8px; border-radius: 99px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.season-badge.is-harvest { color: #2b7044; background: #eaf5e7; border: 1px solid #cce5c6; }
+.season-badge.is-offseason { color: #8c734b; background: #fbf6ec; border: 1px solid #ebdcc5; }
 .status-pill { padding: 6px 10px; border: 1px solid #e5e9e2; border-radius: 99px; color: #627167; background: #f5f7f2; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .status-pill::before { width: 6px; height: 6px; display: inline-block; margin: 0 7px 1px 0; border-radius: 50%; background: var(--gold); content: ""; }
 .status-pill.is-running { color: #2b7654; border-color: #d2e8d8; background: #edf7ef; }
@@ -79,7 +87,7 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 @keyframes panelIn { from { opacity: .45; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 
 
-.calendar-board { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:0; overflow:hidden; margin-bottom:12px; border:1px solid #e3e9df; border-radius:14px; background:var(--paper); box-shadow:var(--shadow); }
+.calendar-board { display:grid; grid-template-columns:minmax(0,1fr) 270px; gap:0; overflow:hidden; margin-bottom:12px; border:1px solid #e3e9df; border-radius:14px; background:var(--paper); box-shadow:var(--shadow); }
 .calendar-primary { min-width:0; display:grid; grid-template-columns:190px minmax(0,1fr); gap:22px; padding:20px 22px; }
 .calendar-date-card { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding-right:18px; border-right:1px solid #edf0e9; }
 .calendar-date-weekday { margin-top:16px; color:#8d9a8e; font-size:9px; font-weight:800; letter-spacing:1.2px; }
@@ -89,7 +97,15 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 .calendar-month-card { min-width:0; }
 .calendar-month-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
 .calendar-month-heading h2 { margin:3px 0 0; color:var(--forest); font:800 17px var(--heading); }
-.calendar-current-tag { padding:5px 8px; border-radius:99px; color:#67856d; background:#edf4e9; font-size:8px; font-weight:800; letter-spacing:.8px; }
+.calendar-heading-actions { display:flex; align-items:center; gap:10px; }
+.calendar-nav-controls { display:flex; align-items:center; gap:4px; }
+.calendar-nav-btn { width:28px; height:28px; display:grid; place-items:center; border:1px solid #dce4d8; border-radius:6px; background:#fff; color:var(--forest); font-size:15px; font-weight:700; transition:.15s ease; }
+.calendar-nav-btn:hover { background:#f0f5ec; border-color:#c4d3be; }
+.calendar-nav-today { height:28px; padding:0 10px; border:1px solid #dce4d8; border-radius:6px; background:#fff; color:var(--forest); font-size:11px; font-weight:700; transition:.15s ease; }
+.calendar-nav-today:hover { background:#f0f5ec; }
+.calendar-current-tag { padding:4px 8px; border-radius:99px; font-size:8px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; }
+.calendar-current-tag.is-current { color:#386b4f; background:#ebf5e8; border:1px solid #d0e7cb; }
+.calendar-current-tag.is-browsing { color:#946f34; background:#fbf5e7; border:1px solid #f2e2be; }
 .calendar-weekdays,.calendar-days { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; text-align:center; }
 .calendar-weekdays { margin-bottom:5px; }
 .calendar-weekdays span { padding:3px 0; color:#a0aaa1; font-size:8px; font-weight:800; letter-spacing:.6px; }
@@ -99,6 +115,14 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 .calendar-day.is-weekend { color:#9b8b71; }
 .calendar-day.is-today { color:#fff; background:var(--forest-2); box-shadow:0 3px 9px rgba(24,55,45,.18); font-weight:800; transform:scale(1.04); }
 .calendar-day.is-today::after { position:absolute; bottom:3px; width:3px; height:3px; border-radius:50%; background:#e8c888; content:""; }
+.calendar-day.is-close-day { border: 1px dashed #b58d55; }
+.calendar-day.is-harvest-day { background: #f2f7ec; }
+.close-marker { font-size: 6px; color: #b58d55; position: absolute; top: 1px; right: 3px; font-style: normal; }
+.calendar-legend { display:flex; align-items:center; gap:14px; margin-top:10px; padding-top:8px; border-top:1px solid #edf1ea; color:#828f85; font-size:9px; font-weight:600; }
+.legend-swatch { width:8px; height:8px; display:inline-block; border-radius:3px; vertical-align:middle; margin-right:4px; }
+.legend-swatch.is-today { background:var(--forest-2); }
+.legend-swatch.is-harvest-day { background:#d4e6c7; border:1px solid #a6c493; }
+.legend-dot-close { color:#b58d55; font-size:9px; vertical-align:middle; margin-right:2px; }
 .calendar-agenda { display:flex; flex-direction:column; padding:20px 18px 17px; border-left:1px solid #e8ede5; background:#f8faf5; }
 .calendar-agenda-heading { display:flex; align-items:center; justify-content:space-between; }
 .calendar-clock-icon { color:#b08a50; font-size:19px; }
@@ -111,14 +135,34 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
 .calendar-agenda-item strong { display:block; margin-top:3px; color:var(--forest); font:800 13px var(--heading); }
 .calendar-agenda-item p { margin:3px 0 0; color:#8a968c; font-size:9px; line-height:1.4; }
 .calendar-agenda-separator { height:1px; margin:15px 0 0 18px; background:#e7ece3; }
-.calendar-economic-year { display:grid; grid-template-columns:1fr auto; align-items:center; gap:2px 8px; margin-top:auto; padding-top:15px; border-top:1px solid #e7ece3; }
-.calendar-economic-year span { color:#8b988d; font-size:9px; font-weight:700; }
-.calendar-economic-year strong { grid-column:2; grid-row:1 / span 2; color:#ad8951; font:800 27px var(--heading); }
-.calendar-economic-year small { color:#9ba59c; font-size:8px; }
+.calendar-economic-badges { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:auto; padding-top:12px; border-top:1px solid #e7ece3; }
+.econ-badge-item { display:flex; flex-direction:column; padding:6px 8px; border-radius:7px; background:#ffffff; border:1px solid #e4eae0; }
+.econ-badge-item small { color:#8c978e; font-size:7.5px; font-weight:800; letter-spacing:.5px; }
+.econ-badge-item strong { color:var(--forest); font:800 12.5px var(--heading); margin-top:2px; }
+
+.gov-summary-card { margin-bottom:16px; border:1px solid #dee5d8; border-radius:12px; background:var(--paper); box-shadow:var(--shadow); overflow:hidden; }
+.gov-summary-content { padding:18px 22px; }
+.gov-summary-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.gov-summary-header h3 { margin:3px 0 0; font-size:17px; font-weight:800; color:var(--forest); }
+.gov-kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+.gov-kpi-item { display:flex; flex-direction:column; padding:12px 14px; border:1px solid #e5ebe0; border-radius:9px; background:#f9fbf7; }
+.gov-kpi-item small { color:#829186; font-size:8.5px; font-weight:800; letter-spacing:.8px; }
+.gov-kpi-item strong { margin-top:3px; color:var(--forest); font:800 17px var(--heading); letter-spacing:-.5px; }
+.gov-kpi-item strong small { color:#79877d; font-size:11px; font-weight:600; }
+.gov-kpi-item span { margin-top:3px; color:#738278; font-size:10px; }
+.gov-actions-row { display:flex; gap:10px; flex-wrap:wrap; }
+.btn-gov-shortcut { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border:1px solid #c9d8c3; border-radius:7px; background:#eef6ec; color:var(--forest); font-size:11px; font-weight:700; transition:.16s ease; }
+.btn-gov-shortcut:hover { background:#e2f0de; border-color:#b3c9ac; }
+.gov-badge { padding:5px 10px; border-radius:99px; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
+.gov-badge.is-majority { color:#246a3e; background:#eaf5e7; border:1px solid #cae4c4; }
+.gov-badge.is-minority { color:#946f34; background:#fbf5e7; border:1px solid #f2e2be; }
+.gov-badge.is-not-formed { color:#728177; background:#f0f3ed; border:1px solid #d9e2d6; }
+
 @media (max-width:1100px) {
-  .calendar-board { grid-template-columns:minmax(0,1fr) 225px; }
+  .calendar-board { grid-template-columns:minmax(0,1fr) 235px; }
   .calendar-primary { grid-template-columns:150px minmax(0,1fr); gap:15px; padding:17px; }
   .calendar-date-number { font-size:59px; }
+  .gov-kpi-row { grid-template-columns:1fr; }
 }
 @media (max-width:760px) {
   .calendar-board { grid-template-columns:1fr; }
@@ -129,7 +173,7 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
   .calendar-agenda-heading { grid-column:1 / -1; }
   .calendar-agenda-item { margin-top:3px; }
   .calendar-agenda-separator { display:none; }
-  .calendar-economic-year { grid-column:1 / -1; margin-top:2px; padding-top:9px; }
+  .calendar-economic-badges { grid-column:1 / -1; margin-top:4px; padding-top:9px; }
 }
 @media (max-width:420px) {
   .calendar-primary { grid-template-columns:1fr; }
@@ -142,7 +186,7 @@ h1 { margin: 5px 0 4px; font-size: clamp(27px, 3vw, 36px); font-weight: 800; let
   .calendar-day,.calendar-blank { aspect-ratio:1.65; }
   .calendar-agenda { grid-template-columns:1fr; }
   .calendar-agenda-heading { grid-column:auto; }
-  .calendar-economic-year { grid-column:auto; }
+  .calendar-economic-badges { grid-column:auto; }
 }
 
 .cycle-strip { margin-bottom: 12px; padding: 13px 17px; border: 1px solid #e2e8dd; border-radius: 11px; background: #f9fbf6; }
@@ -304,6 +348,325 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 .app-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 25px; padding: 17px 2px 0; border-top: 1px solid #e3e8e0; color: #9aa49b; font-size: 8px; letter-spacing: .7px; }
 .app-footer span:first-child { font-weight: 800; }
 
+/* Sociedade */
+.society-host { margin-bottom: 20px; }
+.society-dashboard { display: grid; gap: 14px; margin-bottom: 6px; }
+.society-kpis-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.society-card { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.society-huge { display: block; margin: 3px 0 2px; color: var(--forest); font: 800 24px var(--heading); letter-spacing: -.5px; }
+.society-huge small { font-size: 12px; font-weight: 600; color: #8a968d; }
+.society-sub { display: block; color: #7f8e83; font-size: 9px; font-weight: 600; }
+.society-stat-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 7px; border-top: 1px solid #edf0eb; font-size: 9px; color: #87948b; }
+.society-stat-meta b { color: #4b5c51; font-weight: 700; text-align: right; }
+.society-details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.society-bars-group { display: grid; gap: 9px; margin-top: 10px; }
+.society-bar-row { display: flex; flex-direction: column; gap: 4px; }
+.society-bar-label { display: flex; justify-content: space-between; font-size: 9px; color: #5f7064; }
+.society-bar-label b { color: var(--forest); font-weight: 700; }
+.society-bar-track { height: 6px; overflow: hidden; border-radius: 99px; background: #edf1ea; }
+.society-bar-track span { display: block; height: 100%; border-radius: inherit; background: #68926b; }
+.society-bar-track.active-track span { background: #4a8057; }
+.society-bar-track.child-track span { background: #b58d55; }
+.society-bar-track.elder-track span { background: #7a889b; }
+.society-data-note { margin-top: 11px; padding: 9px 11px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.45; }
+.society-recent-events { margin-top: 12px; padding-top: 10px; border-top: 1px solid #edf0eb; }
+.society-event-list { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.society-event-list li { display: flex; align-items: baseline; gap: 7px; font-size: 9px; color: #627267; }
+.society-event-list li small { padding: 2px 5px; border-radius: 4px; background: #edf2eb; color: #496351; font-weight: 700; font-size: 8px; white-space: nowrap; }
+.society-muted { color: #8a968c; font-size: 9px; margin: 4px 0; }
+.vital-div { color: #b0bbb3; margin: 0 2px; }
+.actor-list { margin-top: 10px; }
+.actor-card { padding: 11px 13px; border: 1px solid #e7ebe3; border-radius: 8px; background: #fcfdfa; margin-bottom: 7px; transition: border-color .15s ease, box-shadow .15s ease; }
+.actor-card:hover { border-color: #bad3be; box-shadow: 0 2px 6px rgba(0,0,0,.03); }
+.actor-head { display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: var(--forest); font-weight: 800; }
+.actor-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 8.5px; color: #7d8b81; }
+
+/* Serviços Públicos */
+.services-host { min-width: 0; }
+.services-dashboard-content { display: grid; gap: 14px; }
+.services-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.service-kpi-card { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.service-kpi-card strong { display: block; margin: 3px 0 2px; color: var(--forest); font: 800 24px var(--heading); }
+.service-kpi-card span { display: block; color: #7f8e83; font-size: 9px; font-weight: 600; }
+.services-details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.services-details-grid > .content-card { padding: 18px; }
+.services-stat-list { display: grid; gap: 6px; margin-top: 10px; }
+.services-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #edf0eb; font-size: 9.5px; color: #6e7d73; }
+.services-stat-row b { color: #3f5245; font-weight: 700; text-align: right; }
+
+.politics-host { min-width: 0; }
+.politics-dashboard { display: grid; gap: 15px; }
+.politics-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.politics-summary-card { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.politics-summary-card span { display: block; color: #87948a; font-size: 9px; font-weight: 700; }
+.politics-summary-card strong { display: block; margin-top: 5px; color: var(--forest); font: 800 21px var(--heading); }
+.politics-section-heading { margin: 5px 0 0; }
+.politics-section-heading h2 { margin: 4px 0; color: var(--forest); font: 800 18px var(--heading); }
+.politics-section-heading p { max-width: 760px; color: var(--muted); font-size: 10px; }
+.politics-groups-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.politics-group-card { min-width: 0; padding: 16px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
+.politics-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.politics-group-head h3 { margin: 0; color: var(--forest); font: 800 14px var(--heading); }
+.politics-group-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.politics-relation { flex: 0 0 auto; padding: 5px 8px; border-radius: 99px; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.politics-support { color: #427653; background: #edf5eb; }
+.politics-neutral { color: #81704f; background: #f6f0e4; }
+.politics-opposition { color: #a14f47; background: #f9ece9; }
+.politics-influence { display: flex; justify-content: space-between; gap: 10px; margin-top: 13px; color: #75837a; font-size: 9px; }
+.politics-influence strong { color: var(--forest); font-size: 11px; }
+.politics-track { height: 6px; overflow: hidden; margin-top: 6px; border-radius: 99px; background: #edf0e9; }
+.politics-track span { display: block; height: 100%; border-radius: inherit; background: #789b75; }
+.politics-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 13px; margin-top: 12px; }
+.politics-metrics div { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid #edf0eb; font-size: 9px; }
+.politics-metrics span { color: #89958c; }
+.politics-metrics b { color: #4c6052; text-align: right; }
+.politics-measurement { min-height: 28px; margin: 10px 0 8px; color: #8b968e; font-size: 8px; line-height: 1.45; }
+.politics-interests { display: flex; flex-wrap: wrap; gap: 5px; }
+.politics-interests span { padding: 4px 7px; border-radius: 5px; color: #63776a; background: #f0f4ed; font-size: 8px; }
+.politics-data-note { margin: 0; padding: 11px 13px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.5; }
+
+.institutions-host { min-width: 0; }
+.institutions-dashboard { display: grid; gap: 14px; }
+.institutions-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.institutions-kpi { min-width: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.institutions-kpi span { display: block; color: #87948a; font-size: 9px; font-weight: 700; }
+.institutions-kpi strong { display: block; margin-top: 5px; color: var(--forest); font: 800 19px var(--heading); }
+.institutions-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, .8fr); gap: 13px; align-items: start; }
+.institutions-main-card, .institutions-side-card { min-width: 0; padding: 19px; }
+.institutions-side-card h3 { margin: 5px 0; color: var(--forest); font: 800 16px var(--heading); }
+.institutions-side-card p { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.institutions-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.institution-group-card { min-width: 0; padding: 11px 12px; border: 1px solid #e9ede6; border-radius: 8px; background: #fcfdf9; }
+.institution-group-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.institution-group-top strong { display: block; color: #425448; font-size: 10px; }
+.institution-group-top small { display: block; margin-top: 2px; color: #89968d; font-size: 8px; }
+.institution-group-top > b { flex: 0 0 auto; color: var(--forest); font: 800 18px var(--heading); text-align: right; }
+.institution-group-top > b small { display: inline; font: 500 8px var(--font); }
+.institution-seat-track, .institution-term-track { height: 6px; overflow: hidden; margin-top: 8px; border-radius: 99px; background: #edf0e9; }
+.institution-seat-track span, .institution-term-track span { display: block; height: 100%; border-radius: inherit; background: #789b75; }
+.institution-group-meta, .institution-stat { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #89958c; font-size: 8px; }
+.institution-group-meta span:last-child { text-align: right; }
+.institution-data-note { margin-top: 12px; padding: 10px 12px; border: 1px solid #e6e9e1; border-radius: 8px; color: #7d897f; background: #f8faf6; font-size: 9px; line-height: 1.5; }
+.institution-divider { height: 1px; margin: 14px 0; background: #edf0eb; }
+.institution-coalition-status { display: inline-block; margin: 8px 0 5px; padding: 5px 8px; border-radius: 99px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.institution-coalition-status.is-majority { color: #427653; background: #edf5eb; }
+.institution-coalition-status.is-minority { color: #8a6840; background: #f6f0e4; }
+.institution-coalition-status.is-not-formed { color: #8c827a; background: #f0edea; }
+.institution-coalition-list { display: grid; gap: 5px; }
+.institution-coalition-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #edf0eb; color: #6f7d73; font-size: 9px; }
+.institution-coalition-row b { color: #4b5c50; white-space: nowrap; }
+.institution-coalition-leader { color: #3b6b47; font-weight: 800; margin-left: 4px; font-size: 8px; }
+.institution-empty { color: #89958c; font-size: 9px; line-height: 1.5; }
+.institution-term { display: flex; align-items: baseline; gap: 8px; margin-top: 5px; }
+.institution-term strong { color: var(--forest); font: 800 24px var(--heading); }
+.institution-term span { color: #87948a; font-size: 9px; }
+
+.institution-coalition-controls { margin-top: 12px; padding: 12px; background: #f7faf5; border: 1px solid #e1e7dc; border-radius: 8px; }
+.institution-control-header { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.institution-control-header strong { color: var(--forest); font-size: 10px; font-weight: 800; }
+.institution-live-counter { color: #6a796e; font-size: 9px; }
+.institution-live-counter.has-majority { color: #2e6939; font-weight: 700; }
+.institution-checkbox-grid { display: grid; gap: 6px; margin: 8px 0; }
+.institution-checkbox-row { padding: 6px 8px; background: #ffffff; border: 1px solid #e5ebe1; border-radius: 6px; transition: background .15s ease, border-color .15s ease; }
+.institution-checkbox-row.is-selected { background: #f1f7ee; border-color: #bad3be; }
+.institution-checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 9px; width: 100%; }
+.institution-checkbox-label input[type="checkbox"] { cursor: pointer; accent-color: var(--forest, #2d5a3b); }
+.institution-group-name { font-weight: 700; color: #3d4f43; flex: 1; }
+.institution-group-seats { color: #68796d; font-size: 8.5px; }
+.institution-relation-tag { font-size: 7.5px; padding: 2px 6px; border-radius: 99px; text-transform: uppercase; font-weight: 800; margin-left: 4px; }
+.institution-relation-tag.is-support { color: #2e6939; background: #e6f2e4; }
+.institution-relation-tag.is-neutral { color: #7a6330; background: #f8f1de; }
+.institution-relation-tag.is-opposition { color: #9c3f37; background: #fae8e6; }
+.institution-coalition-actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn-institution-primary, .btn-institution-secondary { padding: 7px 12px; border-radius: 6px; font-size: 9px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: all .15s ease; }
+.btn-institution-primary { background: var(--forest, #2d5a3b); color: #ffffff; }
+.btn-institution-primary:hover { background: #23482f; }
+.btn-institution-secondary { background: #ffffff; color: #5f7064; border-color: #ccd5c8; }
+.btn-institution-secondary:hover:not(:disabled) { background: #f3f6f1; color: #3f4e43; }
+.btn-institution-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.institution-coalition-feedback { margin-top: 8px; font-size: 8.5px; line-height: 1.4; }
+.institution-coalition-feedback.is-success { color: #2b6d39; padding: 6px 8px; background: #eaf4e8; border-radius: 5px; }
+.institution-coalition-feedback.is-info { color: #526759; padding: 6px 8px; background: #edf2eb; border-radius: 5px; }
+.institution-coalition-feedback.is-error { color: #9c322b; padding: 6px 8px; background: #fbeae9; border-radius: 5px; }
+.institution-opposition-list { display: grid; gap: 4px; margin-top: 6px; }
+.institution-opposition-row { display: flex; justify-content: space-between; font-size: 8.5px; color: #7a8a7f; padding: 3px 0; border-bottom: 1px dashed #e9ede6; }
+.institution-opposition-row b { color: #596a5f; }
+
+/* Central de Alertas e Notificações */
+.topbar-alert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid #e1be7b;
+  border-radius: 99px;
+  background: #fbf5e7;
+  color: #8c6a28;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  cursor: pointer;
+  transition: all .16s ease;
+}
+.topbar-alert-badge:hover {
+  background: #f6ecce;
+  border-color: #cca457;
+}
+.topbar-alert-badge.has-alerts {
+  background: #faecea;
+  border-color: #e5b0aa;
+  color: #a43a30;
+}
+.topbar-alert-badge.has-alerts::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d94334;
+  box-shadow: 0 0 0 3px #f7dcd9;
+}
+
+.overview-alerts-container {
+  margin-bottom: 14px;
+}
+.overview-alerts-box {
+  padding: 12px 16px;
+  border: 1px solid #eed6aa;
+  border-radius: 11px;
+  background: #fdfaf2;
+  box-shadow: 0 2px 8px rgba(184, 137, 56, .08);
+}
+.overview-alerts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.overview-alerts-link {
+  border: 0;
+  background: transparent;
+  color: #8c672b;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+}
+.overview-alerts-link:hover {
+  text-decoration: underline;
+}
+.overview-alerts-list {
+  display: grid;
+  gap: 6px;
+}
+.overview-alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: #fff;
+  border: 1px solid #ebd9b8;
+  font-size: 11px;
+}
+.overview-alert-item.severity-alto, .overview-alert-item.severity-critico {
+  border-color: #f1c7c2;
+  background: #fff8f7;
+}
+.overview-alert-item .alert-dot {
+  font-size: 8px;
+  margin-top: 3px;
+  color: #c98835;
+}
+.overview-alert-item.severity-alto .alert-dot, .overview-alert-item.severity-critico .alert-dot {
+  color: #c24134;
+}
+.overview-alert-item .alert-info {
+  display: flex;
+  flex-direction: column;
+}
+.overview-alert-item .alert-info strong {
+  color: var(--forest);
+  font-weight: 700;
+}
+.overview-alert-item .alert-info span {
+  color: #7a887e;
+  font-size: 10px;
+}
+
+/* Sub-abas do Painel de Governo */
+.gov-main-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.gov-subtabs {
+  display: flex;
+  gap: 6px;
+}
+.gov-tab-btn {
+  padding: 7px 14px;
+  border: 1px solid #d4ded1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 700;
+  transition: all .16s ease;
+}
+.gov-tab-btn:hover {
+  background: #f1f6ee;
+  border-color: #bfd0ba;
+}
+.gov-tab-btn.active {
+  background: var(--forest-2);
+  color: #ffffff;
+  border-color: var(--forest-2);
+  box-shadow: 0 2px 6px rgba(24, 55, 45, .15);
+}
+.gov-tab-pane {
+  display: none;
+  animation: panelIn .18s ease-out;
+}
+.gov-tab-pane.active {
+  display: block;
+}
+
+/* Estados vazios e Hospedeiros de Inteligência e Jornal */
+.module-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  border: 1px dashed #d5ded0;
+  border-radius: 12px;
+  background: #fbfcf9;
+  text-align: center;
+  color: var(--muted);
+  margin: 16px 0;
+}
+.module-empty-icon {
+  font-size: 38px;
+  color: var(--forest-3);
+  margin-bottom: 12px;
+}
+.module-empty-state h3 {
+  font: 800 18px var(--heading);
+  color: var(--forest);
+  margin: 0 0 6px;
+}
+.module-empty-state p {
+  font-size: 13px;
+  max-width: 480px;
+  margin: 0;
+}
+.intelligence-host, .newspaper-host {
+  min-height: 220px;
+}
+
 @media (max-width: 1200px) {
   .sidebar { width: 218px; }
   .main-content { margin-left: 218px; }
@@ -355,6 +718,14 @@ button:disabled { opacity: .42; cursor: not-allowed; }
   .action-card { padding: 16px; }
   .action-buttons button { flex: 1 1 45%; }
   .chart-grid, .society-columns, .government-grid, .records-grid { grid-template-columns: 1fr; }
+  .society-kpis-grid, .services-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .society-details-grid, .services-details-grid { grid-template-columns: 1fr; }
+  .politics-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .politics-groups-grid { grid-template-columns: 1fr; }
+  .institutions-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .institutions-layout { grid-template-columns: 1fr; }
+  .institutions-groups { grid-template-columns: 1fr; }
+  .institution-coalition-actions { flex-direction: column; }
   .chart-wide { grid-column: auto; }
   .section-heading.economy-heading { flex-direction: column; }
   .period-switch { align-self: flex-start; }
