@@ -13,29 +13,178 @@
     if (Math.abs(n) >= 1000) return "R$ " + number(n / 1000, 1) + " mil";
     return money(n);
   };
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+
+  const MONTH_NAMES = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+  const WEEKDAY_NAMES = [
+    "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"
+  ];
+  const WEEKDAY_ABBR = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
+
+  function isLeapYear(year) {
+    const y = Number(year) || 2026;
+    return (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  }
+
+  function getDaysInGregorianMonth(year, month) {
+    // month: 1..12
+    return new Date(Date.UTC(Number(year) || 2026, Number(month) || 1, 0)).getUTCDate();
+  }
 
   let visibleMonths = 12;
   let activeView = "overview";
+  let activeGovTab = "executivo";
   let lastSnapshot = null;
   let lastChartSignature = "";
-  let calendarAnchorDate = new Date();
-  let calendarAnchorDay = 149;
-  let calendarSessionId = null;
-  calendarAnchorDate.setHours(12, 0, 0, 0);
+
+  function getFirstWeekdayOfMonth(year, month) {
+    // month: 1..12; returns 0=Segunda, 1=Terça, ..., 6=Domingo
+    const day = new Date(Date.UTC(Number(year) || 2026, (Number(month) || 1) - 1, 1)).getUTCDay();
+    return (day + 6) % 7;
+  }
+
+  function civilDateToSimulationDay(year, month, day) {
+    const diffMs = Date.UTC(Number(year), Number(month) - 1, Number(day)) - Date.UTC(2026, 0, 1);
+    return Math.round(diffMs / 86400000) + 1;
+  }
+
+  function simulationDayToCivilDate(simDay) {
+    const dayNum = Math.max(1, Math.round(Number(simDay) || 1));
+    const ms = Date.UTC(2026, 0, 1) + (dayNum - 1) * 86400000;
+    const d = new Date(ms);
+    const civilYear = d.getUTCFullYear();
+    const civilMonth = d.getUTCMonth() + 1; // 1..12
+    const civilDay = d.getUTCDate();
+    const utcDay = d.getUTCDay(); // 0=Sun..6=Sat
+    const weekdayIndex = (utcDay + 6) % 7; // 0=Seg..6=Dom
+    const leap = isLeapYear(civilYear);
+    const daysInMonth = getDaysInGregorianMonth(civilYear, civilMonth);
+    const monthStartWeekday = getFirstWeekdayOfMonth(civilYear, civilMonth);
+
+    // Calendário econômico de 360 dias (12 meses de 30 dias)
+    const economicYear = Math.floor((dayNum - 1) / 360) + 1;
+    const economicMonth = Math.floor(((dayNum - 1) % 360) / 30) + 1;
+    const economicDay = ((dayNum - 1) % 30) + 1;
+    const dayInYear = ((dayNum - 1) % 360) + 1;
+    const isCloseDay = economicDay === 30;
+    const isHarvest = dayInYear >= 150 && dayInYear <= 209;
+    const daysToClose = 30 - economicDay;
+
+    let harvestDaysRemaining = 0;
+    if (isHarvest) {
+      harvestDaysRemaining = 210 - dayInYear;
+    }
+
+    return {
+      simDay: dayNum,
+      simYear: economicYear,
+      civilYear,
+      civilMonth,
+      civilDay,
+      dayInMonth: civilDay,
+      monthIndex: civilMonth - 1,
+      monthName: MONTH_NAMES[civilMonth - 1],
+      weekdayIndex,
+      weekdayName: WEEKDAY_NAMES[weekdayIndex],
+      weekdayAbbr: WEEKDAY_ABBR[weekdayIndex],
+      monthStartWeekday,
+      daysInMonth,
+      isLeapYear: leap,
+      // Calendário econômico
+      economicYear,
+      economicMonth,
+      economicDay,
+      isCloseDay,
+      isHarvest,
+      daysToClose,
+      harvestDaysRemaining
+    };
+  }
+
+  const getCivilDateInfo = simulationDayToCivilDate;
+  // Estado de navegação do calendário civil
+  let viewedCivilYear = 2026;
+  let viewedCivilMonth = 5; // 1..12
+  let isBrowsingCivilCalendar = false;
 
   function snapshot() {
     try {
-      return window.VilarejoTest && typeof window.VilarejoTest.getDashboardSnapshot === "function"
-        ? window.VilarejoTest.getDashboardSnapshot()
-        : null;
+      if (typeof window !== "undefined" && window.VilarejoTest && typeof window.VilarejoTest.stateSnapshot === "function") {
+        const s = window.VilarejoTest.stateSnapshot();
+        const core = typeof window.VilarejoTest.getCoreSnapshot === "function"
+          ? window.VilarejoTest.getCoreSnapshot()
+          : (window.VilarejoRuntime?.snapshot() || null);
+        const labor = typeof window.VilarejoTest.getLaborStats === "function"
+          ? window.VilarejoTest.getLaborStats()
+          : s?.laborStats;
+        const pop = labor ? (labor.occupied + labor.unemployedSeeking + labor.outOfLaborForce) : 10;
+        const bs = typeof window.VilarejoTest.generateBalanceSheets === "function"
+          ? window.VilarejoTest.generateBalanceSheets()
+          : s?.balanceSheets;
+        const fiscal = typeof window.VilarejoTest.calculateFiscalReport === "function"
+          ? window.VilarejoTest.calculateFiscalReport()
+          : s?.fiscalReport;
+        const macro = typeof window.VilarejoTest.calculateNationalAccounts === "function"
+          ? window.VilarejoTest.calculateNationalAccounts()
+          : s?.nationalAccounts;
+
+        const currentSessionId = (core?.session?.id || s?.sessionId || "session-1").toString();
+
+        return {
+          day: s?.day || (core?.calendar?.absoluteDay ?? 149),
+          monthNumber: s?.monthNumber || (core?.calendar?.economicMonthNumber ?? 0),
+          sessionId: currentSessionId,
+          gameOver: s?.gameOver || null,
+          running: core?.session?.status === "running",
+          history: window.VilarejoIntelligenceRuntime?.service?.getCurrentHistory?.() || [],
+          population: pop,
+          housingCapacity: s?.housingCapacity || (pop + 2),
+          buildings: s?.buildings?.length || 0,
+          lots: s?.lotCount ?? s?.lots ?? 10,
+          employed: labor?.occupied || s?.employed || 0,
+          laborStats: labor,
+          balanceSheets: bs,
+          fiscalReport: fiscal,
+          nationalAccounts: macro,
+          urbanInfra: s?.urbanInfra,
+          marketPrice: s?.marketPrice,
+          servicePrice: s?.servicePrice,
+          marketStock: s?.marketStock,
+          approval: s?.approval,
+          wage: s?.wage,
+          raw: s
+        };
+      }
+      return null;
     } catch (error) {
       console.warn("Não foi possível ler o retrato do Vilarejo:", error);
       return null;
     }
   }
 
-  function setView(name) {
+  function recordMonthClosure(payload) {
+    return window.VilarejoIntelligenceRuntime?.service?.recordMonthClosure?.(payload) || null;
+  }
+
+  function setView(name, subTab) {
+    if (name === "institutions") {
+      setView("government");
+      setGovTab("camara");
+      return;
+    }
+    if (name === "politics") {
+      setView("government");
+      setGovTab("politica");
+      return;
+    }
+
     activeView = name;
+    if (typeof document === "undefined") return;
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
       panel.classList.toggle("active", panel.dataset.viewPanel === name);
     });
@@ -48,6 +197,8 @@
       overview: ["Visão geral", "Acompanhe o território e o pulso da comunidade."],
       economy: ["Economia", "Produção, preços, trabalho e atividade ao longo do tempo."],
       society: ["Sociedade", "Famílias, empresas, emprego e condições de vida."],
+      government: ["Governo", "Câmara de representação, coalizões, grupos de poder e políticas públicas."],
+      services: ["Serviços públicos", "Infraestrutura urbana, abastecimento, habitação e obras."],
       politics: ["Política", "Grupos de interesse, poder e relações com o governo."],
       institutions: ["Instituições", "Representação, Câmara, coalizões e mandatos do Estado."],
       services: ["Serviços e desenvolvimento", "Capacidade pública, bem-estar, infraestrutura e recursos estratégicos."],
@@ -58,13 +209,162 @@
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
     if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "O vilarejo é seu." : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
-    if (name === "politics" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
-      const host = $("politicsDashboard");
-      if (host) window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+
+    if (subTab && name === "government") {
+      setGovTab(subTab);
+    } else {
+      refreshActiveView();
     }
-    if (name === "institutions" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function setGovTab(tabName) {
+    activeGovTab = tabName || "executivo";
+    if (typeof document === "undefined") return;
+    document.querySelectorAll("[data-gov-tab]").forEach((btn) => {
+      const isSelected = btn.dataset.govTab === activeGovTab;
+      btn.classList.toggle("active", isSelected);
+      btn.setAttribute("aria-selected", isSelected ? "true" : "false");
+    });
+    document.querySelectorAll(".gov-tab-pane").forEach((pane) => {
+      pane.classList.toggle("active", pane.dataset.govPane === activeGovTab || pane.id === `gov-tab-${activeGovTab}`);
+    });
+    renderGovernmentSubView();
+  }
+
+  function renderGovernmentSubView() {
+    if (activeGovTab === "executivo") {
+      renderGovernmentOverview();
+    } else if (activeGovTab === "camara") {
       const host = $("institutionsDashboard");
-      if (host) window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoInstitutions && window.VilarejoInstitutionsRuntime) {
+          window.VilarejoInstitutions.renderDashboard(window.VilarejoInstitutionsRuntime.state, host);
+        } else if (!host.children.length) {
+          host.innerHTML = '<div class="module-empty-state"><div class="module-empty-icon">▥</div><h3>Câmara Municipal</h3><p>A representação parlamentar e formação de coalizão estarão disponíveis com a sincronização institucional.</p></div>';
+        }
+      }
+    } else if (activeGovTab === "politica") {
+      const host = $("politicsDashboard");
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoPolitics && window.VilarejoPoliticsRuntime) {
+          window.VilarejoPolitics.renderDashboard(window.VilarejoPoliticsRuntime.state, host);
+        } else if (!host.children.length) {
+          host.innerHTML = '<div class="module-empty-state"><div class="module-empty-icon">⚖</div><h3>Grupos de Interesse</h3><p>A correlação de forças e influência dos grupos de poder será carregada a cada ciclo político.</p></div>';
+        }
+      }
+    }
+  }
+
+  function renderGovernmentOverview() {
+    const host = $("governmentSummaryCard");
+    if (!host || typeof window === "undefined") return;
+    try {
+      const instRuntime = window.VilarejoInstitutionsRuntime;
+      const instState = instRuntime?.getSnapshot?.() || instRuntime?.state || {};
+      const legislature = instState.legislature || {};
+      const coalitionData = instState.coalition || {};
+      const summary = instState.summary || {};
+      const totalSeats = Number(legislature.totalSeats || summary.totalSeats || instState.settings?.totalSeats || 21);
+      const neededMajority = Number(legislature.majoritySeats || summary.quorumSeats || Math.floor(totalSeats / 2) + 1);
+      const coalitionIds = Array.isArray(coalitionData.groupIds) ? coalitionData.groupIds : [];
+      const coalitionGroups = Array.isArray(coalitionData.groups) ? coalitionData.groups : [];
+      const coalitionCount = coalitionIds.length || coalitionGroups.length;
+      const coalitionSeats = Number(coalitionData.seats ?? summary.coalitionSeats ?? 0);
+      const status = coalitionData.status || summary.coalitionStatus || "not_formed";
+      const termMonths = Number(instState.settings?.termMonths || 48);
+      const currentMonth = Number(instState.currentMonth || 0);
+      const nextElectionMonth = Number(instState.nextElectionMonth || currentMonth + termMonths);
+      const monthInTerm = Math.max(1, currentMonth - (nextElectionMonth - termMonths) + 1);
+      const remainingMonths = Math.max(0, nextElectionMonth - currentMonth);
+      const oppositionSeats = Number(
+        instState.alignment?.oppositionSeats ?? instState.opposition?.seats ?? Math.max(0, totalSeats - coalitionSeats)
+      );
+
+      const statusBadge = status === "majority"
+        ? '<span class="gov-badge is-majority">Maioria absoluta</span>'
+        : status === "minority"
+        ? '<span class="gov-badge is-minority">Governo de minoria</span>'
+        : '<span class="gov-badge is-not-formed">Sem coalizão formada</span>';
+
+      host.innerHTML = `
+        <div class="gov-summary-content">
+          <div class="gov-summary-header">
+            <div>
+              <div class="eyebrow">PODER EXECUTIVO E PARLAMENTAR</div>
+              <h3>Situação da Base de Governo</h3>
+            </div>
+            ${statusBadge}
+          </div>
+          <div class="gov-kpi-row">
+            <div class="gov-kpi-item">
+              <small>BASE DO GOVERNO</small>
+              <strong>${coalitionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
+              <span>${coalitionCount > 0 ? coalitionCount + ' grupo(s) na coalizão' : 'Nenhum grupo coligado'}</span>
+            </div>
+            <div class="gov-kpi-item">
+              <small>OPOSIÇÃO / INDEPENDENTES</small>
+              <strong>${oppositionSeats} <small>/ ${totalSeats} cadeiras</small></strong>
+              <span>Maioria necessária: ${neededMajority}</span>
+            </div>
+            <div class="gov-kpi-item">
+              <small>MANDATO DA CÂMARA</small>
+              <strong>${monthInTerm}º <small>mês de ${termMonths}</small></strong>
+              <span>${remainingMonths} meses até renovação</span>
+            </div>
+          </div>
+          <div class="gov-actions-row">
+            <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('camara')">
+              <span>▥</span> Gerenciar coalizão e cadeiras da Câmara
+            </button>
+            <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('politica')">
+              <span>⚖</span> Avaliar influência dos grupos políticos
+            </button>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      console.warn("Erro ao renderizar resumo governamental:", e);
+    }
+  }
+
+  function refreshActiveView() {
+    if (activeView === "society") {
+      renderSocietyView();
+    } else if (activeView === "services") {
+      renderServicesView();
+    } else if (activeView === "government") {
+      renderGovernmentSubView();
+    } else if (activeView === "intelligence") {
+      const host = $("intelligenceDashboard");
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoIntelligence && typeof window.VilarejoIntelligence.renderDashboard === "function") {
+          window.VilarejoIntelligence.renderDashboard(host);
+        } else {
+          host.innerHTML = `
+            <div class="module-empty-state">
+              <div class="module-empty-icon">💡</div>
+              <h3>Central de Inteligência</h3>
+              <p>O módulo de análise preditiva e inteligência executiva será carregado aqui conforme o fechamento dos primeiros meses de simulação.</p>
+            </div>
+          `;
+        }
+      }
+    } else if (activeView === "newspaper") {
+      const host = $("newspaperDashboard");
+      if (host) {
+        if (typeof window !== "undefined" && window.VilarejoNewspaper && typeof window.VilarejoNewspaper.renderDashboard === "function") {
+          window.VilarejoNewspaper.renderDashboard(host);
+        } else {
+          host.innerHTML = `
+            <div class="module-empty-state">
+              <div class="module-empty-icon">📰</div>
+              <h3>Jornal do Vilarejo</h3>
+              <p>A redação do Vilarejo está preparando as próximas edições mensais. As crônicas e notícias da comunidade serão publicadas aqui.</p>
+            </div>
+          `;
+        }
+      }
     }
     if (name === "services" && window.VilarejoServices && window.VilarejoServicesRuntime) {
       const host = $("servicesDashboard");
@@ -84,6 +384,11 @@
       target.innerHTML = '<div class="chart-empty"><span class="chart-empty-mark">⌁</span><strong>' +
         (emptyTitle || "Seu histórico está começando") +
         '</strong><span>Os pontos surgem a cada fechamento mensal. Nenhum dado anterior foi inventado.</span></div>';
+      return;
+    }
+    const hasSeriesData = rows.some((row) => series.some((item) => Number.isFinite(Number(row[item.key]))));
+    if (!hasSeriesData) {
+      target.innerHTML = '<div class="chart-empty"><span class="chart-empty-mark">⌁</span><strong>Indicador sem histórico disponível</strong><span>Esta referência não produz uma série para este indicador; nenhum valor foi estimado.</span></div>';
       return;
     }
 
@@ -133,11 +438,11 @@
     const legend = series.map((item) => '<span class="chart-legend-item"><i class="' + item.className + '"></i>' + item.label + '</span>').join("");
 
     target.innerHTML = '<div class="chart-legend">' + legend + '</div><svg class="chart-svg" viewBox="0 0 ' + width + ' ' + height +
-      '" role="img" aria-label="' + target.dataset.label + '">' + grid + paths + labels + '</svg>';
+      '" role="img" aria-label="' + (target.dataset.label || "Gráfico") + '">' + grid + paths + labels + '</svg>';
   }
 
   function refreshCharts(data) {
-    const history = data.history || [];
+    const history = Array.isArray(data.history) ? data.history : [];
     makeChart("chart-gdp", [
       { key: "gdp", label: "PIB mensal", className: "series-green" }
     ], history, compact, "O PIB histórico começa no primeiro fechamento");
@@ -186,93 +491,382 @@
       const node = $(id);
       if (node) node.textContent = value;
     });
-    const ratio = data.housingCapacity > 0 ? Math.min(100, data.population / data.housingCapacity * 100) : 0;
+    const ratio = data.housingCapacity > 0 ? Math.min(100, (data.population / data.housingCapacity) * 100) : 0;
     const bar = $("housingFill");
-    if (bar) bar.style.width = ratio + "%";
-  }
-
-  function civilDateForDay(day, sessionId) {
-    // Cada partida começa na data local do computador. A partir daí, o calendário
-    // avança um dia por dia simulado e respeita meses reais e anos bissextos.
-    if (calendarSessionId !== sessionId) {
-      calendarSessionId = sessionId;
-      calendarAnchorDate = new Date();
-      calendarAnchorDate.setHours(12, 0, 0, 0);
-      calendarAnchorDay = Number(day) || 1;
-    }
-    const date = new Date(calendarAnchorDate);
-    date.setDate(date.getDate() + (Math.max(1, Number(day) || 1) - calendarAnchorDay));
-    return date;
+    if (bar) bar.style.width = ratio.toFixed(1) + "%";
   }
 
   function refreshCalendar(data) {
-    const date = civilDateForDay(data.day, data.sessionId);
-    const day = date.getDate();
-    const month = date.getMonth();
-    const year = date.getFullYear();
-    const monthNames = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-    const weekdayNames = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
-    const weekday = date.getDay();
-    const firstWeekday = new Date(year, month, 1).getDay();
-    const mondayOffset = (firstWeekday + 6) % 7;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const cells = [];
+    const currentSimDay = Math.max(1, Math.round(Number(data.day) || 1));
+    const todayInfo = simulationDayToCivilDate(currentSimDay);
 
-    for (let index = 0; index < 42; index += 1) {
-      const cellDay = index - mondayOffset + 1;
-      if (cellDay < 1 || cellDay > daysInMonth) {
-        cells.push('<span class="calendar-blank" aria-hidden="true"></span>');
-        continue;
-      }
-      const isToday = cellDay === day;
-      const cellDate = new Date(year, month, cellDay);
-      const weekend = cellDate.getDay() === 0 || cellDate.getDay() === 6;
-      const classes = ["calendar-day", cellDay < day ? "is-past" : "", weekend ? "is-weekend" : "", isToday ? "is-today" : ""].filter(Boolean).join(" ");
-      cells.push('<span class="' + classes + '"' + (isToday ? ' aria-current="date" aria-label="Hoje, ' + cellDay + ' de ' + monthNames[month] + ' de ' + year + '"' : ' aria-label="' + cellDay + ' de ' + monthNames[month] + '"') + '>' + cellDay + '</span>');
+    // Se o usuário não estiver folheando explicitamente, acompanha o mês da simulação
+    if (!isBrowsingCivilCalendar) {
+      viewedCivilYear = todayInfo.civilYear;
+      viewedCivilMonth = todayInfo.civilMonth;
     }
 
-    if ($("calendarWeekday")) $("calendarWeekday").textContent = weekdayNames[weekday].toUpperCase();
-    if ($("calendarDayNumber")) $("calendarDayNumber").textContent = String(day).padStart(2, "0");
-    if ($("calendarMonthYear")) $("calendarMonthYear").textContent = (monthNames[month] + " " + year).toUpperCase();
-    if ($("calendarMonthHeading")) $("calendarMonthHeading").textContent = monthNames[month].replace(/^./, (letter) => letter.toUpperCase()) + " de " + year;
-    if ($("calendarSimDay")) $("calendarSimDay").textContent = "Dia " + data.day + " da simulação";
-    if ($("calendarDays")) $("calendarDays").innerHTML = cells.join("");
+    const isViewingCurrentMonth = (viewedCivilYear === todayInfo.civilYear && viewedCivilMonth === todayInfo.civilMonth);
 
-    const economicDay = ((Math.max(1, Number(data.day)) - 1) % 360) + 1;
-    const economicYear = Math.floor((Math.max(1, Number(data.day)) - 1) / 360) + 1;
-    const inHarvest = economicDay >= 150 && economicDay < 210;
+    // Dados do mês visualizado
+    const daysInViewedMonth = getDaysInGregorianMonth(viewedCivilYear, viewedCivilMonth);
+    const startWeekdayOfViewedMonth = getFirstWeekdayOfMonth(viewedCivilYear, viewedCivilMonth);
+    const viewedMonthName = MONTH_NAMES[viewedCivilMonth - 1];
+
+    // Status da Safra e Fechamento no dia atual da simulação
+    const inHarvest = todayInfo.isHarvest;
+    const daysToClose = todayInfo.daysToClose;
+    const closeLabel = daysToClose === 0 ? "Hoje!" : daysToClose === 1 ? "Amanhã" : "Em " + daysToClose + " dias";
+
     let seasonTitle;
     let seasonDetail;
     if (inHarvest) {
-      const remaining = 210 - economicDay;
+      const remaining = todayInfo.harvestDaysRemaining;
       seasonTitle = "Safra em andamento";
-      seasonDetail = remaining === 1 ? "Último dia previsto da colheita." : "Colheita ativa · " + remaining + " dias até o fim do período.";
-    } else if (economicDay < 150) {
-      const remaining = 150 - economicDay;
+      seasonDetail = remaining === 1 ? "Último dia da colheita." : "Colheita ativa · " + remaining + " dias restantes no período.";
+    } else if (((currentSimDay - 1) % 360) + 1 < 150) {
+      const remaining = 150 - (((currentSimDay - 1) % 360) + 1);
       seasonTitle = remaining === 1 ? "Safra começa amanhã" : "Entressafra";
       seasonDetail = "Início da colheita em " + remaining + (remaining === 1 ? " dia." : " dias.");
     } else {
-      const remaining = (360 - economicDay) + 150;
+      const remaining = (360 - (((currentSimDay - 1) % 360) + 1)) + 150;
       seasonTitle = "Entressafra";
       seasonDetail = "Próxima safra em " + remaining + " dias.";
     }
-    const remainder = Math.max(1, Number(data.day)) % 30;
-    const daysToClose = remainder === 0 ? 30 : 30 - remainder;
-    const closeLabel = daysToClose === 1 ? "Amanhã" : "Em " + daysToClose + " dias";
 
+    // TopBar
+    if ($("topbarCivilDate")) {
+      $("topbarCivilDate").textContent = `${todayInfo.weekdayName}, ${String(todayInfo.civilDay).padStart(2, "0")} de ${todayInfo.monthName} de ${todayInfo.civilYear}`;
+    }
+    if ($("dateLabel")) {
+      $("dateLabel").textContent = `Ano Econômico ${todayInfo.economicYear} · Mês ${todayInfo.economicMonth}, Dia ${todayInfo.economicDay} · Dia ${currentSimDay} absoluto`;
+    }
+    if ($("topbarSeasonBadge")) {
+      $("topbarSeasonBadge").textContent = inHarvest ? "Safra ativa" : "Entressafra";
+      $("topbarSeasonBadge").className = "season-badge " + (inHarvest ? "is-harvest" : "is-offseason");
+    }
+
+    // Painel Principal do Calendário Civil
+    if ($("calendarWeekday")) $("calendarWeekday").textContent = todayInfo.weekdayName.toUpperCase();
+    if ($("calendarDayNumber")) $("calendarDayNumber").textContent = String(todayInfo.civilDay).padStart(2, "0");
+    if ($("calendarMonthYear")) $("calendarMonthYear").textContent = (todayInfo.monthName + " " + todayInfo.civilYear).toUpperCase();
+    if ($("calendarMonthHeading")) $("calendarMonthHeading").textContent = `${viewedMonthName} de ${viewedCivilYear}`;
+    if ($("calendarSimDay")) $("calendarSimDay").textContent = `Dia ${currentSimDay} da simulação · Mês Econômico ${todayInfo.economicMonth}`;
+
+    // Tag indicadora de navegação
+    const currentTag = $("calendarCurrentTag");
+    if (currentTag) {
+      if (isViewingCurrentMonth) {
+        currentTag.textContent = "MÊS ATUAL DA SIMULAÇÃO";
+        currentTag.className = "calendar-current-tag is-current";
+      } else {
+        currentTag.textContent = "HISTÓRICO / FUTURO";
+        currentTag.className = "calendar-current-tag is-browsing";
+      }
+    }
+
+    // Grade dos Dias do Mês Gregoriano
+    const cells = [];
+    // Células em branco antes do primeiro dia da semana do mês (Segunda=0)
+    for (let i = 0; i < startWeekdayOfViewedMonth; i += 1) {
+      cells.push('<span class="calendar-blank" aria-hidden="true"></span>');
+    }
+
+    for (let d = 1; d <= daysInViewedMonth; d += 1) {
+      const cellSimDay = civilDateToSimulationDay(viewedCivilYear, viewedCivilMonth, d);
+      const isToday = (cellSimDay === currentSimDay);
+      const isPast = (cellSimDay < currentSimDay);
+      const weekdayCol = (startWeekdayOfViewedMonth + d - 1) % 7;
+      const isWeekend = (weekdayCol === 5 || weekdayCol === 6);
+
+      // Regras de Fechamento Econômico (a cada 30 dias de simulação)
+      const isCloseDay = (cellSimDay >= 1 && cellSimDay % 30 === 0);
+
+      // Regras de Safra (dias econômicos 150 a 209 em cada ciclo de 360 dias)
+      const econDayInYear = cellSimDay >= 1 ? (((cellSimDay - 1) % 360) + 1) : 0;
+      const isCellHarvest = (cellSimDay >= 1 && econDayInYear >= 150 && econDayInYear <= 209);
+
+      const classes = [
+        "calendar-day",
+        isToday ? "is-today" : "",
+        isPast ? "is-past" : "",
+        isWeekend ? "is-weekend" : "",
+        isCloseDay ? "is-close-day" : "",
+        isCellHarvest ? "is-harvest-day" : ""
+      ].filter(Boolean).join(" ");
+
+      const tooltipParts = [
+        `${d} de ${viewedMonthName} de ${viewedCivilYear}`
+      ];
+      if (cellSimDay >= 1) {
+        const cEconYear = Math.floor((cellSimDay - 1) / 360) + 1;
+        const cEconMonth = Math.floor(((cellSimDay - 1) % 360) / 30) + 1;
+        const cEconDay = ((cellSimDay - 1) % 30) + 1;
+        tooltipParts.push(`Dia ${cellSimDay} da simulação (Ano ${cEconYear}, Mês ${cEconMonth}, Dia ${cEconDay})`);
+      } else {
+        tooltipParts.push("Período anterior ao início da simulação");
+      }
+      if (isToday) tooltipParts.push("Hoje (Dia atual da simulação)");
+      if (isCloseDay) tooltipParts.push("Fechamento mensal da economia");
+      if (isCellHarvest) tooltipParts.push("Período de safra agrícola");
+
+      const tooltip = tooltipParts.join(" · ");
+
+      cells.push(
+        `<span class="${classes}" title="${escapeHtml(tooltip)}"` +
+        (isToday ? ' aria-current="date"' : '') +
+        `>${d}${isCloseDay ? '<i class="close-marker">●</i>' : ''}</span>`
+      );
+    }
+
+    if ($("calendarDays")) $("calendarDays").innerHTML = cells.join("");
+
+    // Agenda: Relógio da Economia
     if ($("calendarSeason")) $("calendarSeason").textContent = seasonTitle;
     if ($("calendarSeasonDetail")) $("calendarSeasonDetail").textContent = seasonDetail;
     if ($("calendarClose")) $("calendarClose").textContent = closeLabel;
-    if ($("calendarEconomicYear")) $("calendarEconomicYear").textContent = String(economicYear).padStart(2, "0");
-    if ($("calendarEconomicDay")) $("calendarEconomicDay").textContent = "Dia " + economicDay + " de 360";
-
-    const dateLabel = weekdayNames[weekday].slice(0, 3) + ", " + String(day).padStart(2, "0") + " " + monthNames[month].slice(0, 3) + " " + year + " · Dia " + data.day;
-    if ($("dateLabel")) $("dateLabel").textContent = dateLabel;
+    if ($("calendarEconomicYear")) $("calendarEconomicYear").textContent = String(todayInfo.economicYear).padStart(2, "0");
+    if ($("calendarEconomicMonth")) $("calendarEconomicMonth").textContent = "Mês " + String(todayInfo.economicMonth).padStart(2, "0");
+    if ($("calendarEconomicDay")) $("calendarEconomicDay").textContent = "Dia " + todayInfo.economicDay + " / 30";
 
     const cycle = $("cycleBar");
     if (cycle) {
-      const progress = ((economicDay - 1) / 360) * 100;
-      cycle.innerHTML = '<div class="cycle-head"><b>Ritmo produtivo · Ano econômico ' + economicYear + '</b><span>' + (inHarvest ? '<span class="good">SAFRA ATIVA</span>' : 'ENTRESSAFRA') + ' · próximo fechamento em ' + daysToClose + (daysToClose === 1 ? ' dia' : ' dias') + '</span></div><div class="track"><div class="harvest-zone"></div><div class="year-cursor" style="left:' + progress.toFixed(2) + '%"></div></div><div class="cycle-foot"><span>Início do ciclo</span><span>Safra · dias 150 a 209</span><span>Dia 360</span></div>';
+      const econDayInYear = ((currentSimDay - 1) % 360) + 1;
+      const progress = ((econDayInYear - 1) / 360) * 100;
+      cycle.innerHTML = '<div class="cycle-head"><b>Ritmo produtivo · Ano Econômico ' + todayInfo.economicYear + ' (' + todayInfo.civilYear + ')</b><span>' +
+        (inHarvest ? '<span class="good">SAFRA ATIVA</span>' : 'ENTRESSAFRA') + ' · fechamento em ' + daysToClose + (daysToClose === 1 ? ' dia' : ' dias') +
+        '</span></div><div class="track"><div class="harvest-zone" title="Janela de colheita (dias 150 a 209)"></div><div class="year-cursor" style="left:' + progress.toFixed(2) + '%"></div></div><div class="cycle-foot"><span>Janeiro (Dia 1)</span><span>Safra · dias 150 a 209 (Maio/Junho)</span><span>Dezembro (Dia 360)</span></div>';
+    }
+  }
+
+  function renderSocietyView() {
+    const host = $("societyDashboard");
+    if (!host || !window.VilarejoSocietyRuntime || !window.VilarejoSociety) return;
+    try {
+      const sState = window.VilarejoSocietyRuntime.state;
+      const snap = window.VilarejoSociety.getSnapshot(sState);
+      const d = snap.demographic;
+      const q = snap.qualityOfLife?.current || {};
+      const m = snap.migration?.monthly || { incoming: 0, outgoing: 0, net: 0 };
+      const cumM = snap.migration?.cumulative || { incoming: 0, outgoing: 0, net: 0 };
+      const vital = snap.demographicEvents || { births: 0, deaths: 0, agingTransitions: 0 };
+      const lastMonthVital = vital.lastMonth || { births: 0, deaths: 0, agingTransitions: 0 };
+      const culture = snap.culture || { diversityIndex: 0, groups: [] };
+
+      const score = Number.isFinite(q.score) ? q.score.toFixed(1) : "n/d";
+      const qLevel = q.level || (q.score >= 70 ? "Favorável" : q.score >= 50 ? "Regular" : "Crítico");
+      const coverage = q.measuredDimensions ? `${q.measuredDimensions}/6 dimensões` : "em consolidação";
+
+      const cultureNames = {
+        local: "Cultura local",
+        regional: "Origem regional",
+        urbana: "Origem urbana",
+        rural: "Origem rural"
+      };
+
+      const cultureRows = (culture.groups || []).map((grp) => {
+        const share = grp.share ? grp.share.toFixed(1) : "0.0";
+        return `
+          <div class="society-bar-row">
+            <div class="society-bar-label"><span>${escapeHtml(cultureNames[grp.id] || grp.id)}</span><b>${grp.count} hab. (${share}%)</b></div>
+            <div class="society-bar-track"><span style="width:${Math.min(100, grp.share)}%"></span></div>
+          </div>
+        `;
+      }).join("") || '<p class="society-muted">Sem dados culturais consolidados.</p>';
+
+      const ageTotal = (d.children || 0) + (d.workingAge || 0) + (d.elderly || 0) || 1;
+      const childShare = (((d.children || 0) / ageTotal) * 100).toFixed(1);
+      const activeShare = (((d.workingAge || 0) / ageTotal) * 100).toFixed(1);
+      const elderShare = (((d.elderly || 0) / ageTotal) * 100).toFixed(1);
+
+      const recentEvents = (snap.recentEvents || []).slice(-4).map((evt) => {
+        return `<li><small>Mês ${evt.month || 0}</small><span>${escapeHtml(evt.text || evt.title || "Evento social")}</span></li>`;
+      }).join("") || '<li class="society-muted">Nenhum evento extraordinário registrado recentemente.</li>';
+
+      host.innerHTML = `
+        <div class="society-dashboard">
+          <!-- KPIs Demográficos e de Qualidade de Vida -->
+          <div class="society-kpis-grid">
+            <article class="content-card society-card">
+              <div class="eyebrow">POPULAÇÃO TOTAL</div>
+              <strong class="society-huge">${d.population || 0}</strong>
+              <span class="society-sub">moradores residentes</span>
+              <div class="society-stat-meta">
+                <span>Razão de dependência:</span>
+                <b>${d.dependencyRatio !== null && d.dependencyRatio !== undefined ? Number(d.dependencyRatio).toFixed(1) : "n/d"} / 100 ativos</b>
+              </div>
+            </article>
+
+            <article class="content-card society-card">
+              <div class="eyebrow">QUALIDADE DE VIDA</div>
+              <strong class="society-huge ${q.score >= 60 ? 'good' : 'amber'}">${score}<small>/100</small></strong>
+              <span class="society-sub">Nível ${escapeHtml(qLevel)} (${coverage})</span>
+              <div class="society-stat-meta">
+                <span>Bem-estar domiciliar:</span>
+                <b>${q.components?.householdWellbeing ? Number(q.components.householdWellbeing).toFixed(0) + '/100' : 'n/d'}</b>
+              </div>
+            </article>
+
+            <article class="content-card society-card">
+              <div class="eyebrow">DINÂMICA VITAL</div>
+              <strong class="society-huge">${vital.births || 0} <small class="vital-div">/</small> ${vital.deaths || 0}</strong>
+              <span class="society-sub">nascimentos / óbitos acumulados</span>
+              <div class="society-stat-meta">
+                <span>Último mês:</span>
+                <b>${lastMonthVital.births || 0} nascidos · ${lastMonthVital.deaths || 0} falecidos</b>
+              </div>
+            </article>
+
+            <article class="content-card society-card">
+              <div class="eyebrow">MOBILIDADE E MIGRAÇÃO</div>
+              <strong class="society-huge">${cumM.net >= 0 ? '+' : ''}${cumM.net || 0}</strong>
+              <span class="society-sub">saldo migratório líquido acumulado</span>
+              <div class="society-stat-meta">
+                <span>Imigrantes:</span>
+                <b>${d.foreignBorn || 0} (${Number(d.foreignBornShare || 0).toFixed(1)}%)</b>
+              </div>
+            </article>
+          </div>
+
+          <!-- Composição da População e Cultura -->
+          <div class="society-details-grid">
+            <article class="content-card">
+              <div class="section-heading compact-heading">
+                <div>
+                  <div class="eyebrow">COMPOSIÇÃO POR IDADE E ATIVIDADE</div>
+                  <h3>Pirâmide e Capacidade de Trabalho</h3>
+                  <p>Divisão da comunidade entre população dependente e força de trabalho produtiva.</p>
+                </div>
+              </div>
+              <div class="society-bars-group">
+                <div class="society-bar-row">
+                  <div class="society-bar-label"><span>População em Idade Ativa (15 a 64 anos)</span><b>${d.workingAge || 0} hab. (${activeShare}%)</b></div>
+                  <div class="society-bar-track active-track"><span style="width:${activeShare}%"></span></div>
+                </div>
+                <div class="society-bar-row">
+                  <div class="society-bar-label"><span>Crianças e Jovens (0 a 14 anos)</span><b>${d.children || 0} hab. (${childShare}%)</b></div>
+                  <div class="society-bar-track child-track"><span style="width:${childShare}%"></span></div>
+                </div>
+                <div class="society-bar-row">
+                  <div class="society-bar-label"><span>Idosos (65 anos ou mais)</span><b>${d.elderly || 0} hab. (${elderShare}%)</b></div>
+                  <div class="society-bar-track elder-track"><span style="width:${elderShare}%"></span></div>
+                </div>
+              </div>
+              <div class="society-data-note">A transição demográfica e a entrada na vida adulta ocorrem organicamente a cada ciclo mensal, alimentando o mercado de trabalho do vilarejo sem inflar artificialmente a economia.</div>
+            </article>
+
+            <article class="content-card">
+              <div class="section-heading compact-heading">
+                <div>
+                  <div class="eyebrow">DIVERSIDADE CULTURAL E INTEGRAÇÃO</div>
+                  <h3>Origem dos Moradores</h3>
+                  <p>Diversidade: <b>${culture.diversityIndex.toFixed(1)}/100</b> · Integração: <b>${culture.integrationIndex !== null && culture.integrationIndex !== undefined ? culture.integrationIndex.toFixed(1) + '/100' : 'Sem migração externa'}</b></p>
+                </div>
+              </div>
+              <div class="society-bars-group">${cultureRows}</div>
+              <div class="society-recent-events">
+                <div class="eyebrow">ACONTECIMENTOS DEMOGRÁFICOS RECENTES</div>
+                <ul class="society-event-list">${recentEvents}</ul>
+              </div>
+            </article>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      console.warn("Erro ao renderizar painel de Sociedade:", e);
+    }
+  }
+
+  function renderServicesView() {
+    const host = $("servicesDashboard");
+    if (!host) return;
+    try {
+      const snap = snapshot();
+      if (!snap) return;
+      const s = snap.raw || {};
+      const infra = s.urbanInfra || { capacity: 20, demand: snap.population, congestionRatio: 0.8, tfpFactor: 1.0 };
+      const congestion = Number(infra.congestionRatio || 1.0).toFixed(2);
+      const tfp = Math.round(Number(infra.tfpFactor || 1.0) * 100);
+      const lots = s.lotCount ?? s.lots ?? 10;
+      const buildings = s.buildings?.length || 0;
+      const housingCap = s.housingCapacity || (snap.population + 2);
+      const housingRate = housingCap > 0 ? Math.min(100, (snap.population / housingCap) * 100) : 0;
+      const marketStock = Number(s.marketStock || 0).toFixed(1);
+      const marketPrice = money(s.marketPrice || 50);
+      const servicePrice = money(s.servicePrice || 180);
+      const shortage = Number(s.lastShortage || 0);
+      const unmet = s.lastUnmetHouseholds || 0;
+      const npvLandlord = s.lastProjectNPV?.landlord?.viable ? "Viável (" + money(s.lastProjectNPV.landlord.npv) + ")" : "Cautela / Retração";
+      const npvFarm = s.lastProjectNPV?.farm?.viable ? "Viável (" + money(s.lastProjectNPV.farm.npv) + ")" : "Cautela / Retração";
+
+      host.innerHTML = `
+        <div class="services-dashboard-content">
+          <div class="services-kpi-grid">
+            <article class="content-card service-kpi-card">
+              <div class="eyebrow">HABITAÇÃO E MORADIA</div>
+              <strong>${snap.population} / ${housingCap}</strong>
+              <span>moradores / capacidade residencial</span>
+              <div class="capacity-track"><span style="width: ${housingRate.toFixed(1)}%"></span></div>
+            </article>
+
+            <article class="content-card service-kpi-card">
+              <div class="eyebrow">TERRENOS E EXPANSÃO</div>
+              <strong>${lots}</strong>
+              <span>lotes públicos disponíveis para obras</span>
+            </article>
+
+            <article class="content-card service-kpi-card">
+              <div class="eyebrow">MALHA URBANA E CONGESTIONAMENTO</div>
+              <strong class="${congestion > 1.0 ? 'bad' : 'good'}">${congestion}x</strong>
+              <span>Capacidade da malha: ${infra.capacity || 20} hab. (Demanda: ${infra.demand || snap.population})</span>
+            </article>
+
+            <article class="content-card service-kpi-card">
+              <div class="eyebrow">PRODUTIVIDADE TFP URBANA</div>
+              <strong class="${tfp >= 100 ? 'good' : 'amber'}">${tfp}%</strong>
+              <span>Eficiência dos fatores e mobilidade local</span>
+            </article>
+          </div>
+
+          <div class="services-details-grid">
+            <article class="content-card">
+              <div class="section-heading compact-heading">
+                <div>
+                  <div class="eyebrow">ABASTECIMENTO E COMÉRCIO</div>
+                  <h3>Segurança Alimentar e Serviços Básicos</h3>
+                  <p>Condição de abastecimento de cestas essenciais e serviços gerais.</p>
+                </div>
+              </div>
+              <div class="services-stat-list">
+                <div class="services-stat-row"><span>Estoque de alimentos no comércio local</span><b>${marketStock} unidades</b></div>
+                <div class="services-stat-row"><span>Preço da cesta básica alimentar</span><b>${marketPrice}</b></div>
+                <div class="services-stat-row"><span>Tarifa da oficina e serviços locais</span><b>${servicePrice}</b></div>
+                <div class="services-stat-row"><span>Situação do abastecimento alimentar</span><b class="${shortage > 0 ? 'bad' : 'good'}">${shortage > 0 ? 'Escassez parcial' : 'Totalmente abastecido'}</b></div>
+                <div class="services-stat-row"><span>Famílias afetadas por racionamento</span><b class="${unmet > 0 ? 'bad' : 'good'}">${unmet}</b></div>
+              </div>
+            </article>
+
+            <article class="content-card">
+              <div class="section-heading compact-heading">
+                <div>
+                  <div class="eyebrow">OBRAS E MANUTENÇÃO URBANA</div>
+                  <h3>Capacidade Construtiva e Expansão</h3>
+                  <p>Obras públicas em andamento e viabilidade financeira de projetos.</p>
+                </div>
+              </div>
+              <div class="services-stat-list">
+                <div class="services-stat-row"><span>Obras de moradia em construção</span><b>${buildings} obra(s)</b></div>
+                <div class="services-stat-row"><span>Manutenção predial e urbana</span><b>Contratos ativos com a oficina local</b></div>
+                <div class="services-stat-row"><span>Prestação de serviços mecânicos e reparos</span><b>Oficina operacional permanente</b></div>
+                <div class="services-stat-row"><span>Viabilidade VPL Imobiliário (14k)</span><b class="${s.lastProjectNPV?.landlord?.viable ? 'good' : 'bad'}">${npvLandlord}</b></div>
+                <div class="services-stat-row"><span>Viabilidade VPL Lote Agrícola (8k)</span><b class="${s.lastProjectNPV?.farm?.viable ? 'good' : 'bad'}">${npvFarm}</b></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      console.warn("Erro ao renderizar serviços públicos:", e);
     }
   }
 
@@ -287,12 +881,99 @@
     if ($("historyCount")) $("historyCount").textContent = data.history.length + " meses registrados";
   }
 
+  function refreshAlerts() {
+    const badge = $("topbarAlertBadge");
+    const countEl = $("topbarAlertCount");
+    const container = $("overviewAlertsContainer");
+
+    let alerts = [];
+    if (typeof window !== "undefined" && window.VilarejoIntelligenceRuntime?.service?.getAlerts) {
+      try {
+        alerts = window.VilarejoIntelligenceRuntime.service.getAlerts() || [];
+      } catch (e) {
+        alerts = [];
+      }
+    }
+
+    const activeAlerts = Array.isArray(alerts)
+      ? alerts.filter((alert) => alert && alert.status === "ativo" && alert.severity !== "informativo")
+      : [];
+    const alertCount = activeAlerts.length;
+
+    if (badge) {
+      badge.classList.toggle("hidden", alertCount === 0);
+      badge.classList.toggle("has-alerts", alertCount > 0);
+      badge.title = alertCount > 0
+        ? `${alertCount} alerta(s) na Central de Inteligência`
+        : "Central de Inteligência — Nenhum alerta no momento";
+    }
+    if (countEl) {
+      countEl.textContent = String(alertCount);
+    }
+
+    if (container) {
+      container.classList.toggle("hidden", alertCount === 0);
+      if (alertCount > 0) {
+        const itemsHtml = activeAlerts.slice(0, 3).map((a) => {
+          const sev = (a.severity || "").toLowerCase();
+          const sevClass = sev === "critico" || sev === "grave" ? "severity-critico" : "severity-alto";
+          const title = escapeHtml(a.title || a.indicator || "Alerta de sistema");
+          const msg = escapeHtml(a.message || a.condition || "");
+          const sevLabel = escapeHtml((a.severity || "Atenção").toUpperCase());
+          return `
+            <div class="overview-alert-item ${sevClass}">
+              <div class="alert-item-header">
+                <span class="alert-item-title">${title}</span>
+                <span class="alert-item-severity">${sevLabel}</span>
+              </div>
+              <p class="alert-item-desc">${msg}</p>
+            </div>
+          `;
+        }).join("");
+
+        container.innerHTML = `
+          <div class="overview-alerts-box">
+            <div class="overview-alerts-header">
+              <div>
+                <div class="eyebrow">ALERTAS DO VILAREJO</div>
+                <h4>Sinais de Risco e Tendências Observadas</h4>
+              </div>
+              <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('intelligence')">
+                Ver Central de Inteligência →
+              </button>
+            </div>
+            <div class="overview-alerts-list">
+              ${itemsHtml}
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div class="overview-alerts-box">
+            <div class="overview-alerts-header">
+              <div>
+                <div class="eyebrow">ALERTAS DO VILAREJO</div>
+                <h4>Situação Monitorada</h4>
+              </div>
+              <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('intelligence')">
+                Central de Inteligência →
+              </button>
+            </div>
+            <p class="society-muted" style="margin-top:0.35rem">Nenhum alerta persistente ativo entre os indicadores observados. Dados ausentes permanecem indisponíveis e não são tratados como normais.</p>
+          </div>
+        `;
+      }
+    }
+  }
+
   function refresh() {
     const data = snapshot();
     if (!data) return;
     lastSnapshot = data;
     refreshStatus(data);
+    refreshAlerts();
     refreshMap(data);
+
     const history = data.history || [];
     const signature = (data.sessionId || "session-local") + ":" + history.length + ":" +
       (history.length ? JSON.stringify(history[history.length - 1]) : "inicio");
@@ -331,6 +1012,17 @@
         document.body.classList.remove("menu-open");
       });
     });
+    document.querySelectorAll("[data-gov-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        setGovTab(button.dataset.govTab);
+      });
+    });
+    const alertBadge = $("topbarAlertBadge");
+    if (alertBadge) {
+      alertBadge.addEventListener("click", () => {
+        setView("intelligence");
+      });
+    }
     document.querySelectorAll("[data-months]").forEach((button) => {
       button.addEventListener("click", () => {
         visibleMonths = Number(button.dataset.months) || 12;
@@ -338,6 +1030,37 @@
         if (lastSnapshot) refreshCharts(lastSnapshot);
       });
     });
+    const prevBtn = $("calPrevMonth");
+    if (prevBtn) {
+      prevBtn.addEventListener("click", () => {
+        isBrowsingCivilCalendar = true;
+        viewedCivilMonth -= 1;
+        if (viewedCivilMonth < 1) {
+          viewedCivilMonth = 12;
+          viewedCivilYear -= 1;
+        }
+        if (lastSnapshot) refreshCalendar(lastSnapshot);
+      });
+    }
+    const nextBtn = $("calNextMonth");
+    if (nextBtn) {
+      nextBtn.addEventListener("click", () => {
+        isBrowsingCivilCalendar = true;
+        viewedCivilMonth += 1;
+        if (viewedCivilMonth > 12) {
+          viewedCivilMonth = 1;
+          viewedCivilYear += 1;
+        }
+        if (lastSnapshot) refreshCalendar(lastSnapshot);
+      });
+    }
+    const todayBtn = $("calToday");
+    if (todayBtn) {
+      todayBtn.addEventListener("click", () => {
+        isBrowsingCivilCalendar = false;
+        if (lastSnapshot) refreshCalendar(lastSnapshot);
+      });
+    }
     const mobileToggle = $("mobileMenu");
     if (mobileToggle) mobileToggle.addEventListener("click", () => document.body.classList.toggle("menu-open"));
     ["start", "pause"].forEach((id) => {
@@ -363,17 +1086,88 @@
     });
   }
 
+  function initEventSubscriptions() {
+    if (typeof window !== "undefined" && window.VilarejoRuntime && window.VilarejoRuntime.events) {
+      window.VilarejoRuntime.events.on("world:synchronized", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("economy:month-closed", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("intelligence:month-closed", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("game:initialized", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("game:reset", () => {
+        refreshAlerts();
+        refresh();
+      });
+      window.VilarejoRuntime.events.on("institutions:coalition-updated", () => refresh());
+      window.VilarejoRuntime.events.on("politics:month-closed", () => refresh());
+    }
+  }
+
   function init() {
     initNavigation();
     initMapDetails();
+    initEventSubscriptions();
+    refreshAlerts();
     setView(activeView);
     refresh();
   }
 
-  window.VilarejoDashboard = { refresh, setView };
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
-  } else {
-    init();
+  if (typeof window !== "undefined") {
+    window.VilarejoCalendar = {
+      isLeapYear,
+      getDaysInGregorianMonth,
+      getFirstWeekdayOfMonth,
+      civilDateToSimulationDay,
+      simulationDayToCivilDate,
+      getCivilDateInfo,
+      MONTH_NAMES,
+      WEEKDAY_NAMES,
+      WEEKDAY_ABBR
+    };
+    window.VilarejoDashboard = {
+      refresh,
+      setView,
+      setGovTab,
+      getSnapshot: snapshot,
+      recordMonthClosure,
+      refreshAlerts
+    };
+    if (typeof document !== "undefined") {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+      } else {
+        init();
+      }
+    }
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      isLeapYear,
+      getDaysInGregorianMonth,
+      getFirstWeekdayOfMonth,
+      civilDateToSimulationDay,
+      simulationDayToCivilDate,
+      getCivilDateInfo,
+      MONTH_NAMES,
+      WEEKDAY_NAMES,
+      WEEKDAY_ABBR,
+      refresh,
+      setView,
+      setGovTab,
+      getSnapshot: snapshot,
+      recordMonthClosure,
+      refreshAlerts
+    };
   }
 })();
