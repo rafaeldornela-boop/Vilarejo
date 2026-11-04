@@ -283,6 +283,122 @@ test("6.1 Mercado de trabalho coletivo sem viés e formação dinâmica de preç
   assert(run("auditCashConservation().ok"), "Conservação de caixa íntegra após fases produtivas e de consumo");
 });
 
+// ---------------------------------------------------------------------------
+// 7. FRENTE 1: MIGRAÇÃO FAMILIAR E DÉFICIT HABITACIONAL
+// ---------------------------------------------------------------------------
+test("7.1 Migração demográfica realista com famílias, crianças e cálculo de déficit habitacional", () => {
+  api.reset();
+  const S = getS();
+  
+  // Salário atrativo e vagas abertas no Vilarejo
+  S.wage = 2800;
+  S.externalWage = 1500;
+  S.lots = 5;
+  S.housingCapacity = 8; // Capacidade deliberadamente restrita para testar déficit
+  
+  // Forçar vagas para induzir atratividade Harris-Todaro
+  const farm = S.firms.find(f => f.id === "farm");
+  farm.openVacancies = 6;
+  farm.activeWorkers = 2;
+  
+  const popBefore = run("population()");
+  const migResult = api.processHarrisTodaroMigration();
+  
+  // Estatísticas de migração
+  const stats = api.getMigrationStats();
+  assert(stats !== undefined, "Estatísticas de migração devem ser expostas");
+  assert(typeof stats.cumulativeIn === "number", "cumulativeIn deve ser numérico");
+  assert(typeof stats.net === "number", "net deve ser numérico");
+  
+  // Verificar cálculo de déficit habitacional
+  const currentPop = run("population()");
+  const expectedDeficit = Math.max(0, currentPop - (S.housingCapacity || 12));
+  assert.strictEqual(S.housingDeficit, expectedDeficit, "housingDeficit deve mensurar a população excedente à capacidade instalada");
+  
+  // Verificar tipologias dos domicílios presentes
+  const households = S.households;
+  const hasAdults = households.every(h => h.adults >= 1);
+  assert(hasAdults, "Todos os domicílios devem possuir ao menos 1 adulto");
+  assert(run("auditCashConservation().ok"), "Conservação monetária íntegra após dinâmica migratória");
+  assert(api.generateBalanceSheets().audit.allPass, "Balanços patrimoniais consistentes");
+});
+
+// ---------------------------------------------------------------------------
+// 8. FRENTE 1: CADEIAS PRODUTIVAS E ABASTECIMENTO AGROALIMENTAR LOCAL
+// ---------------------------------------------------------------------------
+test("8.1 Cadeia produtiva local: Comércio adquire excedente alimentar da lavoura com desconto", () => {
+  api.reset();
+  const S = getS();
+  const farm = S.firms.find(f => f.id === "farm");
+  const comm = S.firms.find(f => f.id === "commerce");
+  
+  // Simular período de safra para gerar excedente de alimentos
+  S.day = 160; // Dia de colheita
+  run("log('external', 'stateFarm', 20000, 'Capital para insumos agrícolas')");
+  farm.activeWorkers = 4;
+  farm.behavior.produce(farm, { day: 160, fx: 5, weatherFactor: 1 });
+  
+  assert(farm.localFoodStock > 0, "Fazenda deve produzir alimentos locais como co-produto da safra");
+  assert.strictEqual(S.farmLocalFoodStock, farm.localFoodStock, "S.farmLocalFoodStock deve sincronizar com o estoque da fazenda");
+  
+  const initialLocalStock = farm.localFoodStock;
+  const commCashBefore = run("balance('commerce')");
+  const farmCashBefore = run("balance(farmAccount())");
+  
+  // Comércio planeja abastecimento com demanda de 10 unidades
+  run("log('external', 'commerce', 15000, 'Liquidez comercial')");
+  const prodRes = comm.behavior.produce(comm, { demand: 10 });
+  
+  assert(prodRes.localFoodPurchased > 0, "Comércio deve adquirir prioritariamente alimentos da lavoura local");
+  assert(farm.localFoodStock < initialLocalStock, "Estoque de alimentos da fazenda deve ser abatido pela venda ao comércio");
+  
+  // Autonomia alimentar local calculada
+  const supplyStats = api.getSupplyChainStats();
+  assert(supplyStats.localFoodAutonomy > 0, "Índice de autonomia alimentar local deve ser positivo");
+  
+  // Conservação de caixa estrita: dinheiro saiu do comércio e entrou na fazenda
+  assert(run("auditCashConservation().ok"), "Conservação de caixa íntegra na transação intersetorial B2B");
+  assert(api.generateBalanceSheets().audit.allPass, "SFC preservada após comércio inter-firmas");
+});
+
+// ---------------------------------------------------------------------------
+// 9. FRENTE 1: OBRAS ESTRUTURANTES E CATÁLOGO DE INFRAESTRUTURA
+// ---------------------------------------------------------------------------
+test("9.1 Catálogo de infraestrutura estruturante: execução e impacto na produtividade e capacidade", () => {
+  api.reset();
+  const S = getS();
+  
+  const projects = api.getInfrastructureProjects();
+  assert(projects.rural_road, "Projeto rural_road deve existir no catálogo");
+  assert(projects.social_housing, "Projeto social_housing deve existir no catálogo");
+  assert(projects.sanitation_health, "Projeto sanitation_health deve existir no catálogo");
+  
+  // Capitalizar Tesouro para investimentos públicos
+  run("log('external', 'treasury', 50000, 'Recursos fiscais para investimentos em infraestrutura')");
+  
+  const farm = S.firms.find(f => f.id === "farm");
+  const initialTFP = farm.productivityFactor || 1.0;
+  
+  // 1. Pavimentação de Estrada Vicinal (R$ 8.000 -> +5% TFP permanente na lavoura)
+  const initialFarmTFP = farm.productivityFactor;
+  const roadExec = api.executeInfrastructureProject("rural_road");
+  assert.strictEqual(roadExec, 8000, "Obra de estrada rural deve custar R$ 8.000");
+  assert.strictEqual(farm.productivityFactor, api.round2(initialFarmTFP + 0.05), "TFP da fazenda deve incorporar bônus de 5% (+0.05) da estrada vicinal");
+  
+  // 2. Habitação de Interesse Social (R$ 6.000 -> +4 capacidade habitacional, consome 1 lote)
+  const initialCap = S.housingCapacity || 12;
+  const initialLots = S.lots;
+  const houseExec = api.executeInfrastructureProject("social_housing");
+  assert.strictEqual(houseExec, 6000, "Obra de habitação social deve custar R$ 6.000");
+  assert.strictEqual(S.housingCapacity, initialCap + 4, "Capacidade habitacional deve aumentar em +4");
+  assert.strictEqual(S.lots, initialLots - 1, "Construção de moradias sociais deve consumir 1 lote público");
+  
+  // 3. Auditoria SFC e conservação de caixa
+  assert(run("auditCashConservation().ok"), "Conservação de moeda íntegra após obras públicas");
+  const bs = api.generateBalanceSheets();
+  assert(bs.audit.allPass, "Todos os balanços patrimoniais íntegros");
+});
+
 console.log(`\n========================================================`);
 console.log(`=== TODOS OS ${passedTests}/${totalTests} TESTES ESTRUTURAIS APROVADOS COM SUCESSO! ===`);
 console.log(`========================================================\n`);
