@@ -1692,6 +1692,30 @@
     }
     const mobileToggle = $("mobileMenu");
     if (mobileToggle) mobileToggle.addEventListener("click", () => document.body.classList.toggle("menu-open"));
+    const toggleAudioBtn = $("toggleAudio");
+    const ambientAudio = $("ambientAudio");
+    if (toggleAudioBtn && ambientAudio) {
+      ambientAudio.volume = 0.35;
+      let isAudioPlaying = false;
+      toggleAudioBtn.addEventListener("click", () => {
+        if (isAudioPlaying) {
+          ambientAudio.pause();
+          isAudioPlaying = false;
+          toggleAudioBtn.classList.remove("active");
+          toggleAudioBtn.textContent = "♫ Áudio";
+          toggleAudioBtn.title = "Ligar trilha sonora ambiente";
+        } else {
+          ambientAudio.play().then(() => {
+            isAudioPlaying = true;
+            toggleAudioBtn.classList.add("active");
+            toggleAudioBtn.textContent = "♫ Tocando";
+            toggleAudioBtn.title = "Pausar trilha sonora ambiente";
+          }).catch((err) => {
+            console.warn("Reprodução bloqueada pelo navegador:", err);
+          });
+        }
+      });
+    }
     ["start", "pause"].forEach((id) => {
       const control = $(id);
       if (control) control.addEventListener("click", refresh);

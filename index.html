@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#18372d">
   <meta name="description" content="Vilarejo: uma simulação econômica viva. Construa, administre e acompanhe a evolução de uma comunidade.">
   <title>Vilarejo | Uma economia viva</title>
+  <link rel="icon" type="image/svg+xml" href="public/assets/interface/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -62,8 +63,12 @@
             <button class="btn-primary" id="start" type="button">Começar</button>
             <button class="btn-secondary" id="pause" type="button" disabled>Pausar</button>
             <button class="btn-secondary" id="speed" type="button">Acelerar</button>
+            <button class="btn-quiet" id="toggleAudio" type="button" aria-label="Ligar ou pausar trilha sonora" title="Trilha sonora ambiente">♫ Áudio</button>
             <button class="btn-quiet" id="reset" type="button" aria-label="Reiniciar partida">Reiniciar</button>
           </div>
+          <audio id="ambientAudio" loop preload="none" style="display:none">
+            <source src="public/assets/audio/morning_light_on_cobblestone.mp3" type="audio/mpeg">
+          </audio>
         </div>
       </header>
 
@@ -75,7 +80,7 @@
 
         <div id="event" class="event-card event-modal hidden pulse-animation" role="presentation">
           <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="eventTitle" aria-describedby="eventText">
-            <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" loading="lazy" decoding="async"><figcaption>Ilustração geral de deliberação; não retrata este evento nem qualquer resultado observado.</figcaption></figure>
+            <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><figcaption>Ilustração geral de deliberação; não retrata este evento nem qualquer resultado observado.</figcaption></figure>
             <div class="event-kicker">ESCOLHA DO MOTOR</div><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div>
             <p class="ux-event-caveat">Custos e riscos aparecem somente quando informados pela simulação. Variações posteriores serão observadas, sem presumir causalidade.</p>
           </section>
