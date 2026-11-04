@@ -83,7 +83,8 @@ async function assertServedAsset(baseUrl, assetPath) {
       .map((match) => match[1])
       .filter((reference) => !reference.startsWith("#") && !/^(?:[a-z]+:|\/\/)/i.test(reference));
     const scriptReferences = localReferences.filter((reference) => /\.js(?:[?#]|$)/i.test(reference));
-    assert.equal(scriptReferences.length, 13, "index deve referenciar os treze módulos JavaScript de runtime");
+    assert.equal(scriptReferences.length, 14, "index deve referenciar os quatorze módulos JavaScript de runtime");
+    assert.ok(scriptReferences.includes("src/world/vilarejo_world_engine.js"), "index carrega o módulo do Mundo Vivo");
     assert.ok(scriptReferences.includes("src/newspaper/vilarejo_newspaper.js"), "index carrega o módulo do Jornal");
     const newspaperJs = await assertServedAsset(baseUrl, "/src/newspaper/vilarejo_newspaper.js");
     assert.match(newspaperJs.headers.get("content-type"), /^text\/javascript\b/);

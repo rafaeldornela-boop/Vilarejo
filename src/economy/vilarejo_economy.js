@@ -20,6 +20,16 @@ function publishEconomyMonthClosed(){
    reconciled:!!S.lastNationalAccounts.reconciliation?.reconciled
   }:null,
   fiscalResult:S.lastFiscalReport?.nominalResult??null,
+  eventEngine:S.eventEngine?{
+   monthNumber:S.eventEngine.mes,
+   monthEvents:(Array.isArray(S.eventEngine.log)?S.eventEngine.log:[])
+    .filter(line=>line.startsWith(`Mês ${S.eventEngine.mes}:`)||line.startsWith(`Mês ${S.eventEngine.mes} ·`))
+    .slice(-12),
+   active:(Array.isArray(S.eventEngine.ativos)?S.eventEngine.ativos:[]).map(active=>{
+    const definition=window.EventosV3?.EVENTOS?.find(item=>item.id===active.id);
+    return {id:active.id,title:definition?.caixa||active.id,category:definition?.categoria||"geral",severity:active.sev||"media",monthsRemaining:active.mesesRestantes||0,responded:Boolean(active.respondido)};
+   })
+  }:null,
   gameOver:S.gameOver||null
  },"economia");
  if(window.VilarejoDashboard&&typeof window.VilarejoDashboard.refresh==="function")window.VilarejoDashboard.refresh();

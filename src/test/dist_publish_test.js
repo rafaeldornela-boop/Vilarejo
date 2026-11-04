@@ -23,6 +23,7 @@ const REQUIRED_SCRIPTS = [
   "src/politics/vilarejo_politics.js",
   "src/institutions/vilarejo_institutions.js",
   "src/services/vilarejo_services.js",
+  "src/world/vilarejo_world_engine.js",
   "src/newspaper/vilarejo_newspaper.js",
   "src/intelligence/vilarejo_intelligence.js",
   "src/intelligence/intelligence_view.js",

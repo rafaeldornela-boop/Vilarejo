@@ -35,6 +35,7 @@ const expectedScripts = [
   "src/politics/vilarejo_politics.js",
   "src/institutions/vilarejo_institutions.js",
   "src/services/vilarejo_services.js",
+  "src/world/vilarejo_world_engine.js",
   "src/newspaper/vilarejo_newspaper.js",
   "src/intelligence/vilarejo_intelligence.js",
   "src/intelligence/intelligence_view.js",
@@ -45,7 +46,7 @@ report("Todos os scripts carregam uma única vez na ordem completa do contrato",
 report("A página inclui o stylesheet principal liberado explicitamente pelo servidor", /<link\b[^>]*href=["']style\.css["']/i.test(html) && /new Set\(\["index\.html",\s*"style\.css"\]\)/.test(fs.readFileSync(path.join(ROOT, "server.js"), "utf8")));
 const serverSource = fs.readFileSync(path.join(ROOT, "server.js"), "utf8");
 const runtimeDirectorySource = serverSource.match(/const RUNTIME_SRC_DIRS = new Set\(\[([\s\S]*?)\]\);/)?.[1] || "";
-const requiredRuntimeDirectories = ["core", "economy", "events", "institutions", "intelligence", "newspaper", "politics", "services", "shared", "society", "ui"];
+const requiredRuntimeDirectories = ["core", "economy", "events", "institutions", "intelligence", "newspaper", "politics", "services", "shared", "society", "ui", "world"];
 report("O servidor permite somente módulos de runtime e assets públicos", requiredRuntimeDirectories.every((name) => runtimeDirectorySource.includes(`\"${name}\"`)) && !runtimeDirectorySource.includes("\"test\"") && /PUBLIC_ASSET_EXTENSIONS/.test(serverSource));
 report("A página declara idioma português", /<html\s+lang=["']pt-BR["']/i.test(html));
 report("O executor de testes não depende de jsdom", !/require\(["']jsdom["']\)/.test(fs.readFileSync(path.join(ROOT, "src/test/test_runner.js"), "utf8")));
