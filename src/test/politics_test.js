@@ -402,5 +402,50 @@ test("reinicia com a partida e volta a sincronizar a composição", () => {
   society.dispose();
 });
 
+test("catálogo de grupos de interesse: 10 grupos, 50 personagens, bônus e detecção de conflitos", () => {
+  const catalog = Politics.getCharactersCatalog();
+  assert.equal(catalog.grupos.length, 10, "Devem existir 10 grupos de interesse");
+  assert.equal(catalog.personagens.length, 50, "Devem existir 50 personagens");
+
+  const trab01 = Politics.getCharacterById("trab01");
+  assert.equal(trab01.nome, "Vicente Almeida");
+  assert.equal(trab01.grupo, "trabalhadores");
+  assert.equal(trab01.custoContratacao, 5200);
+
+  const workers = Politics.getCharactersByGroup("trabalhadores");
+  assert.ok(workers.length > 0);
+  assert.ok(workers.some(c => c.id === "trab01"));
+
+  // Bônus calculados
+  const bonuses = Politics.calculateActiveBonuses({
+    trabalhadores: "trab01",
+    "proprietarios-rurais": "rur03"
+  });
+  assert.equal(bonuses.protecaoSocialDividas, 10);
+  assert.equal(bonuses.aprovacaoPopular, 2);
+  assert.equal(bonuses.produtividadeAgricola, 11);
+
+  // Conflito entre trab01 e rur03
+  const conflicts = Politics.calculateConflicts({
+    trabalhadores: "trab01",
+    "proprietarios-rurais": "rur03"
+  });
+  assert.equal(conflicts.length, 1);
+  assert.ok(conflicts[0].pair.includes("trab01"));
+  assert.ok(conflicts[0].pair.includes("rur03"));
+  assert.equal(conflicts[0].penalty, -4);
+
+  // Render do painel de gabinete
+  const host = { innerHTML: "" };
+  const state = Politics.createState();
+  const rendered = Politics.renderDashboard(state, host, {
+    activeCharacters: { trabalhadores: "trab01" },
+    treasuryBalance: 15000
+  });
+  assert.equal(rendered, true);
+  assert.ok(host.innerHTML.includes("politics-cabinet-panel"));
+  assert.ok(host.innerHTML.includes("Vicente Almeida"));
+});
+
 console.log(`\nResultado Política: ${passed} testes aprovados; ${failures.length} reprovados.`);
 if (failures.length) process.exitCode = 1;
