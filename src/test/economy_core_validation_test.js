@@ -399,6 +399,32 @@ test("9.1 Catálogo de infraestrutura estruturante: execução e impacto na prod
   assert(bs.audit.allPass, "Todos os balanços patrimoniais íntegros");
 });
 
+// ---------------------------------------------------------------------------
+// 10. FRENTE 2: INTERFACE, JORNAL E PLANO DE METAS (PPA)
+// ---------------------------------------------------------------------------
+test("10.1 Integração da Frente 2: Jornal, Mundo Vivo e Dashboard com o Plano de Metas", () => {
+  api.reset();
+  const S = getS();
+  
+  // Executar obra de estrada vicinal e simular colheita com abastecimento local
+  run("log('external', 'treasury', 50000, 'Caixa do Tesouro para obras')");
+  api.executeInfrastructureProject("rural_road");
+  
+  // Fechar o mês econômico
+  run("closeMonth()");
+  
+  // Snapshot expõe os novos dados para o Dashboard
+  const snap = api.stateSnapshot();
+  assert(snap.housingCapacity >= 12, "housingCapacity deve estar no snapshot");
+  assert(typeof snap.housingDeficit === "number", "housingDeficit deve estar no snapshot");
+  assert(Array.isArray(snap.completedProjects), "completedProjects deve ser array no snapshot");
+  assert(snap.completedProjects.some(p => p.id === "rural_road"), "Estrada rural deve constar nas obras concluídas");
+  
+  // Balanço patrimonial e conservação íntegros
+  assert(run("auditCashConservation().ok"), "Conservação de caixa íntegra");
+  assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra");
+});
+
 console.log(`\n========================================================`);
 console.log(`=== TODOS OS ${passedTests}/${totalTests} TESTES ESTRUTURAIS APROVADOS COM SUCESSO! ===`);
 console.log(`========================================================\n`);

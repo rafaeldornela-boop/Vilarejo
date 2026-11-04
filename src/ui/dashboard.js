@@ -384,10 +384,54 @@
               <span>⚖</span> Avaliar influência dos grupos políticos
             </button>
           </div>
+          <div class="gov-ppa-section" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border,#e2e8f0);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+              <span class="eyebrow" style="font-weight:700;color:var(--gold,#d97706);">PLANO PLURIANUAL DE METAS (PPA)</span>
+              <small style="color:var(--muted,#64748b);">Metas Estratégicas de Desenvolvimento</small>
+            </div>
+            <div class="gov-milestones-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+              ${renderPpaMilestonesHtml()}
+            </div>
+          </div>
         </div>
       `;
     } catch (e) {
       console.warn("Erro ao renderizar resumo governamental:", e);
+    }
+  }
+
+  function renderPpaMilestonesHtml() {
+    try {
+      const worldSnap = window.VilarejoRuntime?.modules?.get?.("mundo_vivo")?.snapshot || window.VilarejoWorld?.snapshot;
+      const milestones = Array.isArray(worldSnap?.milestones) ? worldSnap.milestones : [];
+      if (!milestones.length) {
+        return '<p class="ux-observation-empty" style="grid-column:1/-1;margin:0;padding:0.5rem;font-size:0.85rem;">Metas em acompanhamento pelo Mundo Vivo; aguardando primeiro fechamento mensal.</p>';
+      }
+      return milestones.slice(0, 6).map(m => {
+        const achieved = m.achieved;
+        const progressPct = m.goal > 0 ? Math.min(100, Math.round(((m.progress || 0) / m.goal) * 100)) : (achieved ? 100 : 0);
+        const badge = achieved
+          ? '<span style="color:#16a34a;font-weight:700;font-size:0.75rem;background:#dcfce7;padding:2px 6px;border-radius:4px;">Atingida</span>'
+          : '<span style="color:#d97706;font-weight:600;font-size:0.75rem;background:#fef3c7;padding:2px 6px;border-radius:4px;">Em andamento</span>';
+        return `
+          <div style="background:var(--surface,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:6px;padding:0.6rem 0.75rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+              <strong style="font-size:0.85rem;color:var(--text,#1e293b);">${escapeHtml(m.title)}</strong>
+              ${badge}
+            </div>
+            <p style="font-size:0.75rem;color:var(--muted,#64748b);margin:0 0 0.5rem 0;line-height:1.3;">${escapeHtml(m.description)}</p>
+            <div style="background:#e2e8f0;border-radius:4px;height:6px;overflow:hidden;">
+              <div style="background:${achieved ? '#16a34a' : 'var(--gold,#d97706)'};width:${progressPct}%;height:100%;transition:width 0.3s ease;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:0.25rem;font-size:0.7rem;color:var(--muted,#64748b);">
+              <span>Progresso: ${m.progress !== null ? m.progress : 0} / ${m.goal} ${escapeHtml(m.unit || '')}</span>
+              <span>${progressPct}%</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    } catch (_) {
+      return '<p style="font-size:0.8rem;color:var(--muted,#64748b);">Plano de metas em monitoramento.</p>';
     }
   }
 
@@ -881,16 +925,19 @@
         description: "Valores da atividade rural expostos pelo snapshot; o desenho da lavoura é apenas ilustrativo.",
         metrics: [
           metric("Estoque da fazenda", raw.farmInventory, (value) => number(value, 1)),
+          metric("Estoque alimentar local", raw.farmLocalFoodStock, (value) => `${number(value, 1)} cestas`),
+          metric("Autonomia alimentar", raw.localFoodAutonomy, (value) => `${number(value, 1)}%`),
           metric("Caixa da fazenda", raw.farmCash, money),
           metric("Trabalhadores ativos no setor", raw.farmWorkers, number)
         ]
       },
       "Moradias": {
-        description: "Contagens demográficas da Sociedade; não há endereços ou unidades habitacionais georreferenciadas.",
+        description: "Contagens demográficas da Sociedade e capacidade habitacional instalada.",
         metrics: [
           metric("Moradores", demographic.population ?? data.population, number, "Sociedade/Core"),
           metric("Domicílios", demographic.households, number, "Sociedade"),
-          metric("População em idade de trabalho", demographic.workingAge, number, "Sociedade")
+          metric("Capacidade habitacional", raw.housingCapacity, number, "Economia"),
+          metric("Déficit habitacional", raw.housingDeficit, number, "Economia")
         ]
       },
       "Centro e prefeitura": {
@@ -910,12 +957,13 @@
         ]
       },
       "Serviços": {
-        description: "Infraestrutura urbana agregada. Os indicadores específicos de saúde, educação e segurança não são publicados pela referência atual.",
+        description: "Infraestrutura urbana agregada e obras estruturantes do município.",
         metrics: [
           metric("Capacidade urbana", infra.capacity),
           metric("Demanda urbana", infra.demand),
           metric("Congestionamento", infra.congestionRatio, (value) => `${number(value, 2)}×`),
-          metric("Fator de produtividade urbana", infra.tfpFactor, (value) => number(value, 2))
+          metric("Fator de produtividade urbana", infra.tfpFactor, (value) => number(value, 2)),
+          metric("Obras estruturantes concluídas", Array.isArray(raw.completedProjects) ? raw.completedProjects.length : 0, number)
         ]
       }
     };

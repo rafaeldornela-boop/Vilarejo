@@ -198,6 +198,42 @@
       facts.sources.push("payload.gameOver (economy:month-closed)");
     }
 
+    const completedProjects = Array.isArray(payload.completedProjects) ? payload.completedProjects : [];
+    const recentProjects = completedProjects.filter(p => Number(p.month) === facts.indicators.monthNumber);
+    for (const proj of recentProjects) {
+      facts.observed.push({
+        section: "Desenvolvimento",
+        kind: "fact",
+        text: `Obras públicas: Concluída a execução de "${proj.name}", com investimento de ${money(proj.cost)} pelo município.`
+      });
+    }
+    if (recentProjects.length) facts.sources.push("payload.completedProjects");
+
+    const housingDeficit = finiteOrNull(payload.housingDeficit);
+    const housingCapacity = finiteOrNull(payload.housingCapacity);
+    if (housingDeficit !== null) {
+      facts.indicators.housingDeficit = housingDeficit;
+      if (housingDeficit > 0) {
+        facts.observed.push({
+          section: "Sociedade",
+          kind: "fact",
+          text: `Habitação: Déficit habitacional registrado de ${Math.floor(housingDeficit)} pessoas sem moradia formal (capacidade instalada: ${Math.floor(housingCapacity || 12)} vagas).`
+        });
+      }
+      facts.sources.push("payload.housingDeficit (economy:month-closed)");
+    }
+
+    const foodAutonomy = finiteOrNull(payload.localFoodAutonomy);
+    if (foodAutonomy !== null && foodAutonomy > 0) {
+      facts.indicators.localFoodAutonomy = foodAutonomy;
+      facts.observed.push({
+        section: "Economia",
+        kind: "fact",
+        text: `Abastecimento: A lavoura local supriu ${foodAutonomy.toFixed(1)}% do consumo alimentar no comércio municipal com alimentos locais.`
+      });
+      facts.sources.push("payload.localFoodAutonomy (economy:month-closed)");
+    }
+
     try {
       const testApi = windowRef && windowRef.VilarejoTest;
       if (testApi && typeof testApi.stateSnapshot === "function") {

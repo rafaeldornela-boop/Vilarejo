@@ -25,7 +25,8 @@
     quality_recovery: { cooldown: 4, severity: "positive" },
     fiscal_recovery: { cooldown: 6, severity: "positive" },
     coalition_fragility: { cooldown: 6, severity: "medium" },
-    services_pressure: { cooldown: 4, severity: "high" }
+    services_pressure: { cooldown: 4, severity: "high" },
+    housing_deficit: { cooldown: 4, severity: "medium" }
   });
 
   const MILESTONE_DEFINITIONS = Object.freeze([
@@ -35,7 +36,10 @@
     { id: "social_coverage", title: "Bem-estar acompanhado", description: "A qualidade de vida possui ao menos três dimensões medidas.", goal: 3, metric: "qolCoverage" },
     { id: "fiscal_stability", title: "Estabilidade fiscal", description: "Três meses consecutivos sem resultado fiscal negativo.", goal: 3, metric: "stableFiscalMonths" },
     { id: "population_growth", title: "Comunidade em expansão", description: "A população cresceu pelo menos 5% em relação ao início da partida.", goal: 5, metric: "populationGrowthPercent" },
-    { id: "community_integration", title: "Novos moradores integrados", description: "Ao menos cinco chegadas foram registradas e a integração cultural foi medida em 60 pontos ou mais.", goal: 5, metric: "incomingResidents" }
+    { id: "community_integration", title: "Novos moradores integrados", description: "Ao menos cinco chegadas foram registradas e a integração cultural foi medida em 60 pontos ou mais.", goal: 5, metric: "incomingResidents" },
+    { id: "food_security", title: "Segurança alimentar local", description: "A lavoura supriu ao menos 25% da demanda por alimentos do comércio.", goal: 25, metric: "percent" },
+    { id: "rural_connectivity", title: "Conectividade rural", description: "Pavimentação da estrada vicinal concluída com sucesso.", goal: 1, metric: "projects" },
+    { id: "zero_housing_deficit", title: "Habitação digna", description: "Comunidade com déficit habitacional zerado e capacidade adequada.", goal: 1, metric: "boolean" }
   ]);
 
   function createState(options = {}) {
@@ -126,6 +130,10 @@
       serviceAverage,
       lowestService,
       serviceCoverage: serviceRows.length,
+      housingCapacity: numberOr(payload.housingCapacity, 12),
+      housingDeficit: numberOr(payload.housingDeficit, 0),
+      localFoodAutonomy: numberOr(payload.localFoodAutonomy, 0),
+      completedProjects: Array.isArray(payload.completedProjects) ? payload.completedProjects : [],
       engineEvents: engineEvents.filter((item) => typeof item === "string" && item.trim()).slice(0, 12),
       sourceEvents: Array.isArray(society.recentEvents) ? society.recentEvents : []
     };
@@ -282,6 +290,15 @@
         });
       }
     }
+
+    if (metrics.housingDeficit !== null && metrics.housingDeficit >= 2) {
+      pushEvent(state, {
+        id: `housing_deficit:${month}`, ruleId: "housing_deficit", month, category: "habitação", severity: "medium",
+        title: "Déficit habitacional registrado",
+        narrative: `A simulação registrou ${Math.floor(metrics.housingDeficit)} pessoas sem moradia formal. A capacidade habitacional instalada (${Math.floor(metrics.housingCapacity)} vagas) está saturada.`,
+        evidence: { deficit: metrics.housingDeficit, capacity: metrics.housingCapacity, population: metrics.population }
+      });
+    }
   }
 
   function milestoneProgress(id, state, metrics) {
@@ -300,6 +317,18 @@
           ? null
           : Math.min(5, metrics.incomingResidents, (metrics.integrationIndex / 60) * 5),
         available: metrics.incomingResidents !== null && metrics.integrationIndex !== null
+      };
+      case "food_security": return {
+        value: metrics.localFoodAutonomy !== null ? Math.min(25, metrics.localFoodAutonomy) : null,
+        available: metrics.localFoodAutonomy !== null
+      };
+      case "rural_connectivity": return {
+        value: Array.isArray(metrics.completedProjects) && metrics.completedProjects.some(p => p.id === "rural_road") ? 1 : 0,
+        available: Array.isArray(metrics.completedProjects)
+      };
+      case "zero_housing_deficit": return {
+        value: metrics.housingDeficit === 0 && metrics.population > 0 ? 1 : 0,
+        available: metrics.housingDeficit !== null
       };
       default: return { value: null, available: false };
     }
