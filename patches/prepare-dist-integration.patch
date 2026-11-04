@@ -1,0 +1,7 @@
+--- a/scripts/prepare_dist.js
++++ b/scripts/prepare_dist.js
+@@ -22,3 +22,4 @@ const RUNTIME_SCRIPTS = [
+   "src/institutions/vilarejo_institutions.js",
+   "src/services/vilarejo_services.js",
++  "src/world/vilarejo_world_engine.js",
+   "src/newspaper/vilarejo_newspaper.js",

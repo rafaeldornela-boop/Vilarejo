@@ -1,0 +1,50 @@
+--- a/src/newspaper/vilarejo_newspaper.js
++++ b/src/newspaper/vilarejo_newspaper.js
+@@ -84,3 +84,47 @@
+     facts.indicators.monthNumber = Math.floor(monthNumber);
+     if (day !== null) facts.indicators.day = Math.floor(day);
+     if (year !== null) facts.indicators.year = Math.floor(year);
++
++    // O Mundo Vivo é carregado antes do Jornal. Assim, o snapshot do mesmo
++    // fechamento já está disponível sem fabricar fatos nem alterar a Economia.
++    try {
++      const world = runtime?.modules?.get?.("mundo_vivo")?.snapshot;
++      if (world) {
++        const month = facts.indicators.monthNumber;
++        const worldEvents = (Array.isArray(world.events) ? world.events : [])
++          .filter((item) => Number(item.month) === month);
++        const achievedMilestones = (Array.isArray(world.milestones) ? world.milestones : [])
++          .filter((item) => item.achieved && Number(item.achievedAtMonth) === month);
++
++        for (const item of worldEvents) {
++          facts.observed.push({
++            section: "Sociedade",
++            kind: "fact",
++            text: `O registro Mundo Vivo identificou o sinal "${String(item.title)}": ${String(item.narrative)}`
++          });
++        }
++        for (const item of achievedMilestones) {
++          facts.observed.push({
++            section: "Sociedade",
++            kind: "fact",
++            text: `Marco de desenvolvimento alcançado: ${String(item.title)}. ${String(item.description)}`
++          });
++        }
++        if (worldEvents.length || achievedMilestones.length) {
++          facts.sources.push("runtime.modules.get('mundo_vivo').snapshot");
++        }
++      }
++    } catch (_) {}
++
++    // O payload mensal traz apenas registros produzidos pelo Eventos V3.
++    // A redação identifica a origem para não confundir sinal com estatística.
++    const engineEvents = Array.isArray(payload.eventEngine?.monthEvents) ? payload.eventEngine.monthEvents : [];
++    for (const line of engineEvents) {
++      if (typeof line !== "string" || !line.trim()) continue;
++      facts.observed.push({
++        section: "Acontecimentos",
++        kind: "fact",
++        text: `Eventos V3 registrou: ${line.replace(/^Mês \d+[: ·]\s*/, "")}`
++      });
++    }
++    if (engineEvents.length) facts.sources.push("payload.eventEngine.monthEvents (Eventos V3)");

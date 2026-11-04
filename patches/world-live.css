@@ -1,0 +1,53 @@
+/* Mundo Vivo: estilos isolados para não interferir nos módulos existentes. */
+.world-live-shell { margin: 22px 0; padding: 0; overflow: hidden; }
+.world-live-dashboard { padding: clamp(18px, 2.2vw, 28px); color: var(--text, #24352d); }
+.world-live-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+.world-live-header h2 { margin: 5px 0 7px; font: 800 clamp(1.25rem, 2vw, 1.7rem)/1.15 var(--font-heading, Manrope, sans-serif); letter-spacing: -.035em; }
+.world-live-header p, .world-live-footnote { color: var(--muted, #718078); font-size: .86rem; line-height: 1.55; margin: 0; }
+.world-live-achievement-count { min-width: 112px; padding: 12px 15px; border: 1px solid var(--border, #dce4dc); border-radius: 14px; text-align: right; background: var(--surface-soft, #f7f9f5); }
+.world-live-achievement-count strong { display: block; color: var(--accent, #315d49); font-size: 1.35rem; }
+.world-live-achievement-count span { display: block; color: var(--muted, #718078); font-size: .68rem; }
+.world-live-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.world-live-metric { min-width: 0; padding: 13px 15px; border: 1px solid var(--border, #dce4dc); border-radius: 13px; background: var(--surface-soft, #f7f9f5); }
+.world-live-metric span { display: block; color: var(--muted, #718078); font-size: .72rem; }
+.world-live-metric strong { display: block; margin-top: 5px; overflow-wrap: anywhere; color: var(--text, #24352d); font-size: 1.15rem; font-weight: 800; }
+.world-live-columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 14px; }
+.world-live-block { min-width: 0; padding: 16px; border: 1px solid var(--border, #dce4dc); border-radius: 14px; }
+.world-live-block h3 { margin: 0 0 12px; font-size: .94rem; }
+.world-live-events, .world-live-milestones { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.world-live-event { padding: 11px 12px; border-left: 3px solid #8b9a91; border-radius: 8px; background: var(--surface-soft, #f7f9f5); }
+.world-live-event.world-severity-high { border-left-color: #b65b4b; }
+.world-live-event.world-severity-medium { border-left-color: #c28d43; }
+.world-live-event.world-severity-positive { border-left-color: #548568; }
+.world-live-event strong, .world-live-milestone strong { display: block; color: var(--text, #24352d); font-size: .84rem; }
+.world-live-period { display: block; margin-bottom: 4px; color: var(--muted, #718078); font-size: .62rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.world-live-event p, .world-live-milestone p, .world-live-recommendation p { margin: 6px 0; color: var(--muted, #718078); font-size: .78rem; line-height: 1.5; }
+.world-live-event small { color: var(--muted, #87948d); font-size: .65rem; }
+.world-live-milestone { padding: 0 0 9px; border-bottom: 1px solid var(--border, #e2e8e1); }
+.world-live-milestone:last-child { border-bottom: 0; padding-bottom: 0; }
+.world-live-milestone > div:first-child { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.world-live-milestone > div:first-child span { flex: 0 0 auto; color: var(--muted, #87948d); font-size: .65rem; }
+.world-live-milestone.is-achieved > div:first-child span { color: #548568; font-weight: 800; }
+.world-live-progress { height: 5px; overflow: hidden; border-radius: 10px; background: var(--border, #e2e8e1); }
+.world-live-progress i { display: block; height: 100%; border-radius: inherit; background: #8b9d83; }
+.world-live-progress i.is-unknown { width: 100%; background: repeating-linear-gradient(90deg, #cbd4cb 0 5px, transparent 5px 9px); }
+.world-live-decisions { margin-top: 14px; }
+.world-live-decisions > div:first-child p { margin: -6px 0 12px; color: var(--muted, #718078); font-size: .76rem; }
+.world-live-recommendations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.world-live-recommendation { padding: 12px; border: 1px solid var(--border, #dce4dc); border-radius: 11px; background: var(--surface-soft, #f7f9f5); }
+.world-live-recommendation > div span { display: block; margin-bottom: 5px; color: var(--muted, #718078); font-size: .61rem; font-weight: 800; letter-spacing: .06em; }
+.world-live-recommendation > div strong { font-size: .83rem; }
+.world-live-recommendation small { display: block; color: var(--muted, #718078); font-size: .73rem; line-height: 1.45; }
+.world-live-recommendation button { margin-top: 11px; padding: 7px 10px; border: 1px solid var(--border, #dce4dc); border-radius: 8px; color: var(--accent, #315d49); background: transparent; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.world-live-recommendation button:hover { border-color: var(--accent, #315d49); }
+.world-live-empty { padding: 13px; color: var(--muted, #718078); font-size: .78rem; line-height: 1.5; }
+.world-live-footnote { margin-top: 13px; font-size: .68rem; }
+@media (max-width: 900px) {
+  .world-live-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .world-live-columns { grid-template-columns: 1fr; }
+  .world-live-recommendations { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .world-live-header { flex-direction: column; }
+  .world-live-achievement-count { width: 100%; box-sizing: border-box; text-align: left; }
+}

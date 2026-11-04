@@ -1,0 +1,56 @@
+--- a/src/test/newspaper_test.js
++++ b/src/test/newspaper_test.js
+@@ -274,5 +274,53 @@
+   assert.equal(typeof Newspaper.getIssue, "function");
+ });
+ 
++test("Jornal incorpora acontecimentos do Mundo Vivo no mesmo fechamento", () => {
++  const runtime = makeRuntime();
++  runtime.modules.register({
++    id: "mundo_vivo",
++    version: "1.0.0",
++    name: "Mundo Vivo",
++    dependencies: ["core", "economia"],
++    description: "snapshot factual auxiliar para o Jornal"
++  });
++  runtime.modules.updateSnapshot("mundo_vivo", {
++    events: [{
++      id: "fiscal_pressure:1",
++      month: 1,
++      title: "Pressão recorrente sobre o Tesouro",
++      narrative: "O resultado fiscal ficou negativo em dois fechamentos consecutivos."
++    }],
++    milestones: [{
++      id: "first_close",
++      title: "Primeiro ciclo concluído",
++      description: "A comunidade fechou seu primeiro mês econômico.",
++      achieved: true,
++      achievedAtMonth: 1
++    }]
++  });
++
++  const registration = Newspaper.registerWithRuntime(runtime, { window: {} });
++  runtime.publish("economy:month-closed", monthPayload(1), "economia");
++  const edition = registration.service.getEdition(1);
++  const society = edition.sections.find((section) => section.section === "Sociedade");
++  assert.ok(society);
++  assert.ok(society.facts.some((fact) => fact.includes("Pressão recorrente sobre o Tesouro")));
++  assert.ok(society.facts.some((fact) => fact.includes("Primeiro ciclo concluído")));
++  assert.ok(edition.sources.includes("runtime.modules.get('mundo_vivo').snapshot"));
++});
++
++test("Jornal incorpora registros de Eventos V3 do fechamento", () => {
++  const runtime = makeRuntime();
++  const registration = Newspaper.registerWithRuntime(runtime, { window: {} });
++  runtime.publish("economy:month-closed", monthPayload(1, {
++    eventEngine: { monthEvents: ["Mês 1: Uma enchente atingiu a região."] }
++  }), "economia");
++  const edition = registration.service.getEdition(1);
++  const events = edition.sections.find((section) => section.section === "Acontecimentos");
++  assert.ok(events);
++  assert.ok(events.facts.some((fact) => fact.includes("Eventos V3 registrou: Uma enchente atingiu a região.")));
++  assert.ok(edition.sources.includes("payload.eventEngine.monthEvents (Eventos V3)"));
++});
++
+ console.log(`\nResultado: ${passed} aprovados; ${failed} reprovados.`);
+ if (failed) process.exitCode = 1;
