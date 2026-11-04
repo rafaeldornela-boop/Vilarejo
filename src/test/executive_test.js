@@ -1,6 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
-const E = require("../src/executive/vilarejo_executive.js");
+const E = require("../executive/vilarejo_executive.js");
 let passed = 0;
 function test(name, fn) { fn(); passed++; console.log(`✓ ${name}`); }
 const s = E.createState({ executiveTitle: "Prefeito" });
