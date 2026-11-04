@@ -81,6 +81,49 @@
     { from: "health.healthOutcomes", to: "education.attendance", factor: 0.04, note: "Saúde melhora frequência e aprendizagem." }
   ]);
 
+  const GOVERNANCE_ACTIONS = Object.freeze({
+    action_sanitary_clean: {
+      id: "action_sanitary_clean",
+      name: "Mutirão Sanitário e Limpeza Urbana",
+      domain: "infrastructure",
+      cost: 350,
+      description: "Desobstrução de valas de esgoto, coleta de resíduos e eliminação de focos de contaminação hídrica.",
+      impacts: { sanitationDelta: 8, sanitaryRiskReduction: 35, preventionDelta: 6, civicPressureReduction: 12 }
+    },
+    action_health_campaign: {
+      id: "action_health_campaign",
+      name: "Campanha Comunitária de Vacinação e ESF",
+      domain: "health",
+      cost: 450,
+      description: "Mobilização de agentes comunitários de saúde, vacinação em massa e distribuição de sais e remédios básicos.",
+      impacts: { preventionDelta: 14, healthAccessDelta: 10, capacityDelta: 12, civicPressureReduction: 15 }
+    },
+    action_education_shift: {
+      id: "action_education_shift",
+      name: "Turno Escolar Suplementar e Vagas Emergenciais",
+      domain: "education",
+      cost: 400,
+      description: "Locação temporária de sala comunitária e contratação de monitor para acolher crianças fora da escola.",
+      impacts: { educationAccessDelta: 12, attendanceDelta: 10, extraCapacity: 4, civicPressureReduction: 15 }
+    },
+    action_security_patrol: {
+      id: "action_security_patrol",
+      name: "Ronda Preventiva e Iluminação Noturna",
+      domain: "security",
+      cost: 350,
+      description: "Vigilância comunitária nos corredores de comércio e instalação emergencial de luminárias públicas.",
+      impacts: { preventionDelta: 15, publicTrustDelta: 12, civicPressureReduction: 12 }
+    },
+    action_civic_hearing: {
+      id: "action_civic_hearing",
+      name: "Audiência Pública & Conselho Comunitário",
+      domain: "governance",
+      cost: 150,
+      description: "Sessão aberta de diálogo com líderes comunitários, acolhendo queixas e pactuando prioridades com a cidadania.",
+      impacts: { civicPressureReduction: 25, publicTrustDelta: 8 }
+    }
+  });
+
   function createDomain(definition, custom = {}) {
     const indicators = {};
     for (const [key, value] of Object.entries(definition.indicators)) indicators[key] = clamp(custom.indicators?.[key] ?? value);
@@ -97,7 +140,7 @@
   function createState(options = {}) {
     const domains = {};
     for (const id of DOMAIN_IDS) domains[id] = createDomain(DOMAIN_DEFINITIONS[id], options.domains?.[id]);
-    return {
+    const state = {
       version: VERSION, currentMonth: 0, domains,
       resources: {
         water: { reserves: 55, extraction: 0, renewableRecharge: 0, quality: 55 },
@@ -106,9 +149,26 @@
         minerals: { reserves: 60, extraction: 25, processing: 18, governance: 42, environmentalPressure: 22 }
       },
       publicCapacity: { fiscalSpace: null, workforce: 45, execution: 40 },
+      governance: {
+        demands: {
+          health: { demand: 13, capacity: 15, coverage: 100, deficit: 0, pressure: 0 },
+          education: { demand: 2, capacity: 4, coverage: 100, deficit: 0, pressure: 0 },
+          sanitation: { demand: 5, coverage: 35, sanitaryRisk: 40, pressure: 44 },
+          security: { risk: 25, safetyIndex: 75, pressure: 22 }
+        },
+        civicPressure: 15,
+        civicStatus: "Estabilidade Cívica & Apoio Comunitário",
+        activeOutbreak: null,
+        activeSecurityIncident: null,
+        actionHistory: []
+      },
       events: [], history: [],
       assumptions: { baseline: "Parâmetros iniciais de cenário; calibrar com o balanceamento do jogo.", budgetLinked: false }
     };
+    if (state.governance?.sanitaryReliefMonths > 0) state.governance.sanitaryReliefMonths -= 1;
+    if (state.governance?.securityReliefMonths > 0) state.governance.securityReliefMonths -= 1;
+    updateDemandsAndGovernance(state, options.demographics || null);
+    return state;
   }
 
   function getPath(state, path) {
@@ -245,6 +305,177 @@
     return round1(values.reduce((a, b) => a + b, 0) / Math.max(1, values.length));
   }
 
+  function updateDemandsAndGovernance(state, demographics = null) {
+    if (!state.governance) {
+      state.governance = {
+        demands: {},
+        civicPressure: 0,
+        civicStatus: "Estabilidade Cívica & Apoio Comunitário",
+        activeOutbreak: null,
+        activeSecurityIncident: null,
+        actionHistory: []
+      };
+    }
+    const pop = Math.max(1, numberOr(demographics?.population, 13));
+    const children = Math.max(0, numberOr(demographics?.children, 2));
+    const elderly = Math.max(0, numberOr(demographics?.elderly, 2));
+    const households = Math.max(1, numberOr(demographics?.households, 5));
+
+    // 1. Saúde: Demanda e Capacidade
+    const healthDemand = Math.round(pop * 0.9 + children * 0.4 + elderly * 0.8);
+    const healthCapIndicator = state.domains?.health?.indicators?.capacity || 40;
+    const healthAccessIndicator = state.domains?.health?.indicators?.access || 45;
+    const healthCapacity = Math.max(1, Math.round((healthCapIndicator / 100) * (pop * 1.4) + healthAccessIndicator * 0.08));
+    const healthCoverage = clamp(round1((healthCapacity / healthDemand) * 100), 0, 100);
+    const healthDeficit = Math.max(0, healthDemand - healthCapacity);
+    const healthPressure = clamp(round1(Math.max(0, 100 - healthCoverage)), 0, 100);
+
+    // 2. Educação: Vagas e Demanda de Crianças
+    const eduDemand = Math.max(1, children);
+    const eduAccess = state.domains?.education?.indicators?.access || 50;
+    const eduInfra = state.domains?.education?.indicators?.infrastructure || 40;
+    const eduCapacity = Math.max(1, Math.round((eduAccess / 100) * (children * 1.5) + eduInfra * 0.05));
+    const eduCoverage = clamp(round1((eduCapacity / eduDemand) * 100), 0, 100);
+    const eduDeficit = Math.max(0, eduDemand - eduCapacity);
+    const eduPressure = clamp(round1(Math.max(0, 100 - eduCoverage)), 0, 100);
+
+    // 3. Saneamento e Doenças
+    const sanDemand = households;
+    const sanCoverage = round1(state.domains?.infrastructure?.indicators?.sanitation || 35);
+    const prevHealth = state.domains?.health?.indicators?.prevention || 38;
+    const sanitaryRisk = clamp(round1(Math.max(0, 65 - sanCoverage) * 1.6 + Math.max(0, 50 - prevHealth) * 0.6), 0, 100);
+    const sanPressure = clamp(round1(sanitaryRisk * 1.1), 0, 100);
+
+    // Gatilho de Surtos Epidemiológicos
+    const relief = Number(state.governance.sanitaryReliefMonths) || 0;
+    if (sanitaryRisk >= 48 && !state.governance.activeOutbreak && relief <= 0) {
+      state.governance.activeOutbreak = {
+        month: state.currentMonth,
+        name: "Surto de Gastroenterite e Arbovirose",
+        severity: sanitaryRisk >= 70 ? "Grave" : "Moderado",
+        absenteeism: sanitaryRisk >= 70 ? 0.22 : 0.12,
+        emergencyCost: sanitaryRisk >= 70 ? 450 : 250,
+        description: "Contaminação de mananciais e esgoto a céu aberto provocam aumento de casos de diarreia infantil e febres."
+      };
+      if (Array.isArray(state.events)) {
+        state.events.push({
+          month: state.currentMonth,
+          domain: "health",
+          indicator: "healthOutcomes",
+          delta: -10,
+          reason: "Surto epidemiológico decorrente de carência de saneamento"
+        });
+      }
+    } else if ((sanitaryRisk < 35 || relief > 0) && state.governance.activeOutbreak) {
+      state.governance.activeOutbreak = null;
+      if (Array.isArray(state.events)) {
+        state.events.push({
+          month: state.currentMonth,
+          domain: "health",
+          indicator: "healthOutcomes",
+          delta: +6,
+          reason: "Surto debelado com melhoria das condições sanitárias e vacinação"
+        });
+      }
+    }
+
+    // 4. Segurança e Ordem Pública
+    const secPrev = state.domains?.security?.indicators?.prevention || 40;
+    const secResp = state.domains?.security?.indicators?.response || 40;
+    const secRisk = clamp(round1(Math.max(0, 65 - secPrev) * 0.8 + Math.max(0, 60 - secResp) * 0.4), 0, 100);
+    const safetyIndex = clamp(round1(100 - secRisk), 0, 100);
+    const secPressure = clamp(round1(secRisk * 0.9), 0, 100);
+
+    if (safetyIndex < 35 && !state.governance.activeSecurityIncident) {
+      state.governance.activeSecurityIncident = {
+        month: state.currentMonth,
+        description: "Ocorrências de Furtos Noturnos e Desordem",
+        commercialLoss: 0.08
+      };
+    } else if (safetyIndex >= 50 && state.governance.activeSecurityIncident) {
+      state.governance.activeSecurityIncident = null;
+    }
+
+    // 5. Cidadania e Mobilização Social
+    const civicPressure = clamp(round1(healthPressure * 0.3 + eduPressure * 0.25 + sanPressure * 0.25 + secPressure * 0.2), 0, 100);
+    let civicStatus = "Estabilidade Cívica & Apoio Comunitário";
+    if (civicPressure >= 80) civicStatus = "Piquete & Mobilização Social Ativa";
+    else if (civicPressure >= 60) civicStatus = "Tensão Popular & Risco de Protesto";
+    else if (civicPressure >= 30) civicStatus = "Cobrança Democrática & Demandas Protocoladas";
+
+    state.governance.demands = {
+      health: { demand: healthDemand, capacity: healthCapacity, coverage: healthCoverage, deficit: healthDeficit, pressure: healthPressure },
+      education: { demand: eduDemand, capacity: eduCapacity, coverage: eduCoverage, deficit: eduDeficit, pressure: eduPressure },
+      sanitation: { demand: sanDemand, coverage: sanCoverage, sanitaryRisk, pressure: sanPressure },
+      security: { risk: secRisk, safetyIndex, pressure: secPressure }
+    };
+    state.governance.civicPressure = civicPressure;
+    state.governance.civicStatus = civicStatus;
+
+    return state.governance;
+  }
+
+  function executeGovernanceAction(state, actionId, context = {}) {
+    const action = GOVERNANCE_ACTIONS[actionId];
+    if (!action) throw new Error(`Ação de governabilidade inexistente: ${actionId}`);
+    if (!state.governance) updateDemandsAndGovernance(state);
+
+    const imp = action.impacts;
+    if (imp.sanitationDelta && state.domains.infrastructure) {
+      state.domains.infrastructure.indicators.sanitation = clamp(state.domains.infrastructure.indicators.sanitation + imp.sanitationDelta);
+    }
+    if (imp.preventionDelta) {
+      if (state.domains.health) state.domains.health.indicators.prevention = clamp(state.domains.health.indicators.prevention + imp.preventionDelta);
+      if (state.domains.security) state.domains.security.indicators.prevention = clamp(state.domains.security.indicators.prevention + imp.preventionDelta * 0.5);
+    }
+    if (imp.healthAccessDelta && state.domains.health) {
+      state.domains.health.indicators.access = clamp(state.domains.health.indicators.access + imp.healthAccessDelta);
+    }
+    if (imp.capacityDelta && state.domains.health) {
+      state.domains.health.indicators.capacity = clamp(state.domains.health.indicators.capacity + imp.capacityDelta);
+    }
+    if (imp.educationAccessDelta && state.domains.education) {
+      state.domains.education.indicators.access = clamp(state.domains.education.indicators.access + imp.educationAccessDelta);
+    }
+    if (imp.attendanceDelta && state.domains.education) {
+      state.domains.education.indicators.attendance = clamp(state.domains.education.indicators.attendance + imp.attendanceDelta);
+    }
+    if (imp.publicTrustDelta && state.domains.security) {
+      state.domains.security.indicators.publicTrust = clamp(state.domains.security.indicators.publicTrust + imp.publicTrustDelta);
+    }
+    if (imp.civicPressureReduction) {
+      state.governance.civicPressure = clamp(state.governance.civicPressure - imp.civicPressureReduction);
+    }
+
+    if (actionId === "action_sanitary_clean" || actionId === "action_health_campaign") {
+      state.governance.activeOutbreak = null;
+      state.governance.sanitaryReliefMonths = 2;
+    }
+    if (state.governance.activeSecurityIncident && actionId === "action_security_patrol") {
+      state.governance.activeSecurityIncident = null;
+      state.governance.securityReliefMonths = 2;
+    }
+
+    const record = {
+      id: action.id,
+      name: action.name,
+      month: state.currentMonth,
+      cost: action.cost,
+      description: action.description,
+      executedAt: Date.now()
+    };
+    state.governance.actionHistory.push(record);
+    if (state.governance.actionHistory.length > 30) state.governance.actionHistory.shift();
+
+    updateDemandsAndGovernance(state, context.demographics);
+
+    return {
+      success: true,
+      action: record,
+      governance: clone(state.governance)
+    };
+  }
+
   function advanceMonth(state, options = {}) {
     const month = Math.max(state.currentMonth + 1, Math.floor(numberOr(options.month, state.currentMonth + 1)));
     const before = {};
@@ -261,7 +492,15 @@
       domain.history.push({ month, satisfaction: domain.satisfaction, indicators: clone(domain.indicators) });
       if (domain.history.length > 36) domain.history.shift();
     }
-    const summary = { month, crossEffects: clone(crossEffects), satisfaction: Object.fromEntries(DOMAIN_IDS.map((id) => [id, state.domains[id].satisfaction])) };
+    if (state.governance?.sanitaryReliefMonths > 0) state.governance.sanitaryReliefMonths -= 1;
+    if (state.governance?.securityReliefMonths > 0) state.governance.securityReliefMonths -= 1;
+    updateDemandsAndGovernance(state, options.demographics || null);
+    const summary = {
+      month,
+      crossEffects: clone(crossEffects),
+      satisfaction: Object.fromEntries(DOMAIN_IDS.map((id) => [id, state.domains[id].satisfaction])),
+      governance: clone(state.governance)
+    };
     state.history.push(summary);
     if (state.history.length > 60) state.history.shift();
     return clone(summary);
@@ -275,7 +514,17 @@
   }
 
   function getSnapshot(state) {
-    return clone({ version: VERSION, currentMonth: state.currentMonth, domains: state.domains, resources: state.resources, publicCapacity: state.publicCapacity, events: state.events.slice(-20), history: state.history.slice(-24), assumptions: state.assumptions });
+    return clone({
+      version: VERSION,
+      currentMonth: state.currentMonth,
+      domains: state.domains,
+      resources: state.resources,
+      publicCapacity: state.publicCapacity,
+      governance: state.governance,
+      events: state.events.slice(-20),
+      history: state.history.slice(-24),
+      assumptions: state.assumptions
+    });
   }
 
   function escapeHtml(value) {
@@ -331,8 +580,20 @@
     const moduleNames = { health: "saude", education: "educacao", security: "seguranca", science: "ciencia", development: "desenvolvimento", culture: "cultura", infrastructure: "infraestrutura" };
     const moduleTitles = { health: "Saúde", education: "Educação", security: "Segurança", science: "Ciência e Tecnologia", development: "Desenvolvimento", culture: "Cultura", infrastructure: "Infraestrutura e Recursos Estratégicos" };
     for (const id of DOMAIN_IDS) runtime.modules.register({ id: moduleNames[id], version: VERSION, name: moduleTitles[id], dependencies: ["core", "economia", "sociedade"], description: DOMAIN_DEFINITIONS[id].description });
-    runtime.modules.register({ id: "servicos", version: VERSION, name: "Serviços e desenvolvimento", dependencies: DOMAIN_IDS.map((id) => moduleNames[id]), description: "Painel integrado de políticas públicas e recursos estratégicos." });
-    const state = createState(options);
+    runtime.modules.register({ id: "servicos", version: VERSION, name: "Serviços e desenvolvimento", dependencies: DOMAIN_IDS.map((id) => moduleNames[id]), description: "Painel integrado de políticas públicas, demandas da cidadania e recursos estratégicos." });
+    
+    let latestDemographics = null;
+    if (runtime.population && typeof runtime.population.getSnapshot === "function") {
+      const snap = runtime.population.getSnapshot();
+      if (snap?.totals) {
+        latestDemographics = {
+          population: snap.totals.population || 13,
+          households: snap.totals.households || 5
+        };
+      }
+    }
+
+    const state = createState({ ...options, demographics: latestDemographics });
     const publishSnapshot = (source = "servicos") => {
       const snapshot = getSnapshot(state);
       runtime.modules.updateSnapshot("servicos", snapshot, source);
@@ -342,21 +603,59 @@
     publishSnapshot("servicos.initial");
     const unsubs = [];
     unsubs.push(runtime.events.on("game:reset", () => { resetState(state, options); publishSnapshot("servicos.reset"); }));
+
+    unsubs.push(runtime.events.on("society:month-closed", (event) => {
+      const payload = event?.payload;
+      if (payload?.demographic) {
+        latestDemographics = {
+          population: payload.demographic.population,
+          children: payload.demographic.children,
+          workingAge: payload.demographic.workingAge,
+          elderly: payload.demographic.elderly,
+          households: payload.economyProjection?.length || 5
+        };
+      }
+    }));
+
     unsubs.push(runtime.events.on("economy:month-closed", (event) => {
       const month = Math.max(state.currentMonth + 1, Math.floor(numberOr(event?.payload?.monthNumber, runtime.clock?.snapshot?.().economicMonthNumber || state.currentMonth + 1)));
-      const result = advanceMonth(state, { month });
+      const result = advanceMonth(state, { month, demographics: latestDemographics });
       const snapshot = publishSnapshot("servicos.month-closed");
       runtime.publish("services:month-closed", { ...result, snapshot }, "servicos");
+
+      if (snapshot.governance?.activeOutbreak) {
+        runtime.publish("services:sanitary-outbreak", snapshot.governance.activeOutbreak, "servicos");
+      }
+      if (snapshot.governance?.activeSecurityIncident) {
+        runtime.publish("services:security-incident", snapshot.governance.activeSecurityIncident, "servicos");
+      }
     }));
+
     unsubs.push(runtime.events.on("services:policy-impact", (event) => {
       const result = applyEvent(state, event?.payload || {});
       const snapshot = publishSnapshot("servicos.policy-impact");
       runtime.publish("services:indicator-updated", { ...result, snapshot }, "servicos");
     }));
+
+    unsubs.push(runtime.events.on("services:governance-action", (event) => {
+      const actionId = event?.payload?.actionId;
+      if (actionId) {
+        const result = executeGovernanceAction(state, actionId, { demographics: latestDemographics });
+        const snapshot = publishSnapshot("servicos.governance-action");
+        runtime.publish("services:governance-updated", { ...result, snapshot }, "servicos");
+      }
+    }));
+
     return {
       alreadyRegistered: false, state, getSnapshot: () => getSnapshot(state),
       setLever: (domainId, leverId, value) => { const result = setLever(state, domainId, leverId, value); publishSnapshot("servicos.lever-updated"); runtime.publish("services:policy-updated", { domainId, leverId, value: result }, "servicos"); return result; },
       applyEvent: (event) => { const result = applyEvent(state, event); publishSnapshot("servicos.event"); runtime.publish("services:indicator-updated", result, "servicos"); return result; },
+      executeGovernanceAction: (actionId) => {
+        const result = executeGovernanceAction(state, actionId, { demographics: latestDemographics });
+        publishSnapshot("servicos.governance-action");
+        runtime.publish("services:governance-updated", result, "servicos");
+        return result;
+      },
       dispose() { unsubs.forEach((unsubscribe) => unsubscribe()); }
     };
   }
@@ -366,5 +665,23 @@
     catch (error) { if (root.console?.error) root.console.error("Falha ao registrar Serviços Públicos:", error); }
   }
 
-  return { VERSION, DOMAIN_DEFINITIONS: clone(DOMAIN_DEFINITIONS), DOMAIN_IDS: [...DOMAIN_IDS], CROSS_EFFECTS: clone(CROSS_EFFECTS), createState, setLever, applyEvent, updateResources, applyLevers, applyCrossEffects, advanceMonth, getSnapshot, renderDashboard, registerWithRuntime };
+  return {
+    VERSION,
+    DOMAIN_DEFINITIONS: clone(DOMAIN_DEFINITIONS),
+    DOMAIN_IDS: [...DOMAIN_IDS],
+    CROSS_EFFECTS: clone(CROSS_EFFECTS),
+    GOVERNANCE_ACTIONS: clone(GOVERNANCE_ACTIONS),
+    createState,
+    setLever,
+    applyEvent,
+    updateResources,
+    applyLevers,
+    applyCrossEffects,
+    updateDemandsAndGovernance,
+    executeGovernanceAction,
+    advanceMonth,
+    getSnapshot,
+    renderDashboard,
+    registerWithRuntime
+  };
 });

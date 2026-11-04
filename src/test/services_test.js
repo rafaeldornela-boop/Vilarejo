@@ -96,4 +96,43 @@ test("integra com runtime e fecha mês uma vez", () => {
   assert.equal(adapter.state.currentMonth, 1); assert.equal(published, 1); assert.ok(modules.get("servicos").snapshot);
   for (const id of ["saude", "educacao", "seguranca", "ciencia", "desenvolvimento", "cultura", "infraestrutura"]) assert.ok(modules.has(id));
 });
+
+test("calcula demandas de saúde e vagas escolares a partir da demografia real", () => {
+  const s = Services.createState();
+  const gov = Services.updateDemandsAndGovernance(s, { population: 20, children: 6, workingAge: 12, elderly: 2, households: 7 });
+  assert.equal(gov.demands.education.demand, 6);
+  assert.ok(gov.demands.health.demand > 15);
+  assert.equal(gov.demands.sanitation.demand, 7);
+  assert.ok(Number.isFinite(gov.demands.health.coverage));
+});
+
+test("saneamento precário eleva risco sanitário e dispara surto de gastroenterite", () => {
+  const s = Services.createState();
+  s.domains.infrastructure.indicators.sanitation = 15;
+  s.domains.health.indicators.prevention = 20;
+  const gov = Services.updateDemandsAndGovernance(s, { population: 13, children: 2, workingAge: 9, elderly: 2, households: 5 });
+  assert.ok(gov.demands.sanitation.sanitaryRisk >= 48);
+  assert.ok(gov.activeOutbreak !== null);
+  assert.equal(gov.activeOutbreak.name, "Surto de Gastroenterite e Arbovirose");
+});
+
+test("mutirão sanitário debela surto e reduz pressão cívica", () => {
+  const s = Services.createState();
+  s.domains.infrastructure.indicators.sanitation = 15;
+  s.domains.health.indicators.prevention = 20;
+  Services.updateDemandsAndGovernance(s, { population: 13, children: 2, workingAge: 9, elderly: 2, households: 5 });
+  assert.ok(s.governance.activeOutbreak);
+
+  const res = Services.executeGovernanceAction(s, "action_sanitary_clean");
+  assert.equal(res.success, true);
+  assert.equal(s.governance.activeOutbreak, null);
+  assert.ok(s.domains.infrastructure.indicators.sanitation > 15);
+  assert.equal(s.governance.actionHistory.length, 1);
+});
+
+test("ações de governabilidade rejeitam IDs inexistentes", () => {
+  const s = Services.createState();
+  assert.throws(() => Services.executeGovernanceAction(s, "acao_inexistente"));
+});
+
 console.log(`\n${passed} testes de Serviços aprovados.`);

@@ -254,5 +254,120 @@ test("reinicia a Câmara e limpa coalizão ao resetar a partida", () => {
   politics.dispose();
 });
 
+test("pauta e aprova Projeto de Lei no Plenário com maioria parlamentar e sanção", () => {
+  const { runtime, politics, institutions } = createRuntime();
+  institutions.recalculateRepresentation();
+  const bills = institutions.getBills();
+  assert(bills.length >= 4, "Catálogo de PLs deve ter projetos cadastrados");
+  
+  // Pautar PL de Habitação Social
+  const tabled = institutions.sponsorBill("pl_social_housing");
+  assert.equal(tabled.status, "tabled");
+
+  // Formar ampla coalizão para garantir quórum e votos favoráveis
+  institutions.setCoalition(["workers", "vulnerable", "middle_class"]);
+  
+  // Votação no Plenário
+  let enactedEventReceived = false;
+  runtime.events.on("institutions:bill-enacted", () => { enactedEventReceived = true; });
+  const result = institutions.voteBill("pl_social_housing", { lobbyImpact: 10 });
+
+  assert(result.totalYes > 0, "Deve haver votos favoráveis");
+  assert.equal(result.approved, true, "Com a coalizão dos trabalhadores o PL deve ser aprovado");
+  assert.equal(enactedEventReceived, true, "Deve emitir evento de sanção da lei");
+
+  const enactedLaws = institutions.getEnactedLaws();
+  assert(enactedLaws.some((l) => l.id === "pl_social_housing"), "A lei aprovada deve constar no rol de leis sancionadas");
+  institutions.dispose();
+  politics.dispose();
+});
+
+test("rejeita Projeto de Lei quando a oposição e descontentes barram a maioria", () => {
+  const state = Institutions.createState();
+  const snap = politicsSnapshot();
+  Institutions.recalculateRepresentation(state, snap);
+  
+  // Votar projeto elegível com lobby negativo e sem coalizão
+  const result = Institutions.voteBill(state, "pl_coop_fiscal", { lobbyImpact: -50, context: { population: 20 } });
+  assert.equal(result.approved, false, "Com forte oposição, o projeto deve ser rejeitado");
+  assert.equal(result.totalNo > result.totalYes, true, "Votos contrários devem superar os favoráveis");
+  
+  const snapAfter = Institutions.getSnapshot(state);
+  const bill = snapAfter.bills.find((b) => b.id === "pl_coop_fiscal");
+  assert.equal(bill.status, "rejected", "PL deve figurar como rejeitado");
+});
+
+test("bloqueia tramitação de leis quando o vilarejo ainda não atingiu a evolução necessária", () => {
+  const state = Institutions.createState();
+  const snap = politicsSnapshot();
+  Institutions.recalculateRepresentation(state, snap);
+
+  // População inicial baixa (12 moradores) e sem leis prévias
+  const lowContext = { population: 12, treasuryCash: 2000, enactedLaws: [] };
+  
+  // Tentar pautar PL 06 (Saúde da Família, que exige População >= 18 e PL 01 aprovado)
+  assert.throws(() => {
+    Institutions.sponsorBill(state, "pl_public_health_family", { context: lowContext });
+  }, /bloqueado para pauta/);
+
+  // Verificar na prévia que está bloqueado e explica os motivos
+  const preview = Institutions.getBillPreview(state, "pl_public_health_family", { context: lowContext });
+  assert.equal(preview.eligibility.eligible, false);
+  assert(preview.eligibility.reasons.length >= 2, "Deve listar população e lei pré-requisito pendentes");
+  assert.equal(preview.phase, 2);
+});
+
+test("desbloqueia leis avançadas e gera prévia de impactos após evolução da comunidade", () => {
+  const state = Institutions.createState();
+  const snap = politicsSnapshot();
+  Institutions.recalculateRepresentation(state, snap);
+
+  // Comunidade evoluída com 20 moradores, caixa no Tesouro e PL 01 aprovado
+  const advancedContext = { population: 20, treasuryCash: 6000, enactedLaws: ["pl_social_housing"] };
+  
+  const preview = Institutions.getBillPreview(state, "pl_public_health_family", { context: advancedContext });
+  assert.equal(preview.eligibility.eligible, true, "Comunidade evoluída desbloqueia o projeto");
+  assert(preview.projectedVoting.totalSeats === 21, "Projeção legislativa deve cobrir todas as 21 cadeiras");
+  assert(preview.impacts.healthAccess > 0, "Impacto de saúde deve constar na prévia");
+
+  // Pautar e votar com sucesso
+  const tabled = Institutions.sponsorBill(state, "pl_public_health_family", { context: advancedContext });
+  assert.equal(tabled.status, "tabled");
+
+  const voteRes = Institutions.voteBill(state, "pl_public_health_family", { context: advancedContext, lobbyImpact: 20 });
+  assert.equal(voteRes.approved, true, "Com evolução e apoio, o PL é aprovado no Plenário");
+});
+
+test("ciclo eleitoral: convenção com plataforma, pesquisa eleitoral e apuração com renovação de mandato", () => {
+  const { runtime, politics, institutions } = createRuntime();
+  
+  const platforms = institutions.getCampaignPlatforms();
+  assert(platforms.length >= 3, "Devem existir ao menos 3 plataformas eleitorais");
+
+  // Selecionar plataforma solidária
+  const selected = institutions.selectCampaignPlatform("social_solidarity");
+  assert.equal(selected.id, "social_solidarity");
+
+  // Consultar pesquisa eleitoral
+  const polling = institutions.getElectionPolling();
+  assert(Array.isArray(polling) && polling.length > 0, "Pesquisa eleitoral deve retornar intenções dos grupos");
+  assert(polling.some((p) => p.intent === "favor_gov" || p.govApprovalScore > 50), "Deve haver intenção de voto apurada");
+
+  // Realizar Eleição Geral Municipal
+  let electionEvent = false;
+  runtime.events.on("institutions:mandate-renewed", () => { electionEvent = true; });
+  const electionResult = institutions.holdElection();
+
+  assert.equal(electionResult.termNumber, 2, "Mandato deve avançar para 2");
+  assert.equal(electionEvent, true, "Deve emitir evento de renovação do mandato");
+  
+  const finalSnap = institutions.getSnapshot();
+  assert.equal(finalSnap.termNumber, 2);
+  assert.equal(finalSnap.coalition.status, "not_formed", "Nova legislatura inicia sem coalizão prévia");
+  
+  institutions.dispose();
+  politics.dispose();
+});
+
 console.log(`\nResultado Instituições: ${passed} testes aprovados; ${failures.length} reprovados.`);
 if (failures.length) process.exitCode = 1;
