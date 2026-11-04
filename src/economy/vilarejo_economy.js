@@ -738,7 +738,11 @@ function createFirm(id, name, sector, account, config = {}, behavior = {}) {
     get loans() { return totalLoans(this.account); },
     set loans(v) { /* fonte de verdade é S.bankLoans */ },
     get payables() { return { wages: this.wageDebt || 0, taxes: this.taxDebt || 0 }; },
-    set payables(v) { if (v) { if (v.wages !== undefined) this.wageDebt = v.wages; if (v.taxes !== undefined) this.taxDebt = v.taxes; } }
+    set payables(v) { if (v) { if (v.wages !== undefined) this.wageDebt = v.wages; if (v.taxes !== undefined) this.taxDebt = v.taxes; } },
+    get inventoryValue() { return round2((this.inventory?.quantity || 0) * (this.inventory?.unitValue || 0)); },
+    get assets() { return round2(this.cash + this.inventoryValue + (this.capitalStock || 0)); },
+    get liabilities() { return round2(this.loans + (this.wageDebt || 0) + (this.taxDebt || 0)); },
+    get netWorth() { return round2(this.assets - this.liabilities); }
   };
   return firm;
 }
@@ -2017,12 +2021,15 @@ function generateBalanceSheets(){
  if(totalDomesticCash<0||bCash<0||gCash<0||hCash<0||bLoans<0)check9_numericalIntegrity=false;
 
  const intersectoralDebtCreditZeroSum=check2_depositsMatch&&check3_creditMatch&&check4_taxesMatch&&check5_wagesMatch&&check6_rentsMatch;
- const allPass=check1_balanceSheetsPerSector&&intersectoralDebtCreditZeroSum&&check7_writeDownsMatch&&check8_cashConservation&&check9_numericalIntegrity;
+ const totalDomesticNetWorth=round2(hNetWorth+fNetWorth+bNetWorth+gNetWorth);
+ const totalPhysicalAssets=round2(fInventoryVal+fProductiveCapital+realEstateCapital+gLandLots);
+ const check10_macroWealthConservation=Math.abs((totalDomesticNetWorth-xNetPosition)-totalPhysicalAssets)<0.05;
+ const allPass=check1_balanceSheetsPerSector&&intersectoralDebtCreditZeroSum&&check7_writeDownsMatch&&check8_cashConservation&&check9_numericalIntegrity&&check10_macroWealthConservation;
 
  return {
   households:{assets:hAssets,liabilities:hLiabilities,netWorth:hNetWorth,details:{cash:hCash,deposits:hDeposits,wageClaims:hWageClaims,rentDebt:hRentDebt,loans:hLoans}},
   enterprises:{assets:fAssets,liabilities:fLiabilities,netWorth:fNetWorth,details:{cash:fCash,inventory:fInventoryVal,productiveCapital:fProductiveCapital,realEstate:realEstateCapital,rentReceivables:fRentClaims,wageDebt:fWageDebt,taxDebt:fTaxDebt,loans:fLoans}},
-  bank:{assets:bAssets,liabilities:bLiabilities,netWorth:bNetWorth,details:{cashReserves:bCash,loanPortfolio:bLoans,regularPrincipal:bPortfolio.regularPrincipal,principalArrears:bPortfolio.principalArrears,interestArrears:bPortfolio.interestArrears,defaultRate:bPortfolio.defaultRate,deposits:bDeposits}},
+  bank:{assets:bAssets,liabilities:bLiabilities,netWorth:bNetWorth,details:{cashReserves:bCash,loanPortfolio:bLoans,regularPrincipal:bPortfolio.regularPrincipal,principalArrears:bPortfolio.principalArrears,interestArrears:bPortfolio.interestArrears,defaultRate:bPortfolio.defaultRate,deposits:bDeposits,creditLosses:S.lastBankCreditLosses||0,cumulativeWriteDowns:S.cumulativeBankWriteDowns||0,debtorRelief:S.cumulativeDebtorRelief||0,provisions:bPortfolio.totalArrears}},
   government:{assets:gAssets,liabilities:gLiabilities,netWorth:gNetWorth,details:{cash:gCash,landLots:gLandLots,taxReceivables:gTaxReceivables,loans:gLoans}},
   external:S.externalSector,
   dre:S.lastDRE||{},
@@ -2031,6 +2038,8 @@ function generateBalanceSheets(){
   audit:{
    totalDomesticCash,
    xNetPosition,
+   totalDomesticNetWorth,
+   totalPhysicalAssets,
    cashOk:check8_cashConservation,
    intersectoralDebtCreditZeroSum,
    balanceSheetOk:allPass,
@@ -2043,12 +2052,14 @@ function generateBalanceSheets(){
    check7_writeDownsMatch,
    check8_cashConservation,
    check9_numericalIntegrity,
+   check10_macroWealthConservation,
    allPass,
    cashAudit:{ok:check8_cashConservation,expected:xNetPosition,observed:totalDomesticCash,difference:round2(totalDomesticCash-xNetPosition)},
    depositAudit:{ok:check2_depositsMatch,householdDeposits:hDeposits,bankDeposits:bDeposits},
    creditAudit:{ok:check3_creditMatch,bankLoans:bLoans,borrowerLoans:totalBorrowerLoans},
    balanceSheetAudit:{ok:check1_balanceSheetsPerSector},
-   intersectoralAudit:{ok:intersectoralDebtCreditZeroSum,writeDownsOk:check7_writeDownsMatch}
+   intersectoralAudit:{ok:intersectoralDebtCreditZeroSum,writeDownsOk:check7_writeDownsMatch},
+   macroWealthAudit:{ok:check10_macroWealthConservation,domesticNetWorth:totalDomesticNetWorth,netExternalPosition:xNetPosition,physicalAssets:totalPhysicalAssets,difference:round2((totalDomesticNetWorth-xNetPosition)-totalPhysicalAssets)}
   }
  };
 }
@@ -2456,5 +2467,5 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  }));
 
  return{passed:results.filter(r=>r.passed).length,total:results.length,results};}
-window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},simulateMonths,availableCredit,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0};
+window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,updateMarketPrice,marketConsumption,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},simulateMonths,availableCredit,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0};
 newGame();actions();
