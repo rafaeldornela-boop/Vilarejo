@@ -39,7 +39,9 @@
     { id: "community_integration", title: "Novos moradores integrados", description: "Ao menos cinco chegadas foram registradas e a integração cultural foi medida em 60 pontos ou mais.", goal: 5, metric: "incomingResidents" },
     { id: "food_security", title: "Segurança alimentar local", description: "A lavoura supriu ao menos 25% da demanda por alimentos do comércio.", goal: 25, metric: "percent" },
     { id: "rural_connectivity", title: "Conectividade rural", description: "Pavimentação da estrada vicinal concluída com sucesso.", goal: 1, metric: "projects" },
-    { id: "zero_housing_deficit", title: "Habitação digna", description: "Comunidade com déficit habitacional zerado e capacidade adequada.", goal: 1, metric: "boolean" }
+    { id: "zero_housing_deficit", title: "Habitação digna", description: "Comunidade com déficit habitacional zerado e capacidade adequada.", goal: 1, metric: "boolean" },
+    { id: "cooperative_agroindustry", title: "Agroindústria Cooperativa", description: "Cooperativa agroartesanal fundada e agregando valor à produção local.", goal: 1, metric: "boolean" },
+    { id: "community_microcredit", title: "Microcrédito Comunitário", description: "Linha de microcrédito produtivo orientada e ativa no Banco Local.", goal: 1, metric: "boolean" }
   ]);
 
   function createState(options = {}) {
@@ -133,6 +135,10 @@
       housingCapacity: numberOr(payload.housingCapacity, 12),
       housingDeficit: numberOr(payload.housingDeficit, 0),
       localFoodAutonomy: numberOr(payload.localFoodAutonomy, 0),
+      cooperativeActive: Boolean(payload.cooperativeActive),
+      microcreditCount: numberOr(payload.microcreditCount, 0),
+      microcreditStats: payload.microcreditStats || null,
+      councilSupport: numberOr(payload.councilSupport, null),
       completedProjects: Array.isArray(payload.completedProjects) ? payload.completedProjects : [],
       engineEvents: engineEvents.filter((item) => typeof item === "string" && item.trim()).slice(0, 12),
       sourceEvents: Array.isArray(society.recentEvents) ? society.recentEvents : []
@@ -329,6 +335,14 @@
       case "zero_housing_deficit": return {
         value: metrics.housingDeficit === 0 && metrics.population > 0 ? 1 : 0,
         available: metrics.housingDeficit !== null
+      };
+      case "cooperative_agroindustry": return {
+        value: metrics.cooperativeActive ? 1 : 0,
+        available: metrics.cooperativeActive !== null && metrics.cooperativeActive !== undefined
+      };
+      case "community_microcredit": return {
+        value: metrics.microcreditCount > 0 ? 1 : 0,
+        available: metrics.microcreditCount !== null && metrics.microcreditCount !== undefined
       };
       default: return { value: null, available: false };
     }

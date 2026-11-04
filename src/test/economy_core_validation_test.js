@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const { createSimulationContext } = require("./simulation_context.js");
 
 console.log("\n========================================================");
-console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (6 EIXOS) ===");
+console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (EIXOS 1 A 14) ===");
 console.log("========================================================\n");
 
 const ctx = createSimulationContext();
@@ -422,6 +422,109 @@ test("10.1 Integração da Frente 2: Jornal, Mundo Vivo e Dashboard com o Plano 
   
   // Balanço patrimonial e conservação íntegros
   assert(run("auditCashConservation().ok"), "Conservação de caixa íntegra");
+  assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra");
+});
+
+// ---------------------------------------------------------------------------
+// 11. COOPERATIVA AGROARTESANAL E AGROINDÚSTRIA LOCAL
+// ---------------------------------------------------------------------------
+test("11.1 Cooperativa Agroartesanal: fundação, processamento B2B, agregação de valor e distribuição de sobras", () => {
+  api.reset();
+  const S = getS();
+  
+  // 1. Fundação da Cooperativa pelo Tesouro Municipal
+  run("log('external', 'treasury', 20000, 'Aporte no Tesouro')");
+  const initialCoopCash = 3000;
+  const coopFirm = api.foundCooperative(initialCoopCash, "treasury");
+  
+  assert(coopFirm && coopFirm.id === "cooperative", "Firma da cooperativa deve ser registrada em S.firms");
+  assert(run("balance('cooperative')") === initialCoopCash, "Conta 'cooperative' deve ter saldo inicial transferido");
+  assert(S.cooperativeActive === true, "cooperativeActive deve ser true após fundação");
+  
+  // 2. Simular mês com safra para validar compra B2B da fazenda e agregação de valor
+  run("log('external', 'stateFarm', 5000, 'Capital para lavoura')");
+  run("closeMonth()");
+  
+  const snap = api.stateSnapshot();
+  assert(snap.cooperativeActive === true, "Snapshot deve expor cooperativeActive");
+  assert(snap.accounts.cooperative >= 0, "Caixa da cooperativa deve ser positivo ou nulo");
+  
+  // 3. Distribuição de sobras líquidas cooperativas aos cooperados (famílias)
+  run("log('external', 'cooperative', 4000, 'Resultado líquido do ciclo')");
+  const surplusResult = api.distributeCooperativeSurplus();
+  assert(surplusResult.distributed > 0, "Sobras cooperativas devem ser distribuídas aos cooperados");
+  assert(surplusResult.householdCount > 0, "Famílias associadas devem ser beneficiadas");
+  
+  // 4. Auditoria SFC e conservação de caixa
+  assert(run("auditCashConservation().ok"), "Conservação de moeda estrita na operação cooperativa");
+  const bs = api.generateBalanceSheets();
+  assert(bs.audit.allPass, "Balanços patrimoniais consistentes com a Cooperativa");
+});
+
+// ---------------------------------------------------------------------------
+// 12. MICROCRÉDITO COMUNITÁRIO E INCLUSÃO PRODUTIVA
+// ---------------------------------------------------------------------------
+test("12.1 Microcrédito Comunitário: concessão, inclusão produtiva familiar e amortização regular no Banco Local", () => {
+  api.reset();
+  const S = getS();
+  
+  // 1. Injetar liquidez no banco para carteira de microcrédito
+  run("log('external', 'bank', 30000, 'Liquidez bancária para microcrédito')");
+  
+  // 2. Concessão de microcrédito produtivo para domicílio
+  const borrowerId = "house:1";
+  const initialHouseCash = run("balance(accountKey(S.households[0]))");
+  const microLoan = api.issueMicrocredit(borrowerId, 1500, "fomento à confecção artesanal");
+  
+  assert(microLoan && microLoan.isMicrocredit === true, "Empréstimo deve ser marcado como microcrédito");
+  assert(microLoan.interestRate <= 0.01, "Taxa de juros do microcrédito deve ser favorecida (<= 1% a.m.)");
+  assert(run("balance(accountKey(S.households[0]))") === initialHouseCash + 1500, "Caixa da família deve receber o crédito integral");
+  
+  // 3. Verificar estatísticas da carteira no Banco Local
+  const portfolio = api.getBankPortfolioStats();
+  assert(portfolio.microcredit && portfolio.microcredit.count >= 1, "Carteira deve registrar ao menos 1 contrato ativo");
+  assert(portfolio.microcredit.principal >= 1500, "Volume de microcrédito deve ser refletido na carteira bancária");
+  
+  // 4. Fechamento mensal com amortização da cascata bancária
+  run("closeMonth()");
+  
+  // 5. Auditoria de conservação e SFC
+  assert(run("auditCashConservation().ok"), "Conservação de caixa íntegra após concessão de microcrédito");
+  assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra com carteira de microcrédito");
+});
+
+// ---------------------------------------------------------------------------
+// 13. DILEMAS DO GABINETE EXECUTIVO E CRISES POLÍTICAS
+// ---------------------------------------------------------------------------
+test("13.1 Dilemas do Gabinete Executivo: gatilho, deliberação, trade-off orçamentário e sustentação parlamentar", () => {
+  api.reset();
+  const S = getS();
+  
+  // 1. Catálogo e acionamento de dilema
+  const dilemmas = api.getCabinetDilemmas();
+  assert(Array.isArray(dilemmas) && dilemmas.length >= 4, "Catálogo de dilemas do Gabinete deve ter ao menos 4 cenários");
+  
+  const dilemma = api.triggerCabinetDilemma("housing_migration_surge");
+  assert(dilemma && dilemma.id === "housing_migration_surge", "Dilema de habitação deve ser acionado");
+  assert(S.pendingCabinetDilemma && S.pendingCabinetDilemma.id === "housing_migration_surge", "Dilema deve constar como pendente no estado");
+  
+  // 2. Deliberar opção com impacto fiscal e parlamentar
+  const initialSupport = api.getCouncilSupport();
+  run("log('external', 'treasury', 15000, 'Caixa para contingências')");
+  
+  // Escolher construir moradias de emergência (cost: 3500, councilImpact: +10, approvalImpact: +12)
+  const resolution = api.resolveCabinetDilemma("housing_migration_surge", "emergency_housing");
+  assert(resolution.success === true, "Deliberação do Gabinete deve ser concluída com sucesso");
+  assert(S.pendingCabinetDilemma === null, "Dilema pendente deve ser desimpedido");
+  assert(S.resolvedDilemmas.some(d => d.id === "housing_migration_surge"), "Dilema deve figurar no histórico de resolvidos");
+  assert(S.lastResolvedDilemma.choiceId === "emergency_housing", "Última deliberação deve registrar a opção escolhida");
+  assert(api.getCouncilSupport() === initialSupport + 10, "Apoio na Câmara deve aumentar conforme o impacto parlamentar");
+  
+  // 3. Fechamento mensal com evento propagado
+  run("closeMonth()");
+  
+  // 4. Auditoria de conservação e SFC
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa após deliberação de crise do Gabinete");
   assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra");
 });
 

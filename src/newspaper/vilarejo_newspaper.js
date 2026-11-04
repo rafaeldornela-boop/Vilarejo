@@ -234,6 +234,51 @@
       facts.sources.push("payload.localFoodAutonomy (economy:month-closed)");
     }
 
+    if (payload.lastResolvedDilemma) {
+      const d = payload.lastResolvedDilemma;
+      facts.indicators.lastResolvedDilemma = d.id;
+      facts.observed.push({
+        section: "Governo",
+        kind: "fact",
+        text: `Deliberação Executiva: O Gabinete deliberou sobre "${d.title}", adotando a medida: "${d.choiceTitle || d.choiceLabel || d.choiceId}".`
+      });
+      facts.sources.push("payload.lastResolvedDilemma (economy:month-closed)");
+    }
+
+    if (payload.cooperativeActive) {
+      facts.indicators.cooperativeActive = true;
+      facts.observed.push({
+        section: "Desenvolvimento",
+        kind: "fact",
+        text: "Cooperativismo: A Cooperativa Agroartesanal operou no período agregando valor à safra e distribuindo sobras aos produtores associados."
+      });
+      facts.sources.push("payload.cooperativeActive (economy:month-closed)");
+    }
+
+    const microCount = finiteOrNull(payload.microcreditCount);
+    if (microCount !== null && microCount > 0) {
+      facts.indicators.microcreditCount = microCount;
+      const stats = payload.microcreditStats || {};
+      const activePrincipal = finiteOrNull(stats.principal) ?? 0;
+      facts.observed.push({
+        section: "Economia",
+        kind: "fact",
+        text: `Microcrédito: O Banco Comunitário registrou ${Math.floor(microCount)} operações ativas de microcrédito produtivo orientado (${money(activePrincipal)} em carteira).`
+      });
+      facts.sources.push("payload.microcreditStats (economy:month-closed)");
+    }
+
+    const council = finiteOrNull(payload.councilSupport);
+    if (council !== null) {
+      facts.indicators.councilSupport = council;
+      facts.observed.push({
+        section: "Governo",
+        kind: "fact",
+        text: `Câmara Municipal: O índice de sustentação e apoio parlamentar ao Executivo fixou-se em ${percent(council, 0)}.`
+      });
+      facts.sources.push("payload.councilSupport (economy:month-closed)");
+    }
+
     try {
       const testApi = windowRef && windowRef.VilarejoTest;
       if (testApi && typeof testApi.stateSnapshot === "function") {

@@ -251,6 +251,14 @@
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
       panel.classList.toggle("active", panel.dataset.viewPanel === name);
     });
+    const topHomeBtn = $("btnTopHome");
+    if (topHomeBtn) {
+      topHomeBtn.addEventListener("click", () => setView("overview"));
+    }
+    const breadHome = $("breadHome");
+    if (breadHome) {
+      breadHome.addEventListener("click", () => setView("overview"));
+    }
     document.querySelectorAll("[data-view]").forEach((button) => {
       const selected = button.dataset.view === name;
       button.classList.toggle("active", selected);
@@ -384,6 +392,8 @@
               <span>⚖</span> Avaliar influência dos grupos políticos
             </button>
           </div>
+          ${renderCabinetDilemmaHtml()}
+          ${renderCooperativeAndMicrocreditHtml()}
           <div class="gov-ppa-section" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border,#e2e8f0);">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
               <span class="eyebrow" style="font-weight:700;color:var(--gold,#d97706);">PLANO PLURIANUAL DE METAS (PPA)</span>
@@ -432,6 +442,182 @@
       }).join("");
     } catch (_) {
       return '<p style="font-size:0.8rem;color:var(--muted,#64748b);">Plano de metas em monitoramento.</p>';
+    }
+  }
+
+  function renderCabinetDilemmaHtml() {
+    try {
+      const testApi = window.VilarejoTest;
+      const snap = testApi?.stateSnapshot ? testApi.stateSnapshot() : null;
+      const councilSupport = snap?.councilSupport ?? 65;
+      const pending = snap?.pendingCabinetDilemma;
+      const last = snap?.lastResolvedDilemma;
+
+      let councilBadge = councilSupport >= 60
+        ? '<span style="color:#16a34a;background:#dcfce7;padding:3px 8px;border-radius:6px;font-weight:700;font-size:0.75rem;">Sustentação Estável</span>'
+        : councilSupport >= 45
+        ? '<span style="color:#d97706;background:#fef3c7;padding:3px 8px;border-radius:6px;font-weight:700;font-size:0.75rem;">Apoio Moderado</span>'
+        : '<span style="color:#dc2626;background:#fee2e2;padding:3px 8px;border-radius:6px;font-weight:700;font-size:0.75rem;">Tensão Parlamentar</span>';
+
+      if (pending) {
+        const choicesHtml = (pending.choices || []).map((c) => {
+          const title = c.title || c.label || "";
+          const desc = c.description || c.text || "";
+          const costText = c.cost > 0 ? `Custo: R$ ${c.cost.toLocaleString("pt-BR")}` : 'Sem custo direto';
+          const councilVal = c.impacts?.councilSupport ?? c.councilImpact ?? 0;
+          const approvalVal = c.impacts?.approval ?? c.approvalImpact ?? 0;
+          const councilDelta = (councilVal >= 0 ? '+' : '') + councilVal + '% na Câmara';
+          const approvalDelta = (approvalVal >= 0 ? '+' : '') + approvalVal + '% aprovação';
+          return `
+            <div style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:0.75rem;display:flex;flex-direction:column;justify-content:space-between;gap:0.5rem;">
+              <div>
+                <strong style="color:var(--forest,#14342b);font-size:0.9rem;">${escapeHtml(title)}</strong>
+                <p style="margin:0.25rem 0 0.5rem;font-size:0.8rem;color:#475569;line-height:1.35;">${escapeHtml(desc)}</p>
+                <div style="display:flex;flex-wrap:wrap;gap:0.4rem;font-size:0.72rem;">
+                  <span style="background:#f1f5f9;color:#334155;padding:2px 6px;border-radius:4px;font-weight:600;">${costText}</span>
+                  <span style="background:#f0fdf4;color:#166534;padding:2px 6px;border-radius:4px;font-weight:600;">${councilDelta}</span>
+                  <span style="background:#eff6ff;color:#1e40af;padding:2px 6px;border-radius:4px;font-weight:600;">${approvalDelta}</span>
+                </div>
+              </div>
+              <button type="button" class="btn-gov-shortcut" style="margin-top:0.4rem;justify-content:center;background:#14342b;color:#fff;border:none;cursor:pointer;" onclick="window.VilarejoDashboard && window.VilarejoDashboard.resolveCabinetDilemma('${c.id}')">
+                Deliberar esta decisão
+              </button>
+            </div>
+          `;
+        }).join("");
+
+        return `
+          <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:1rem;margin-top:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+              <span style="background:#f59e0b;color:#fff;font-size:0.7rem;font-weight:800;padding:2px 8px;border-radius:4px;letter-spacing:0.5px;">CRISE DO GABINETE · DELIBERAÇÃO URGENTE</span>
+              <span style="font-size:0.8rem;font-weight:700;color:#92400e;">Apoio na Câmara: ${councilSupport}%</span>
+            </div>
+            <h4 style="margin:0 0 0.4rem;font-size:1.05rem;color:#78350f;">${escapeHtml(pending.title)}</h4>
+            <p style="margin:0 0 0.85rem;font-size:0.85rem;color:#92400e;line-height:1.4;">${escapeHtml(pending.description)}</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.75rem;">
+              ${choicesHtml}
+            </div>
+          </div>
+        `;
+      }
+
+      const lastDelib = last
+        ? `<div style="font-size:0.78rem;color:#64748b;margin-top:0.4rem;">Última deliberação: <strong style="color:#334155;">${escapeHtml(last.title)}</strong> &mdash; <em>${escapeHtml(last.choiceTitle || last.choiceLabel || '')}</em></div>`
+        : '';
+
+      return `
+        <div style="background:var(--surface,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:8px;padding:0.9rem;margin-top:1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+            <div>
+              <span class="eyebrow" style="font-weight:700;color:var(--forest,#14342b);">GABINETE EXECUTIVO & RELAÇÃO PARLAMENTAR</span>
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.25rem;">
+                <strong style="font-size:1.05rem;color:var(--forest,#14342b);">Apoio na Câmara: ${councilSupport}%</strong>
+                ${councilBadge}
+              </div>
+              ${lastDelib}
+            </div>
+            <div>
+              <button type="button" class="btn-gov-shortcut" style="cursor:pointer;" onclick="window.VilarejoDashboard && window.VilarejoDashboard.triggerRandomCabinetDilemma()">
+                <span>⚡</span> Despachar cenário de crise no Gabinete
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function renderCooperativeAndMicrocreditHtml() {
+    try {
+      const testApi = window.VilarejoTest;
+      const snap = testApi?.stateSnapshot ? testApi.stateSnapshot() : null;
+      const coopActive = Boolean(snap?.cooperativeActive);
+      const coopCash = Number(snap?.accounts?.cooperative ?? 0);
+      const coopTfp = Number(snap?.cooperativeTfp ?? 1.0);
+      const portfolio = testApi?.getBankPortfolioStats ? testApi.getBankPortfolioStats() : null;
+      const micro = portfolio?.microcredit || { count: snap?.microcreditCount || 0, principal: 0, arrears: 0 };
+
+      const coopCard = coopActive
+        ? `
+          <div style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:0.85rem;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong style="color:var(--forest,#14342b);font-size:0.9rem;">Cooperativa Agroartesanal</strong>
+                <span style="color:#16a34a;background:#dcfce7;padding:2px 6px;border-radius:4px;font-weight:700;font-size:0.72rem;">Operando</span>
+              </div>
+              <p style="font-size:0.78rem;color:#475569;margin:0.35rem 0 0.6rem;line-height:1.35;">Processamento local de café e manufatura artesanal com agregação de valor e retenção de excedente na comunidade.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.75rem;margin-bottom:0.6rem;">
+                <div style="background:#f8fafc;padding:0.4rem;border-radius:4px;">
+                  <span style="color:#64748b;display:block;font-size:0.7rem;">Caixa Cooperativo:</span>
+                  <strong style="color:#0f172a;">R$ ${coopCash.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>
+                </div>
+                <div style="background:#f8fafc;padding:0.4rem;border-radius:4px;">
+                  <span style="color:#64748b;display:block;font-size:0.7rem;">Produtividade TFP:</span>
+                  <strong style="color:#0f172a;">${(coopTfp * 100).toFixed(0)}%</strong>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn-gov-shortcut" style="width:100%;justify-content:center;cursor:pointer;" onclick="window.VilarejoDashboard && window.VilarejoDashboard.distributeCooperativeSurplus()">
+              <span>💰</span> Distribuir Sobras Líquidas aos Associados
+            </button>
+          </div>
+        `
+        : `
+          <div style="background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:0.85rem;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong style="color:var(--forest,#14342b);font-size:0.9rem;">Cooperativa Agroartesanal</strong>
+                <span style="color:#64748b;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-weight:600;font-size:0.72rem;">Não constituída</span>
+              </div>
+              <p style="font-size:0.78rem;color:#475569;margin:0.35rem 0 0.6rem;line-height:1.35;">Sem processamento local, a produção agropecuária é exportada in natura com baixa agregação de valor.</p>
+            </div>
+            <button type="button" class="btn-gov-shortcut" style="width:100%;justify-content:center;background:#14342b;color:#fff;border:none;cursor:pointer;" onclick="window.VilarejoDashboard && window.VilarejoDashboard.foundCooperative()">
+              <span>🏛</span> Fundar Cooperativa (Investimento: R$ 3.000)
+            </button>
+          </div>
+        `;
+
+      const microCard = `
+        <div style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:0.85rem;display:flex;flex-direction:column;justify-content:space-between;">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <strong style="color:var(--forest,#14342b);font-size:0.9rem;">Microcrédito Comunitário</strong>
+              <span style="color:#0284c7;background:#e0f2fe;padding:2px 6px;border-radius:4px;font-weight:700;font-size:0.72rem;">Banco Local</span>
+            </div>
+            <p style="font-size:0.78rem;color:#475569;margin:0.35rem 0 0.6rem;line-height:1.35;">Crédito produtivo orientado para oficinas artesanais, hortas familiares e pequenos serviços com taxa favorecida de 0,5% a.m.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.75rem;margin-bottom:0.6rem;">
+              <div style="background:#f8fafc;padding:0.4rem;border-radius:4px;">
+                <span style="color:#64748b;display:block;font-size:0.7rem;">Contratos Ativos:</span>
+                <strong style="color:#0f172a;">${micro.count} contratos</strong>
+              </div>
+              <div style="background:#f8fafc;padding:0.4rem;border-radius:4px;">
+                <span style="color:#64748b;display:block;font-size:0.7rem;">Volume em Carteira:</span>
+                <strong style="color:#0f172a;">R$ ${(micro.principal || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn-gov-shortcut" style="width:100%;justify-content:center;cursor:pointer;" onclick="window.VilarejoDashboard && window.VilarejoDashboard.issueMicrocredit(1000)">
+            <span>🌱</span> Conceder Microcrédito Produtivo (R$ 1.000)
+          </button>
+        </div>
+      `;
+
+      return `
+        <div class="gov-coop-section" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border,#e2e8f0);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <span class="eyebrow" style="font-weight:700;color:var(--forest,#14342b);">DESENVOLVIMENTO ECONÔMICO & CRÉDITO COMUNITÁRIO</span>
+            <small style="color:var(--muted,#64748b);">Fomento Produtivo & Inclusão</small>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0.75rem;">
+            ${coopCard}
+            ${microCard}
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      return '';
     }
   }
 
@@ -905,7 +1091,7 @@
         const formatted = value === null ? UNAVAILABLE : metric.format(value);
         return '<article class="ux-overview-metric"><span class="eyebrow">' + escapeHtml(metric.label) + '</span><strong>' +
           escapeHtml(formatted) + '</strong><small>' + escapeHtml(comparison) + '</small></article>';
-      }).join("") + '</div><p class="ux-data-provenance">Fonte: snapshots mensais desta execução, registrados pela Central de Inteligência. Valores ausentes não são estimados.</p>';
+      }).join("") + '</div><p class="ux-data-provenance">Indicadores consolidados no último fechamento da comunidade (valores ausentes não são estimados).</p>';
   }
 
   function sectorMetricsFor(data, sector) {
@@ -920,9 +1106,9 @@
       metric("Estoque do comércio", raw.marketStock, (value) => `${number(value, 1)} unidades`)
     ];
     const profiles = {
-      "Visão do território": { description: "Indicadores agregados disponíveis para a execução atual.", metrics: overview },
+      "Visão do território": { description: "Indicadores gerais de desenvolvimento do município.", metrics: overview },
       "Fazenda e produção": {
-        description: "Valores da atividade rural expostos pelo snapshot; o desenho da lavoura é apenas ilustrativo.",
+        description: "Produção agrícola, estoques de grãos e mão de obra rural do município.",
         metrics: [
           metric("Estoque da fazenda", raw.farmInventory, (value) => number(value, 1)),
           metric("Estoque alimentar local", raw.farmLocalFoodStock, (value) => `${number(value, 1)} cestas`),
@@ -1702,6 +1888,14 @@
   }
 
   function initNavigation() {
+    const topHomeBtn = $("btnTopHome");
+    if (topHomeBtn) {
+      topHomeBtn.addEventListener("click", () => setView("overview"));
+    }
+    const breadHome = $("breadHome");
+    if (breadHome) {
+      breadHome.addEventListener("click", () => setView("overview"));
+    }
     document.querySelectorAll("[data-view]").forEach((button) => {
       button.addEventListener("click", () => {
         setView(button.dataset.view);
@@ -1861,7 +2055,47 @@
       recordMonthClosure,
       refreshAlerts,
       renderIntelligenceDashboard,
-      renderNewspaperDashboard
+      renderNewspaperDashboard,
+      resolveCabinetDilemma: (choiceId) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
+          const snap = window.VilarejoTest.stateSnapshot();
+          const dilemma = snap?.pendingCabinetDilemma;
+          if (dilemma) {
+            window.VilarejoTest.resolveCabinetDilemma(dilemma.id, choiceId);
+            refresh();
+          }
+        }
+      },
+      triggerRandomCabinetDilemma: () => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.getCabinetDilemmas) {
+          const list = window.VilarejoTest.getCabinetDilemmas();
+          if (list && list.length) {
+            const snap = window.VilarejoTest.stateSnapshot();
+            const available = list.filter((d) => !snap?.resolvedDilemmas?.some((r) => r.id === d.id));
+            const chosen = available.length ? available[0] : list[0];
+            window.VilarejoTest.triggerCabinetDilemma(chosen.id);
+            refresh();
+          }
+        }
+      },
+      foundCooperative: () => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.foundCooperative) {
+          window.VilarejoTest.foundCooperative(3000, "treasury");
+          refresh();
+        }
+      },
+      distributeCooperativeSurplus: () => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.distributeCooperativeSurplus) {
+          window.VilarejoTest.distributeCooperativeSurplus();
+          refresh();
+        }
+      },
+      issueMicrocredit: (amount) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.issueMicrocredit) {
+          window.VilarejoTest.issueMicrocredit("house:1", amount || 1000, "capital de giro para produção autônoma");
+          refresh();
+        }
+      }
     };
     if (typeof document !== "undefined") {
       if (document.readyState === "loading") {
@@ -1896,7 +2130,47 @@
       recordMonthClosure,
       refreshAlerts,
       renderIntelligenceDashboard,
-      renderNewspaperDashboard
+      renderNewspaperDashboard,
+      resolveCabinetDilemma: (choiceId) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
+          const snap = window.VilarejoTest.stateSnapshot();
+          const dilemma = snap?.pendingCabinetDilemma;
+          if (dilemma) {
+            window.VilarejoTest.resolveCabinetDilemma(dilemma.id, choiceId);
+            refresh();
+          }
+        }
+      },
+      triggerRandomCabinetDilemma: () => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.getCabinetDilemmas) {
+          const list = window.VilarejoTest.getCabinetDilemmas();
+          if (list && list.length) {
+            const snap = window.VilarejoTest.stateSnapshot();
+            const available = list.filter((d) => !snap?.resolvedDilemmas?.some((r) => r.id === d.id));
+            const chosen = available.length ? available[0] : list[0];
+            window.VilarejoTest.triggerCabinetDilemma(chosen.id);
+            refresh();
+          }
+        }
+      },
+      foundCooperative: () => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.foundCooperative) {
+          window.VilarejoTest.foundCooperative(3000, "treasury");
+          refresh();
+        }
+      },
+      distributeCooperativeSurplus: () => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.distributeCooperativeSurplus) {
+          window.VilarejoTest.distributeCooperativeSurplus();
+          refresh();
+        }
+      },
+      issueMicrocredit: (amount) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.issueMicrocredit) {
+          window.VilarejoTest.issueMicrocredit("house:1", amount || 1000, "capital de giro para produção autônoma");
+          refresh();
+        }
+      }
     };
   }
 })();
