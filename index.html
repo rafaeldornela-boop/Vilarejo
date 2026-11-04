@@ -73,15 +73,15 @@
           <div class="intro-mark">V<span>·</span></div>
         </div>
 
-          <div id="event" class="event-card event-modal hidden pulse-animation" role="presentation">
-            <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="eventTitle" aria-describedby="eventText">
-              <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" loading="lazy" decoding="async"><figcaption>Ilustração geral de deliberação; não retrata este evento nem qualquer resultado observado.</figcaption></figure>
-              <div class="event-kicker">ESCOLHA DO MOTOR</div><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div>
-              <p class="ux-event-caveat">Custos e riscos aparecem somente quando informados pela simulação. Variações posteriores serão observadas, sem presumir causalidade.</p>
-            </section>
-          </div>
+        <div id="event" class="event-card event-modal hidden pulse-animation" role="presentation">
+          <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="eventTitle" aria-describedby="eventText">
+            <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" loading="lazy" decoding="async"><figcaption>Ilustração geral de deliberação; não retrata este evento nem qualquer resultado observado.</figcaption></figure>
+            <div class="event-kicker">ESCOLHA DO MOTOR</div><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div>
+            <p class="ux-event-caveat">Custos e riscos aparecem somente quando informados pela simulação. Variações posteriores serão observadas, sem presumir causalidade.</p>
+          </section>
+        </div>
 
-          <div id="overviewAlertsContainer" class="overview-alerts-container hidden"></div>
+        <div id="overviewAlertsContainer" class="overview-alerts-container hidden"></div>
 
         <section class="view-panel active" data-view-panel="overview" aria-label="Visão geral">
           <section class="ux-overview-pulse" id="overviewPulse" aria-label="Indicadores do último fechamento" aria-live="polite"></section>
@@ -137,62 +137,65 @@
 
           <section class="village-card">
             <div class="section-heading map-heading">
-              <div><div class="eyebrow">MAPA ESQUEMÁTICO</div><h2>Setores da comunidade</h2><p>Selecione um setor para consultar agregados observados; o desenho não representa lotes ou endereços reais.</p></div>
-              <span class="live-tag"><i></i> VISUALIZAÇÃO ILUSTRATIVA</span>
+              <div><div class="eyebrow">MUNDO E TERRITÓRIO</div><h2>O Vilarejo em perspectiva</h2><p>Explore os setores da comunidade. O mapa será renderizado pelo Phaser, enquanto os indicadores continuam vindo do motor econômico.</p></div>
+              <span class="live-tag"><i></i> VISUALIZAÇÃO DO MUNDO</span>
             </div>
             <div class="map-layout">
               <div class="map-stage">
-                <svg id="villageMap" class="village-map" viewBox="0 0 1000 620" role="img" aria-label="Mapa ilustrativo e não georreferenciado, com setores selecionáveis de produção, moradias, centro, comércio e serviços">
-                  <defs>
-                    <linearGradient id="groundGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9edcf"/><stop offset="1" stop-color="#cdddbb"/></linearGradient>
-                    <linearGradient id="waterGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9bc9c5"/><stop offset="1" stop-color="#68a7a6"/></linearGradient>
-                    <filter id="mapShadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="9" stdDeviation="7" flood-color="#324d3d" flood-opacity=".18"/></filter>
-                  </defs>
-                  <path d="M500 24 963 275 500 590 37 320Z" fill="url(#groundGradient)" stroke="#b6c9a7" stroke-width="2"/>
-                  <path d="M45 345 205 432 340 358 489 445 640 360 807 454 962 365" fill="none" stroke="#f4f0dc" stroke-width="38" stroke-linecap="round" opacity=".95"/>
-                  <path d="M45 345 205 432 340 358 489 445 640 360 807 454 962 365" fill="none" stroke="#d4c9a8" stroke-width="2" stroke-dasharray="12 12"/>
-                  <path d="M120 190 C235 235 244 300 370 307 C505 315 565 245 655 285 C760 331 798 386 895 390" fill="none" stroke="url(#waterGradient)" stroke-width="38" stroke-linecap="round" opacity=".9"/>
-                  <path d="M120 190 C235 235 244 300 370 307 C505 315 565 245 655 285 C760 331 798 386 895 390" fill="none" stroke="#d9f0df" stroke-width="3" stroke-dasharray="14 18" opacity=".8"/>
-
-                  <g data-district="Fazenda e produção" class="map-district district-farm" tabindex="0" role="button" aria-label="Selecionar Fazenda e produção">
-                    <path d="M590 84 804 200 700 261 485 144Z" fill="#b4ce91" stroke="#94b27b" stroke-width="2"/>
-                    <path d="M614 100 770 185 690 230 534 145Z" fill="#8fb178" opacity=".75"/>
-                    <path d="M636 111 650 119 576 162 562 154M674 132 688 140 614 183 600 175M712 153 726 161 652 204 638 196M750 174 764 182 690 225 676 217" stroke="#e1e9bd" stroke-width="5"/>
-                    <path d="M620 97 757 172 681 215 544 140" fill="none" stroke="#f1edcf" stroke-width="2"/>
-                    <g transform="translate(700 156)" filter="url(#mapShadow)"><path d="M0 0 44 25 0 51 -44 25Z" fill="#8f6947"/><path d="M-44 25 0 51 0 83 -44 57Z" fill="#b47d50"/><path d="M0 51 44 25 44 58 0 83Z" fill="#8a5d3c"/><path d="M-51 24 0 -7 51 24 0 55Z" fill="#c88c56"/><path d="M-6 58 8 50 8 74 -6 82Z" fill="#493a2b"/></g>
-                    <g fill="#4f865b"><circle cx="548" cy="112" r="12"/><circle cx="568" cy="124" r="10"/><circle cx="790" cy="217" r="13"/><circle cx="770" cy="229" r="10"/></g>
-                    <text x="680" y="76" class="map-label">FAZENDA</text>
-                  </g>
-
-                  <g data-district="Moradias" class="map-district district-homes" tabindex="0" role="button" aria-label="Selecionar Moradias">
-                    <g transform="translate(300 192)" filter="url(#mapShadow)"><path d="M0 0 58 33 0 67 -58 34Z" fill="#c5a77b"/><path d="M-58 34 0 67 0 122 -58 88Z" fill="#b9875c"/><path d="M0 67 58 33 58 87 0 122Z" fill="#946746"/><path d="M-68 32 0 -9 68 29 0 72Z" fill="#a95f4c"/><path d="M-15 75 2 85 2 112 -15 102Z" fill="#493b32"/><path d="M22 77 39 67 39 89 22 99Z" fill="#d9e8d5"/></g>
-                    <g transform="translate(410 250) scale(.78)" filter="url(#mapShadow)"><path d="M0 0 58 33 0 67 -58 34Z" fill="#c5a77b"/><path d="M-58 34 0 67 0 122 -58 88Z" fill="#b9875c"/><path d="M0 67 58 33 58 87 0 122Z" fill="#946746"/><path d="M-68 32 0 -9 68 29 0 72Z" fill="#6c8b67"/><path d="M-15 75 2 85 2 112 -15 102Z" fill="#493b32"/><path d="M22 77 39 67 39 89 22 99Z" fill="#d9e8d5"/></g>
-                    <g transform="translate(188 290) scale(.72)" filter="url(#mapShadow)"><path d="M0 0 58 33 0 67 -58 34Z" fill="#c5a77b"/><path d="M-58 34 0 67 0 122 -58 88Z" fill="#b9875c"/><path d="M0 67 58 33 58 87 0 122Z" fill="#946746"/><path d="M-68 32 0 -9 68 29 0 72Z" fill="#d1a35e"/><path d="M-15 75 2 85 2 112 -15 102Z" fill="#493b32"/><path d="M22 77 39 67 39 89 22 99Z" fill="#d9e8d5"/></g>
-                    <text x="294" y="153" class="map-label">MORADIAS</text>
-                  </g>
-
-                  <g data-district="Centro e prefeitura" class="map-district district-center" tabindex="0" role="button" aria-label="Selecionar Centro e prefeitura">
-                    <g transform="translate(518 270) scale(.92)" filter="url(#mapShadow)"><path d="M0 0 70 40 0 81 -70 41Z" fill="#c4c8ad"/><path d="M-70 41 0 81 0 150 -70 109Z" fill="#aab397"/><path d="M0 81 70 40 70 109 0 150Z" fill="#899a82"/><path d="M-82 39 0 -12 82 36 0 88Z" fill="#d7b46e"/><path d="M-7 87 7 79 7 126 -7 134Z" fill="#4e554a"/><path d="M-47 69 -30 79 -30 100 -47 90ZM30 83 47 73 47 94 30 104Z" fill="#d9e8d5"/><path d="M0 -12 0 -42" stroke="#7b6344" stroke-width="4"/><path d="M0 -42 28 -31 0 -20Z" fill="#b55c4a"/></g>
-                    <text x="514" y="211" class="map-label">PREFEITURA</text>
-                  </g>
-
-                  <g data-district="Comércio local" class="map-district district-market" tabindex="0" role="button" aria-label="Selecionar Comércio local">
-                    <g transform="translate(675 348) scale(.72)" filter="url(#mapShadow)"><path d="M0 0 64 37 0 74 -64 37Z" fill="#c0aa85"/><path d="M-64 37 0 74 0 135 -64 98Z" fill="#ae835a"/><path d="M0 74 64 37 64 98 0 135Z" fill="#8e674b"/><path d="M-74 34 0 -10 74 33 0 78Z" fill="#c16e54"/><path d="M-55 32 0 0 55 31 0 63Z" fill="#f1d7a5"/><path d="M-12 85 3 94 3 119 -12 110Z" fill="#493b32"/></g>
-                    <text x="675" y="292" class="map-label">MERCADO</text>
-                  </g>
-
-                  <g data-district="Serviços" class="map-district district-workshop" tabindex="0" role="button" aria-label="Selecionar Serviços">
-                    <g transform="translate(380 405) scale(.62)" filter="url(#mapShadow)"><path d="M0 0 63 36 0 72 -63 36Z" fill="#b5b9a8"/><path d="M-63 36 0 72 0 132 -63 96Z" fill="#899b91"/><path d="M0 72 63 36 63 96 0 132Z" fill="#687e74"/><path d="M-73 34 0 -10 73 32 0 77Z" fill="#647a71"/><path d="M-16 85 1 95 1 119 -16 109Z" fill="#414b45"/><path d="M25 78 45 67 45 89 25 100Z" fill="#d9e8d5"/></g>
-                    <text x="376" y="356" class="map-label">SERVIÇOS</text>
-                  </g>
-
-                  <g fill="#638d5d" stroke="#47784f" stroke-width="2">
-                    <circle cx="114" cy="263" r="17"/><circle cx="132" cy="277" r="12"/><circle cx="845" cy="298" r="18"/><circle cx="866" cy="315" r="12"/><circle cx="472" cy="120" r="14"/><circle cx="454" cy="107" r="11"/>
-                  </g>
-                  <g fill="#dce8c9"><circle cx="109" cy="258" r="5"/><circle cx="840" cy="292" r="6"/><circle cx="470" cy="115" r="4"/></g>
-                  <g class="map-pin" transform="translate(515 455)"><circle r="24" fill="#ffffff"/><circle r="17" fill="#2f6b53"/><text y="6" text-anchor="middle" fill="#ffffff" font-size="18">V</text></g>
-                </svg>
-                <div class="map-legend"><span><i class="legend-dot green"></i> Produção ilustrativa</span><span><i class="legend-dot gold"></i> Moradias ilustrativas</span><span><i class="legend-dot blue"></i> Traçado ilustrativo</span></div>
+                <section class="world-viewport" aria-label="Mundo isométrico do Vilarejo">
+                  <div class="world-viewport-top">
+                    <div class="world-mode"><span class="world-live-dot"></span><span>VISÃO DO TERRITÓRIO</span><b>ISOMÉTRICO</b></div>
+                    <div class="world-controls" aria-label="Controles previstos do mapa">
+                      <button type="button" class="world-control" aria-label="Diminuir zoom" disabled>−</button>
+                      <span>100%</span>
+                      <button type="button" class="world-control" aria-label="Aumentar zoom" disabled>+</button>
+                      <button type="button" class="world-control world-expand" aria-label="Expandir mapa" disabled>⛶</button>
+                    </div>
+                  </div>
+                  <div id="worldCanvas" class="world-canvas-host" data-engine="phaser" data-world-status="awaiting-engine" role="img" aria-label="Área reservada para o mundo isométrico renderizado pelo Phaser">
+                    <div class="world-scene-preview" aria-hidden="true">
+                      <div class="world-sunlight"></div><div class="world-river"></div><div class="world-road"></div>
+                      <div class="world-tile tile-farm"></div><div class="world-tile tile-homes"></div><div class="world-tile tile-center"></div><div class="world-tile tile-market"></div><div class="world-tile tile-services"></div>
+                      <div class="world-tree tree-one"></div><div class="world-tree tree-two"></div><div class="world-tree tree-three"></div>
+                      <div class="world-building building-farm"><i></i></div><div class="world-building building-home"><i></i></div><div class="world-building building-hall"><i></i></div><div class="world-building building-market"><i></i></div><div class="world-building building-service"><i></i></div>
+                      <span class="world-label label-farm">FAZENDA</span><span class="world-label label-homes">MORADIAS</span><span class="world-label label-center">PREFEITURA</span><span class="world-label label-market">COMÉRCIO</span><span class="world-label label-services">SERVIÇOS</span>
+                    </div>
+                    <div class="world-engine-status"><span class="world-engine-status-icon">◇</span><span><strong>Mundo preparado para o Phaser</strong><small>A camada visual será conectada ao estado publicado pelo Core.</small></span></div>
+                  </div>
+                  <div class="world-sector-strip" aria-label="Selecionar setor do município">
+                    <button type="button" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Fazenda e produção')">Fazenda</button>
+                    <button type="button" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Moradias')">Moradias</button>
+                    <button type="button" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Centro e prefeitura')">Centro</button>
+                    <button type="button" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Comércio local')">Comércio</button>
+                    <button type="button" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Serviços')">Serviços</button>
+                  </div>
+                  <div class="world-viewport-bottom"><span>MAPA ILUSTRATIVO · SEM ESCALA GEOGRÁFICA</span><span>O ESTADO ECONÔMICO NÃO É CALCULADO PELO RENDERIZADOR</span></div>
+                </section>
+                <div class="legacy-map-source" hidden aria-hidden="true">
+                  <svg id="villageMap" class="village-map" viewBox="0 0 1000 620" role="img" aria-label="Mapa ilustrativo e não georreferenciado, com setores selecionáveis de produção, moradias, centro, comércio e serviços">
+                    <defs>
+                      <linearGradient id="groundGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9edcf"/><stop offset="1" stop-color="#cdddbb"/></linearGradient>
+                      <linearGradient id="waterGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9bc9c5"/><stop offset="1" stop-color="#68a7a6"/></linearGradient>
+                      <filter id="mapShadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="9" stdDeviation="7" flood-color="#324d3d" flood-opacity=".18"/></filter>
+                    </defs>
+                    <path d="M500 24 963 275 500 590 37 320Z" fill="url(#groundGradient)" stroke="#b6c9a7" stroke-width="2"/>
+                    <path d="M45 345 205 432 340 358 489 445 640 360 807 454 962 365" fill="none" stroke="#f4f0dc" stroke-width="38" stroke-linecap="round" opacity=".95"/>
+                    <path d="M45 345 205 432 340 358 489 445 640 360 807 454 962 365" fill="none" stroke="#d4c9a8" stroke-width="2" stroke-dasharray="12 12"/>
+                    <path d="M120 190 C235 235 244 300 370 307 C505 315 565 245 655 285 C760 331 798 386 895 390" fill="none" stroke="url(#waterGradient)" stroke-width="38" stroke-linecap="round" opacity=".9"/>
+                    <path d="M120 190 C235 235 244 300 370 307 C505 315 565 245 655 285 C760 331 798 386 895 390" fill="none" stroke="#d9f0df" stroke-width="3" stroke-dasharray="14 18" opacity=".8"/>
+                    <g data-district="Fazenda e produção" class="map-district district-farm" tabindex="0" role="button" aria-label="Selecionar Fazenda e produção">
+                      <path d="M590 84 804 200 700 261 485 144Z" fill="#b4ce91" stroke="#94b27b" stroke-width="2"/><path d="M614 100 770 185 690 230 534 145Z" fill="#8fb178" opacity=".75"/><path d="M636 111 650 119 576 162 562 154M674 132 688 140 614 183 600 175M712 153 726 161 652 204 638 196M750 174 764 182 690 225 676 217" stroke="#e1e9bd" stroke-width="5"/><path d="M620 97 757 172 681 215 544 140" fill="none" stroke="#f1edcf" stroke-width="2"/>
+                      <g transform="translate(700 156)" filter="url(#mapShadow)"><path d="M0 0 44 25 0 51 -44 25Z" fill="#8f6947"/><path d="M-44 25 0 51 0 83 -44 57Z" fill="#b47d50"/><path d="M0 51 44 25 44 58 0 83Z" fill="#8a5d3c"/><path d="M-51 24 0 -7 51 24 0 55Z" fill="#c88c56"/><path d="M-6 58 8 50 8 74 -6 82Z" fill="#493a2b"/></g><g fill="#4f865b"><circle cx="548" cy="112" r="12"/><circle cx="568" cy="124" r="10"/><circle cx="790" cy="217" r="13"/><circle cx="770" cy="229" r="10"/></g><text x="680" y="76" class="map-label">FAZENDA</text>
+                    </g>
+                    <g data-district="Moradias" class="map-district district-homes" tabindex="0" role="button" aria-label="Selecionar Moradias">
+                      <g transform="translate(300 192)" filter="url(#mapShadow)"><path d="M0 0 58 33 0 67 -58 34Z" fill="#c5a77b"/><path d="M-58 34 0 67 0 122 -58 88Z" fill="#b9875c"/><path d="M0 67 58 33 58 87 0 122Z" fill="#946746"/><path d="M-68 32 0 -9 68 29 0 72Z" fill="#a95f4c"/><path d="M-15 75 2 85 2 112 -15 102Z" fill="#493b32"/><path d="M22 77 39 67 39 89 22 99Z" fill="#d9e8d5"/></g><g transform="translate(410 250) scale(.78)" filter="url(#mapShadow)"><path d="M0 0 58 33 0 67 -58 34Z" fill="#c5a77b"/><path d="M-58 34 0 67 0 122 -58 88Z" fill="#b9875c"/><path d="M0 67 58 33 58 87 0 122Z" fill="#946746"/><path d="M-68 32 0 -9 68 29 0 72Z" fill="#6c8b67"/><path d="M-15 75 2 85 2 112 -15 102Z" fill="#493b32"/><path d="M22 77 39 67 39 89 22 99Z" fill="#d9e8d5"/></g><g transform="translate(188 290) scale(.72)" filter="url(#mapShadow)"><path d="M0 0 58 33 0 67 -58 34Z" fill="#c5a77b"/><path d="M-58 34 0 67 0 122 -58 88Z" fill="#b9875c"/><path d="M0 67 58 33 58 87 0 122Z" fill="#946746"/><path d="M-68 32 0 -9 68 29 0 72Z" fill="#d1a35e"/><path d="M-15 75 2 85 2 112 -15 102Z" fill="#493b32"/><path d="M22 77 39 67 39 89 22 99Z" fill="#d9e8d5"/></g><text x="294" y="153" class="map-label">MORADIAS</text>
+                    </g>
+                    <g data-district="Centro e prefeitura" class="map-district district-center" tabindex="0" role="button" aria-label="Selecionar Centro e prefeitura"><g transform="translate(518 270) scale(.92)" filter="url(#mapShadow)"><path d="M0 0 70 40 0 81 -70 41Z" fill="#c4c8ad"/><path d="M-70 41 0 81 0 150 -70 109Z" fill="#aab397"/><path d="M0 81 70 40 70 109 0 150Z" fill="#899a82"/><path d="M-82 39 0 -12 82 36 0 88Z" fill="#d7b46e"/><path d="M-7 87 7 79 7 126 -7 134Z" fill="#4e554a"/><path d="M-47 69 -30 79 -30 100 -47 90ZM30 83 47 73 47 94 30 104Z" fill="#d9e8d5"/><path d="M0 -12 0 -42" stroke="#7b6344" stroke-width="4"/><path d="M0 -42 28 -31 0 -20Z" fill="#b55c4a"/></g><text x="514" y="211" class="map-label">PREFEITURA</text></g>
+                    <g data-district="Comércio local" class="map-district district-market" tabindex="0" role="button" aria-label="Selecionar Comércio local"><g transform="translate(675 348) scale(.72)" filter="url(#mapShadow)"><path d="M0 0 64 37 0 74 -64 37Z" fill="#c0aa85"/><path d="M-64 37 0 74 0 135 -64 98Z" fill="#ae835a"/><path d="M0 74 64 37 64 98 0 135Z" fill="#8e674b"/><path d="M-74 34 0 -10 74 33 0 78Z" fill="#c16e54"/><path d="M-55 32 0 0 55 31 0 63Z" fill="#f1d7a5"/><path d="M-12 85 3 94 3 119 -12 110Z" fill="#493b32"/></g><text x="675" y="292" class="map-label">MERCADO</text></g>
+                    <g data-district="Serviços" class="map-district district-workshop" tabindex="0" role="button" aria-label="Selecionar Serviços"><g transform="translate(380 405) scale(.62)" filter="url(#mapShadow)"><path d="M0 0 63 36 0 72 -63 36Z" fill="#b5b9a8"/><path d="M-63 36 0 72 0 132 -63 96Z" fill="#899b91"/><path d="M0 72 63 36 63 96 0 132Z" fill="#687e74"/><path d="M-73 34 0 -10 73 32 0 77Z" fill="#647a71"/><path d="M-16 85 1 95 1 119 -16 109Z" fill="#414b45"/><path d="M25 78 45 67 45 89 25 100Z" fill="#d9e8d5"/></g><text x="376" y="356" class="map-label">SERVIÇOS</text></g>
+                    <g fill="#638d5d" stroke="#47784f" stroke-width="2"><circle cx="114" cy="263" r="17"/><circle cx="132" cy="277" r="12"/><circle cx="845" cy="298" r="18"/><circle cx="866" cy="315" r="12"/><circle cx="472" cy="120" r="14"/><circle cx="454" cy="107" r="11"/></g><g fill="#dce8c9"><circle cx="109" cy="258" r="5"/><circle cx="840" cy="292" r="6"/><circle cx="470" cy="115" r="4"/></g><g class="map-pin" transform="translate(515 455)"><circle r="24" fill="#ffffff"/><circle r="17" fill="#2f6b53"/><text y="6" text-anchor="middle" fill="#ffffff" font-size="18">V</text></g>
+                  </svg>
+                </div>
               </div>
               <aside class="map-summary">
                 <div class="summary-top"><span class="summary-label">SETOR SELECIONADO</span><strong id="districtLabel">Visão do território</strong></div>
@@ -220,8 +223,6 @@
             <div class="section-heading"><div><div class="eyebrow">ACOMPANHAMENTO</div><h2>O que foi observado depois das escolhas</h2><p>Comparações medem variações no fechamento posterior; não provam que uma decisão foi a causa.</p></div></div>
             <div id="decisionSummary" class="ux-decision-summary">As escolhas serão acompanhadas nesta execução.</div>
           </section>
-
-
         </section>
 
         <section class="view-panel" data-view-panel="economy" aria-label="Economia">
@@ -243,124 +244,51 @@
         </section>
 
         <section class="view-panel" data-view-panel="society" aria-label="Sociedade">
-          <div class="section-heading">
-            <div>
-              <div class="eyebrow">DEMOGRAFIA E VIDA COMUNITÁRIA</div>
-              <h2>A sociedade viva do Vilarejo</h2>
-              <p>Famílias, moradores, dinâmica vital, migração, diversidade e qualidade de vida da comunidade.</p>
-            </div>
-          </div>
+          <div class="section-heading"><div><div class="eyebrow">DEMOGRAFIA E VIDA COMUNITÁRIA</div><h2>A sociedade viva do Vilarejo</h2><p>Famílias, moradores, dinâmica vital, migração, diversidade e qualidade de vida da comunidade.</p></div></div>
           <div id="societyDashboard" class="society-host"></div>
           <div class="society-columns">
-            <article class="content-card">
-              <div class="eyebrow">FAMÍLIAS E MORADORES</div>
-              <h2>Domicílios registrados</h2>
-              <div id="popSummary" class="small-summary"></div>
-              <div id="householdsList" class="actor-list"></div>
-            </article>
-            <article class="content-card">
-              <div class="eyebrow">EMPRESAS E INSTITUIÇÕES</div>
-              <h2>Agentes econômicos e empregadores</h2>
-              <div id="institutionsList" class="actor-list"></div>
-            </article>
+            <article class="content-card"><div class="eyebrow">FAMÍLIAS E MORADORES</div><h2>Domicílios registrados</h2><div id="popSummary" class="small-summary"></div><div id="householdsList" class="actor-list"></div></article>
+            <article class="content-card"><div class="eyebrow">EMPRESAS E INSTITUIÇÕES</div><h2>Agentes econômicos e empregadores</h2><div id="institutionsList" class="actor-list"></div></article>
           </div>
         </section>
 
         <section class="view-panel" data-view-panel="government" aria-label="Governo">
           <div class="section-heading gov-main-heading">
-            <div>
-              <div class="eyebrow">ESTRUTURA DO ESTADO E GESTÃO PÚBLICA</div>
-              <h2>O poder, as instituições e as decisões.</h2>
-              <p>Executivo, finanças, Câmara de representação, coalizões governistas e grupos de interesse.</p>
-            </div>
+            <div><div class="eyebrow">ESTRUTURA DO ESTADO E GESTÃO PÚBLICA</div><h2>O poder, as instituições e as decisões.</h2><p>Executivo, finanças, Câmara de representação, coalizões governistas e grupos de interesse.</p></div>
             <div class="gov-subtabs" role="tablist" aria-label="Áreas de Governo">
               <button class="gov-tab-btn active" data-gov-tab="executivo" role="tab" aria-selected="true">Executivo & Finanças</button>
               <button class="gov-tab-btn" data-gov-tab="camara" role="tab" aria-selected="false">Câmara & Coalizões</button>
               <button class="gov-tab-btn" data-gov-tab="politica" role="tab" aria-selected="false">Grupos de Interesse</button>
             </div>
           </div>
-
           <div id="governmentSummaryCard" class="gov-summary-card"></div>
-
-          <!-- Sub-aba 1: Executivo e Finanças Públicas -->
           <div class="gov-tab-pane active" data-gov-pane="executivo">
             <div class="government-grid">
-              <article class="content-card">
-                <div class="eyebrow">INSTRUMENTOS DE POLÍTICA</div>
-                <h2>Políticas públicas</h2>
-                <p class="card-description">As mudanças entram em vigor no próximo fechamento mensal.</p>
-                <div id="policies"></div>
-              </article>
-              <article class="content-card">
-                <div class="eyebrow">RESPONSABILIDADE FISCAL</div>
-                <h2>Contas do governo</h2>
-                <div class="audit-status" id="macroAuditBadge"></div>
-                <div id="macroeconomicAccounts" class="balance-grid"></div>
-              </article>
+              <article class="content-card"><div class="eyebrow">INSTRUMENTOS DE POLÍTICA</div><h2>Políticas públicas</h2><p class="card-description">As mudanças entram em vigor no próximo fechamento mensal.</p><div id="policies"></div></article>
+              <article class="content-card"><div class="eyebrow">RESPONSABILIDADE FISCAL</div><h2>Contas do governo</h2><div class="audit-status" id="macroAuditBadge"></div><div id="macroeconomicAccounts" class="balance-grid"></div></article>
             </div>
-            <details class="content-card detail-card">
-              <summary>Patrimônio e balanços setoriais <span id="sfcAuditBadge"></span></summary>
-              <div id="institutionalBalances" class="balance-grid"></div>
-            </details>
-            <details class="content-card detail-card">
-              <summary>Caixa, patrimônio e obrigações pendentes</summary>
-              <div class="detail-columns">
-                <div><h3>Contas e patrimônio</h3><div id="accounts"></div></div>
-                <div><h3>Obrigações pendentes</h3><div id="obligations"></div></div>
-              </div>
-            </details>
+            <details class="content-card detail-card"><summary>Patrimônio e balanços setoriais <span id="sfcAuditBadge"></span></summary><div id="institutionalBalances" class="balance-grid"></div></details>
+            <details class="content-card detail-card"><summary>Caixa, patrimônio e obrigações pendentes</summary><div class="detail-columns"><div><h3>Contas e patrimônio</h3><div id="accounts"></div></div><div><h3>Obrigações pendentes</h3><div id="obligations"></div></div></div></details>
           </div>
-
-          <!-- Sub-aba 2: Câmara e Coalizões (Instituições) -->
-          <div class="gov-tab-pane" data-gov-pane="camara">
-            <div id="institutionsDashboard" class="institutions-host"></div>
-          </div>
-
-          <!-- Sub-aba 3: Grupos de Interesse (Política) -->
-          <div class="gov-tab-pane" data-gov-pane="politica">
-            <div id="politicsDashboard" class="politics-host"></div>
-          </div>
+          <div class="gov-tab-pane" data-gov-pane="camara"><div id="institutionsDashboard" class="institutions-host"></div></div>
+          <div class="gov-tab-pane" data-gov-pane="politica"><div id="politicsDashboard" class="politics-host"></div></div>
         </section>
 
         <section class="view-panel" data-view-panel="services" aria-label="Serviços e desenvolvimento">
-          <div class="section-heading">
-            <div>
-              <div class="eyebrow">CAPACIDADE E BEM-ESTAR DO ESTADO</div>
-              <h2>O que o Estado entrega à população.</h2>
-              <p>Saúde, educação, segurança, ciência, desenvolvimento, cultura, infraestrutura e recursos estratégicos.</p>
-            </div>
-          </div>
+          <div class="section-heading"><div><div class="eyebrow">CAPACIDADE E BEM-ESTAR DO ESTADO</div><h2>O que o Estado entrega à população.</h2><p>Saúde, educação, segurança, ciência, desenvolvimento, cultura, infraestrutura e recursos estratégicos.</p></div></div>
           <div id="servicesDashboard" class="services-host"></div>
         </section>
 
-        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência">
-          <div id="intelligenceDashboard" class="intel-host"></div>
-        </section>
+        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência"><div id="intelligenceDashboard" class="intel-host"></div></section>
 
         <section class="view-panel" data-view-panel="newspaper" aria-label="Jornal do Vilarejo">
-          <div class="section-heading">
-            <div>
-              <div class="eyebrow">CRÔNICAS E MEMÓRIA DA COMUNIDADE</div>
-              <h2>Jornal do Vilarejo</h2>
-              <p>Edições periódicas que transformam os acontecimentos da comunidade em narrativa viva.</p>
-            </div>
-          </div>
-          <div id="newspaperDashboard" class="newspaper-host">
-            <div class="module-empty-state">
-              <span class="module-empty-icon">📰</span>
-              <h3>Jornal do Vilarejo</h3>
-              <p>A primeira edição será impressa e arquivada após o encerramento do primeiro mês econômico.</p>
-            </div>
-          </div>
+          <div class="section-heading"><div><div class="eyebrow">CRÔNICAS E MEMÓRIA DA COMUNIDADE</div><h2>Jornal do Vilarejo</h2><p>Edições periódicas que transformam os acontecimentos da comunidade em narrativa viva.</p></div></div>
+          <div id="newspaperDashboard" class="newspaper-host"><div class="module-empty-state"><span class="module-empty-icon">📰</span><h3>Jornal do Vilarejo</h3><p>A primeira edição será impressa e arquivada após o encerramento do primeiro mês econômico.</p></div></div>
         </section>
 
         <section class="view-panel" data-view-panel="records" aria-label="Histórico">
           <div class="section-heading"><div><div class="eyebrow">MEMÓRIA DA PARTIDA</div><h2>Histórico e Rastreabilidade Financeira</h2><p>Acompanhe todos os acontecimentos registrados e movimentações do livro-caixa.</p></div></div>
-          <section class="content-card ux-decision-history">
-            <div class="section-heading"><div><div class="eyebrow">ESCOLHAS E OBSERVAÇÕES</div><h2>Acompanhamento das decisões</h2><p>Registros separados por execução, comparados apenas com valores disponíveis no primeiro fechamento posterior.</p></div></div>
-            <p id="decisionStorageWarning" class="ux-storage-warning hidden" role="status"></p>
-            <div id="decisionHistory" class="ux-decision-history-list"><p>Sem decisões registradas nesta execução.</p></div>
-          </section>
+          <section class="content-card ux-decision-history"><div class="section-heading"><div><div class="eyebrow">ESCOLHAS E OBSERVAÇÕES</div><h2>Acompanhamento das decisões</h2><p>Registros separados por execução, comparados apenas com valores disponíveis no primeiro fechamento posterior.</p></div></div><p id="decisionStorageWarning" class="ux-storage-warning hidden" role="status"></p><div id="decisionHistory" class="ux-decision-history-list"><p>Sem decisões registradas nesta execução.</p></div></section>
           <div class="records-grid"><article class="content-card"><div class="eyebrow">DIÁRIO DO VILAREJO</div><h2>Decisões e acontecimentos</h2><ul id="feed" class="feed-list scroll"></ul></article><article class="content-card ledger-card"><div class="eyebrow">RASTREABILIDADE FINANCEIRA</div><h2>Livro-caixa</h2><p class="card-description">Últimas 60 movimentações registradas.</p><div class="scroll ledger-scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div></article></div>
         </section>
 
