@@ -46,7 +46,8 @@
       <header class="topbar">
         <div class="topbar-left">
           <button id="mobileMenu" class="mobile-menu" aria-label="Abrir navegação">☰</button>
-          <div class="breadcrumb"><span>VILAREJO</span><i>/</i><strong id="pageTitle">Visão geral</strong></div>
+          <button id="btnTopHome" class="btn-top-home" type="button" title="Voltar ao início da comunidade" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">⌂ Início</button>
+          <div class="breadcrumb"><span id="breadHome" role="button" tabindex="0" title="Ir para a tela inicial" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')" style="cursor:pointer">VILAREJO</span><i>/</i><strong id="pageTitle">Visão geral</strong></div>
         </div>
         <div class="topbar-right">
           <button id="topbarAlertBadge" class="topbar-alert-badge hidden" title="Alertas da Central de Inteligência" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('intelligence')"><span id="topbarAlertCount">0</span> alertas</button>
@@ -80,9 +81,11 @@
 
         <div id="event" class="event-card event-modal hidden pulse-animation" role="presentation">
           <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="eventTitle" aria-describedby="eventText">
-            <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><figcaption>Ilustração geral de deliberação; não retrata este evento nem qualquer resultado observado.</figcaption></figure>
-            <div class="event-kicker">ESCOLHA DO MOTOR</div><h2 id="eventTitle"></h2><div id="eventText"></div><div class="opts" id="eventOptions"></div>
-            <p class="ux-event-caveat">Custos e riscos aparecem somente quando informados pela simulação. Variações posteriores serão observadas, sem presumir causalidade.</p>
+            <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><figcaption>Decisão de interesse da comunidade local.</figcaption></figure>
+            <div class="event-kicker">ACONTECIMENTO NA COMUNIDADE</div>
+            <h2 id="eventTitle"></h2>
+            <div id="eventText" class="event-description-box"></div>
+            <div class="opts" id="eventOptions"></div>
           </section>
         </div>
 
@@ -95,9 +98,9 @@
               <div class="calendar-month-card">
                 <div class="calendar-month-heading">
                   <div>
-                    <div class="eyebrow">CALENDÁRIO CIVIL · DATAS GREGORIANAS</div>
+                    <div class="eyebrow">CALENDÁRIO DA CIDADE</div>
                     <h2 id="calendarMonthHeading">Maio de 2026</h2>
-                    <p class="ux-calendar-caption">Data visual derivada do dia absoluto; não altera o mês econômico.</p>
+                    <p class="ux-calendar-caption">Rotina diária e eventos da comunidade.</p>
                   </div>
                   <div class="calendar-heading-actions">
                     <span class="calendar-current-tag is-current" id="calendarCurrentTag">MÊS ATUAL</span>
@@ -119,10 +122,10 @@
               </div>
             </div>
             <aside class="calendar-agenda">
-              <div class="calendar-agenda-heading"><span class="eyebrow">RELÓGIO DA ECONOMIA</span><span class="calendar-clock-icon">◷</span></div>
+              <div class="calendar-agenda-heading"><span class="eyebrow">CICLO DE PRODUÇÃO</span><span class="calendar-clock-icon">◷</span></div>
               <div class="calendar-agenda-item"><span class="agenda-mark agenda-season"></span><div><small>ETAPA PRODUTIVA</small><strong id="calendarSeason">Safra começa amanhã</strong><p id="calendarSeasonDetail">A lavoura entra no período de colheita.</p></div></div>
               <div class="calendar-agenda-separator"></div>
-              <div class="calendar-agenda-item"><span class="agenda-mark agenda-close"></span><div><small>PRÓXIMO FECHAMENTO</small><strong id="calendarClose">Em 1 dia</strong><p>Ciclo de 30 dias com liquidação SFC.</p></div></div>
+              <div class="calendar-agenda-item"><span class="agenda-mark agenda-close"></span><div><small>PRÓXIMO FECHAMENTO</small><strong id="calendarClose">Em 1 dia</strong><p>Fechamento contábil e salarial a cada 30 dias.</p></div></div>
               <div class="calendar-agenda-separator"></div>
               <div class="calendar-economic-badges">
                 <div class="econ-badge-item"><small>ANO ECONÔMICO</small><strong id="calendarEconomicYear">01</strong></div>
@@ -132,7 +135,7 @@
               <div class="ux-calendar-events">
                 <div class="eyebrow">ACONTECIMENTOS REGISTRADOS</div>
                 <ul id="calendarEventList" class="ux-calendar-event-list"><li>Sem evento datado disponível.</li></ul>
-                <small class="ux-data-limit">Lista limitada ao histórico recente publicado pelo Core.</small>
+                <small class="ux-data-limit">Acontecimentos e comunicados oficiais recentes.</small>
               </div>
             </aside>
           </section>
@@ -150,7 +153,7 @@
 
           <section class="village-card">
             <div class="section-heading map-heading">
-              <div><div class="eyebrow">MUNDO E TERRITÓRIO</div><h2>O Vilarejo em perspectiva</h2><p>Explore os setores da comunidade. O mapa será renderizado pelo Phaser, enquanto os indicadores continuam vindo do motor econômico.</p></div>
+              <div><div class="eyebrow">MUNDO E TERRITÓRIO</div><h2>O Vilarejo em perspectiva</h2><p>Explore os setores da comunidade e acompanhe o desenvolvimento da cidade em tempo real.</p></div>
               <span class="live-tag"><i></i> VISUALIZAÇÃO DO MUNDO</span>
             </div>
             <div class="map-layout">
@@ -182,7 +185,7 @@
                     <button type="button" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Comércio local')">Comércio</button>
                     <button type="button" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Serviços')">Serviços</button>
                   </div>
-                  <div class="world-viewport-bottom"><span>MAPA ILUSTRATIVO · SEM ESCALA GEOGRÁFICA</span><span>O ESTADO ECONÔMICO NÃO É CALCULADO PELO RENDERIZADOR</span></div>
+                  <div class="world-viewport-bottom"><span>MAPA DA COMUNIDADE</span><span>VISUALIZAÇÃO DOS SETORES DO VILAREJO</span></div>
                 </section>
                 <div class="legacy-map-source" hidden aria-hidden="true">
                   <svg id="villageMap" class="village-map" viewBox="0 0 1000 620" role="img" aria-label="Mapa ilustrativo e não georreferenciado, com setores selecionáveis de produção, moradias, centro, comércio e serviços">
@@ -214,31 +217,32 @@
                 <div class="summary-top"><span class="summary-label">SETOR SELECIONADO</span><strong id="districtLabel">Visão do território</strong></div>
                 <p id="mapSectorDescription" class="map-sector-description">Escolha uma área ilustrada para ver os indicadores agregados disponíveis.</p>
                 <div id="mapSectorMetrics" class="ux-sector-metrics"><p>Os dados do setor ainda não foram observados.</p></div>
-                <div class="map-note"><span class="note-spark">i</span><span>Sem geometrias públicas do motor: propriedades, bairros, estradas, instalações e expansão territorial não são individualmente rastreáveis.</span></div>
+                <div class="map-note"><span class="note-spark">i</span><span>Clique nos setores ilustrados para ver os dados de produção, moradores e comércio de cada região.</span></div>
               </aside>
             </div>
           </section>
 
           <details class="ux-technical-details">
-            <summary>Como ler esta tela e seus limites</summary>
+            <summary>Guia rápido do Gestor Municipal</summary>
             <div class="ux-technical-content">
-              <p>O calendário civil usa datas gregorianas convertidas do dia absoluto. O relógio econômico continua operando em meses de 30 dias e anos de 360 dias; navegar pelo calendário visual não altera a simulação.</p>
-              <p>O mapa é uma ilustração setorial selecionável, não uma planta cadastral. O motor não expõe geometrias de propriedades, bairros, estradas, instalações ou expansão urbana individualizada.</p>
-              <p>O acompanhamento usa snapshots reais da execução. Variações após escolhas não estabelecem causalidade. Índice de Gini e indicadores específicos de serviços públicos permanecem indisponíveis quando não são publicados pelo motor.</p>
+              <p><strong>Ciclo de Decisões:</strong> a cada 30 dias ocorre o fechamento contábil e pagamento de salários. Mantenha o caixa do Tesouro positivo para evitar crises.</p>
+              <p><strong>Crescimento e Serviços:</strong> atrair novas indústrias e moradores gera empregos, mas exige investir em postos de saúde, escolas e saneamento.</p>
+              <p><strong>Espectro Político:</strong> você é livre para governar pelo modelo público-estatal, por parcerias com o mercado privado ou por redes cooperativas e comunitárias.</p>
             </div>
           </details>
 
           <section class="content-card action-card">
-            <div class="section-heading"><div><div class="eyebrow">SUA PRÓXIMA DECISÃO</div><h2>Ações disponíveis no motor</h2><p>Alternativas e custos são os publicados pela simulação; efeitos futuros não são presumidos.</p></div><span class="section-symbol">✳</span></div>
+            <div class="section-heading"><div><div class="eyebrow">DIRETRIZES E AÇÕES DA GESTÃO</div><h2>Decisões estratégicas para o município</h2><p>Escolha onde aplicar os recursos públicos e defina o modelo de desenvolvimento da comunidade.</p></div><span class="section-symbol">✳</span></div>
             <div class="action-buttons" id="actions"></div>
           </section>
           <section class="content-card ux-decision-follow-up">
-            <div class="section-heading"><div><div class="eyebrow">ACOMPANHAMENTO</div><h2>O que foi observado depois das escolhas</h2><p>Comparações medem variações no fechamento posterior; não provam que uma decisão foi a causa.</p></div></div>
+            <div class="section-heading"><div><div class="eyebrow">ACOMPANHAMENTO</div><h2>Impacto das decisões tomadas</h2><p>Acompanhe a evolução do município e os reflexos das medidas adotadas.</p></div></div>
             <div id="decisionSummary" class="ux-decision-summary">As escolhas serão acompanhadas nesta execução.</div>
           </section>
         </section>
 
         <section class="view-panel" data-view-panel="economy" aria-label="Economia">
+          <div class="panel-return-bar"><button type="button" class="btn-return-overview" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">← Voltar para a Visão Geral</button></div>
           <div class="section-heading economy-heading"><div><div class="eyebrow">INDICADORES E TENDÊNCIAS</div><h2>Veja a economia ganhar forma.</h2><p>Gráficos alimentados pelos fechamentos mensais desta partida.</p></div><div class="period-switch"><button class="active" data-months="12">12 meses</button><button data-months="24">24 meses</button><button data-months="60">60 meses</button></div></div>
           <div class="history-note"><span>◷</span><span id="historyCount">0 meses registrados</span><span>O histórico começa no primeiro fechamento mensal.</span></div>
           <div class="chart-grid">
@@ -251,12 +255,13 @@
             <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">DEMOGRAFIA</span><h3>População</h3><p>Como a comunidade cresce ou diminui.</p></div></div><div id="chart-population" class="chart-area" data-label="Evolução da população"></div></article>
             <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">ORÇAMENTO</span><h3>Receitas e despesas</h3><p>Receita pública e despesa primária mensal.</p></div></div><div id="chart-government" class="chart-area" data-label="Receita e despesa pública"></div></article>
             <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">ENDIVIDAMENTO</span><h3>Dívida pública</h3><p>Saldo de empréstimos contratados pelo governo.</p></div></div><div id="chart-debt" class="chart-area" data-label="Dívida pública"></div></article>
-            <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">DISTRIBUIÇÃO DE RENDA</span><h3>Desigualdade</h3><p>Índice de Gini e renda média não são produzidos pela referência atual; nenhum valor é estimado.</p></div></div><div id="chart-income" class="chart-area" data-label="Índice de Gini indisponível na referência atual"></div></article>
+            <article class="content-card chart-card"><div class="chart-title"><div><span class="eyebrow">DISTRIBUIÇÃO DE RENDA</span><h3>Desigualdade & Poder de Compra</h3><p>Acompanhamento da renda familiar e equilíbrio econômico entre os bairros.</p></div></div><div id="chart-income" class="chart-area" data-label="Indicador de distribuição de renda"></div></article>
           </div>
           <details class="content-card detail-card"><summary>Detalhes do mercado e resultado do último mês</summary><div class="detail-columns"><div><h3>Mercado local</h3><div id="market"></div></div><div><h3>Resultado do último mês</h3><div id="monthly"></div></div><div><h3>Fluxos financeiros</h3><div class="balance-grid" id="monthlyBalance"></div><div class="small">Estoque comercial: <b id="stockLabel">0</b></div></div></div></details>
         </section>
 
         <section class="view-panel" data-view-panel="society" aria-label="Sociedade">
+          <div class="panel-return-bar"><button type="button" class="btn-return-overview" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">← Voltar para a Visão Geral</button></div>
           <div class="section-heading"><div><div class="eyebrow">DEMOGRAFIA E VIDA COMUNITÁRIA</div><h2>A sociedade viva do Vilarejo</h2><p>Famílias, moradores, dinâmica vital, migração, diversidade e qualidade de vida da comunidade.</p></div></div>
           <div id="societyDashboard" class="society-host"></div>
           <div class="society-columns">
@@ -266,11 +271,12 @@
         </section>
 
         <section class="view-panel" data-view-panel="government" aria-label="Governo">
+          <div class="panel-return-bar"><button type="button" class="btn-return-overview" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">← Voltar para a Visão Geral</button></div>
           <div class="section-heading gov-main-heading">
             <div><div class="eyebrow">ESTRUTURA DO ESTADO E GESTÃO PÚBLICA</div><h2>O poder, as instituições e as decisões.</h2><p>Executivo, finanças, Câmara de representação, coalizões governistas e grupos de interesse.</p></div>
             <div class="gov-subtabs" role="tablist" aria-label="Áreas de Governo">
-              <button class="gov-tab-btn active" data-gov-tab="executivo" role="tab" aria-selected="true">Executivo & Finanças</button>
-              <button class="gov-tab-btn" data-gov-tab="camara" role="tab" aria-selected="false">Câmara & Coalizões</button>
+              <button class="gov-tab-btn active" data-gov-tab="executivo" role="tab" aria-selected="true">Executivo &amp; Finanças</button>
+              <button class="gov-tab-btn" data-gov-tab="camara" role="tab" aria-selected="false">Câmara &amp; Coalizões</button>
               <button class="gov-tab-btn" data-gov-tab="politica" role="tab" aria-selected="false">Grupos de Interesse</button>
             </div>
           </div>
@@ -288,18 +294,24 @@
         </section>
 
         <section class="view-panel" data-view-panel="services" aria-label="Serviços e desenvolvimento">
+          <div class="panel-return-bar"><button type="button" class="btn-return-overview" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">← Voltar para a Visão Geral</button></div>
           <div class="section-heading"><div><div class="eyebrow">CAPACIDADE E BEM-ESTAR DO ESTADO</div><h2>O que o Estado entrega à população.</h2><p>Saúde, educação, segurança, ciência, desenvolvimento, cultura, infraestrutura e recursos estratégicos.</p></div></div>
           <div id="servicesDashboard" class="services-host"></div>
         </section>
 
-        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência"><div id="intelligenceDashboard" class="intel-host"></div></section>
+        <section class="view-panel" data-view-panel="intelligence" aria-label="Central de Inteligência">
+          <div class="panel-return-bar"><button type="button" class="btn-return-overview" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">← Voltar para a Visão Geral</button></div>
+          <div id="intelligenceDashboard" class="intel-host"></div>
+        </section>
 
         <section class="view-panel" data-view-panel="newspaper" aria-label="Jornal do Vilarejo">
+          <div class="panel-return-bar"><button type="button" class="btn-return-overview" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">← Voltar para a Visão Geral</button></div>
           <div class="section-heading"><div><div class="eyebrow">CRÔNICAS E MEMÓRIA DA COMUNIDADE</div><h2>Jornal do Vilarejo</h2><p>Edições periódicas que transformam os acontecimentos da comunidade em narrativa viva.</p></div></div>
           <div id="newspaperDashboard" class="newspaper-host"><div class="module-empty-state"><span class="module-empty-icon">📰</span><h3>Jornal do Vilarejo</h3><p>A primeira edição será impressa e arquivada após o encerramento do primeiro mês econômico.</p></div></div>
         </section>
 
         <section class="view-panel" data-view-panel="records" aria-label="Histórico">
+          <div class="panel-return-bar"><button type="button" class="btn-return-overview" onclick="window.VilarejoDashboard &amp;&amp; window.VilarejoDashboard.setView('overview')">← Voltar para a Visão Geral</button></div>
           <div class="section-heading"><div><div class="eyebrow">MEMÓRIA DA PARTIDA</div><h2>Histórico e Rastreabilidade Financeira</h2><p>Acompanhe todos os acontecimentos registrados e movimentações do livro-caixa.</p></div></div>
           <section class="content-card ux-decision-history"><div class="section-heading"><div><div class="eyebrow">ESCOLHAS E OBSERVAÇÕES</div><h2>Acompanhamento das decisões</h2><p>Registros separados por execução, comparados apenas com valores disponíveis no primeiro fechamento posterior.</p></div></div><p id="decisionStorageWarning" class="ux-storage-warning hidden" role="status"></p><div id="decisionHistory" class="ux-decision-history-list"><p>Sem decisões registradas nesta execução.</p></div></section>
           <div class="records-grid"><article class="content-card"><div class="eyebrow">DIÁRIO DO VILAREJO</div><h2>Decisões e acontecimentos</h2><ul id="feed" class="feed-list scroll"></ul></article><article class="content-card ledger-card"><div class="eyebrow">RASTREABILIDADE FINANCEIRA</div><h2>Livro-caixa</h2><p class="card-description">Últimas 60 movimentações registradas.</p><div class="scroll ledger-scroll"><table class="table"><thead><tr><th>Dia</th><th>Origem → destino</th><th>Motivo</th><th>Valor</th></tr></thead><tbody id="ledger"></tbody></table></div></article></div>

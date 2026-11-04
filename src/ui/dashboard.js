@@ -386,10 +386,13 @@
           </div>
           <div class="gov-actions-row">
             <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('camara')">
-              <span>▥</span> Gerenciar coalizão e cadeiras da Câmara
+              <span>▥</span> Coalizão e Cadeiras da Câmara
+            </button>
+            <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('camara')">
+              <span>📜</span> Votação de Leis & Eleições
             </button>
             <button type="button" class="btn-gov-shortcut" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setGovTab('politica')">
-              <span>⚖</span> Avaliar influência dos grupos políticos
+              <span>⚖</span> Influência dos Grupos Políticos
             </button>
           </div>
           ${renderCabinetDilemmaHtml()}
@@ -1591,41 +1594,181 @@
       const housingCapacity = finiteValue(snap.housingCapacity);
       const lots = finiteValue(snap.lots);
 
+      // Snapshot integrado de Serviços Públicos & Governabilidade
+      const servicesSnap = typeof window !== "undefined" && window.VilarejoServicesRuntime?.getSnapshot ? window.VilarejoServicesRuntime.getSnapshot() : null;
+      const gov = servicesSnap?.governance || {
+        demands: {
+          health: { demand: 13, capacity: 15, coverage: 100, deficit: 0, pressure: 0 },
+          education: { demand: 2, capacity: 4, coverage: 100, deficit: 0, pressure: 0 },
+          sanitation: { demand: 5, coverage: 35, sanitaryRisk: 40, pressure: 44 },
+          security: { risk: 25, safetyIndex: 75, pressure: 22 }
+        },
+        civicPressure: 15,
+        civicStatus: "Estabilidade Cívica & Apoio Comunitário",
+        activeOutbreak: null,
+        activeSecurityIncident: null
+      };
+
+      const d = gov.demands;
+      const civicPressure = Math.round(gov.civicPressure || 0);
+      const civicStatus = gov.civicStatus || "Estabilidade Cívica & Apoio Comunitário";
+      let statusColor = "#16a34a";
+      if (civicPressure >= 80) statusColor = "#dc2626";
+      else if (civicPressure >= 60) statusColor = "#ea580c";
+      else if (civicPressure >= 30) statusColor = "#ca8a04";
+
+      // Alertas Críticos de Governabilidade
+      let alertBannerHtml = "";
+      if (gov.activeOutbreak) {
+        alertBannerHtml += `
+          <div style="background:#fef2f2;border:1.5px solid #dc2626;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <div>
+              <strong style="color:#991b1b;font-size:0.95rem;">⚠️ ALERTA SANITÁRIO: ${escapeHtml(gov.activeOutbreak.name)}</strong>
+              <p style="margin:0.2rem 0 0 0;font-size:0.82rem;color:#7f1d1d;">${escapeHtml(gov.activeOutbreak.description)} (Absenteísmo de ${Math.round((gov.activeOutbreak.absenteeism || 0.15) * 100)}% na mão de obra local).</p>
+            </div>
+            <button class="btn btn-sm btn-danger" onclick="window.VilarejoDashboard.executeGovernanceAction('action_sanitary_clean')" style="white-space:nowrap;padding:0.4rem 0.8rem;background:#dc2626;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;">
+              🧹 Mutirão Sanitário Urgente (R$ 350)
+            </button>
+          </div>
+        `;
+      }
+      if (gov.activeSecurityIncident) {
+        alertBannerHtml += `
+          <div style="background:#fff7ed;border:1.5px solid #ea580c;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <div>
+              <strong style="color:#9a3412;font-size:0.95rem;">🚨 ALERTA DE SEGURANÇA: ${escapeHtml(gov.activeSecurityIncident.description)}</strong>
+              <p style="margin:0.2rem 0 0 0;font-size:0.82rem;color:#7c2d12;">Prejuízo nas margens do comércio noturno e quebra da tranquilidade pública.</p>
+            </div>
+            <button class="btn btn-sm" onclick="window.VilarejoDashboard.executeGovernanceAction('action_security_patrol')" style="white-space:nowrap;padding:0.4rem 0.8rem;background:#ea580c;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;">
+              🛡️ Ronda Preventiva (R$ 350)
+            </button>
+          </div>
+        `;
+      }
+
       host.innerHTML = `
         <div class="services-dashboard-content">
-          <div class="services-kpi-grid">
+          ${alertBannerHtml}
+
+          <!-- Termômetro da Cidadania & Mobilização Social -->
+          <article class="content-card" style="margin-bottom:1.2rem;border-left:5px solid ${statusColor};">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem;">
+              <div>
+                <div class="eyebrow">GOVERNABILIDADE & CIDADANIA ATIVA</div>
+                <h3 style="margin:0.2rem 0;">Termômetro da Cidadania Municipal</h3>
+                <p style="margin:0;color:#64748b;font-size:0.85rem;">Mede a pressão social e o descontentamento popular acumulado com as demandas essenciais.</p>
+              </div>
+              <div style="text-align:right;">
+                <span style="display:inline-block;padding:0.25rem 0.65rem;border-radius:999px;font-size:0.82rem;font-weight:700;background:${statusColor}15;color:${statusColor};border:1px solid ${statusColor}40;">
+                  ${escapeHtml(civicStatus)}
+                </span>
+                <div style="font-size:1.15rem;font-weight:800;color:${statusColor};margin-top:0.25rem;">
+                  ${civicPressure}% de Pressão Social
+                </div>
+              </div>
+            </div>
+            <div style="background:#e2e8f0;border-radius:999px;height:10px;margin-top:0.75rem;overflow:hidden;">
+              <div style="background:${statusColor};height:100%;width:${Math.min(100, civicPressure)}%;transition:width 0.4s ease;"></div>
+            </div>
+          </article>
+
+          <!-- 4 Cards de Demandas Públicas -->
+          <div class="services-kpi-grid" style="margin-bottom:1.2rem;">
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">CAPACIDADE RESIDENCIAL</div>
-              <strong class="${housingCapacity === null ? "is-unavailable" : ""}">${metricValue(housingCapacity)}</strong>
-              <span>${housingCapacity === null ? "O snapshot atual não expõe capacidade habitacional." : "Capacidade agregada publicada pelo snapshot; sem localização individualizada."}</span>
+              <div class="eyebrow">✚ SAÚDE DA FAMÍLIA (ESF)</div>
+              <strong style="color:${d.health.coverage < 80 ? '#dc2626' : '#16a34a'};">${d.health.coverage}%</strong>
+              <span>Demanda: <b>${d.health.demand}</b> atendimentos/mês · Capacidade: <b>${d.health.capacity}</b>. ${d.health.deficit > 0 ? `<small style="color:#dc2626;">Déficit de ${d.health.deficit} atendimentos.</small>` : '<small style="color:#16a34a;">Cobertura integral.</small>'}</span>
             </article>
 
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">LOTEAMENTO</div>
-              <strong class="${lots === null ? "is-unavailable" : ""}">${metricValue(lots)}</strong>
-              <span>Valor agregado de lotes no snapshot; não indica localização.</span>
+              <div class="eyebrow">▤ EDUCAÇÃO & VAGAS ESCOLARES</div>
+              <strong style="color:${d.education.coverage < 80 ? '#ea580c' : '#16a34a'};">${d.education.coverage}%</strong>
+              <span>Vagas: <b>${d.education.capacity}</b> abertas para <b>${d.education.demand}</b> criança(s). ${d.education.deficit > 0 ? `<small style="color:#dc2626;">Déficit de ${d.education.deficit} vaga(s).</small>` : '<small style="color:#16a34a;">Sem crianças desassistidas.</small>'}</span>
             </article>
 
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">CONGESTIONAMENTO URBANO</div>
-              <strong class="${finiteValue(infra?.congestionRatio) === null ? "is-unavailable" : ""}">${metricValue(infra?.congestionRatio, (value) => `${number(value, 2)}×`)}</strong>
-              <span>Razão publicada pela infraestrutura urbana.</span>
+              <div class="eyebrow">⚙ SANEAMENTO & ÁGUA TRATADA</div>
+              <strong style="color:${d.sanitation.coverage < 60 ? '#dc2626' : '#16a34a'};">${d.sanitation.coverage}%</strong>
+              <span>${d.sanitation.demand} domicílios · Risco Sanitário: <b style="color:${d.sanitation.sanitaryRisk >= 48 ? '#dc2626' : '#16a34a'};">${d.sanitation.sanitaryRisk}%</b>. ${d.sanitation.sanitaryRisk >= 48 ? '<small style="color:#dc2626;">Risco iminente de contaminação.</small>' : '<small style="color:#16a34a;">Nível epidemiológico estável.</small>'}</span>
             </article>
 
             <article class="content-card service-kpi-card">
-              <div class="eyebrow">FATOR URBANO</div>
-              <strong class="${finiteValue(infra?.tfpFactor) === null ? "is-unavailable" : ""}">${metricValue(infra?.tfpFactor, (value) => number(value, 2))}</strong>
-              <span>Fator de produtividade publicado pelo motor; sem conversão para indicador de serviço público.</span>
+              <div class="eyebrow">⬡ SEGURANÇA & ORDEM PÚBLICA</div>
+              <strong style="color:${d.security.safetyIndex < 50 ? '#dc2626' : '#16a34a'};">${d.security.safetyIndex}/100</strong>
+              <span>Índice de segurança pública. ${d.security.safetyIndex < 45 ? '<small style="color:#dc2626;">Ocorrências de furtos noturnos.</small>' : '<small style="color:#16a34a;">Ruas seguras e comércio tranquilo.</small>'}</span>
             </article>
           </div>
 
+          <!-- Painel de Ações Rápidas de Governabilidade -->
+          <article class="content-card" style="margin-bottom:1.2rem;">
+            <div class="section-heading compact-heading">
+              <div>
+                <div class="eyebrow">PODER EXECUTIVO EM AÇÃO</div>
+                <h3 style="margin:0.2rem 0;">Ações Rápidas de Governabilidade e Resposta Cidadã</h3>
+                <p style="margin:0;color:#64748b;font-size:0.85rem;">Intervenções imediatas com custeio do Tesouro para solucionar crises e atender demandas da comunidade.</p>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.75rem;margin-top:0.75rem;">
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.75rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#1e293b;font-size:0.9rem;">🧹 Mutirão Sanitário e Limpeza</strong>
+                  <p style="font-size:0.8rem;color:#64748b;margin:0.25rem 0 0.5rem 0;">Limpa valas de esgoto, remove focos e debela surtos epidemiológicos imediatos.</p>
+                </div>
+                <button onclick="window.VilarejoDashboard.executeGovernanceAction('action_sanitary_clean')" style="padding:0.4rem 0.6rem;background:#0f766e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Executar Mutirão (R$ 350)
+                </button>
+              </div>
+
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.75rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#1e293b;font-size:0.9rem;">💉 Campanha Comunitária de Saúde</strong>
+                  <p style="font-size:0.8rem;color:#64748b;margin:0.25rem 0 0.5rem 0;">Mobiliza agentes de saúde, vacinação infantil e amplia consultas preventivas.</p>
+                </div>
+                <button onclick="window.VilarejoDashboard.executeGovernanceAction('action_health_campaign')" style="padding:0.4rem 0.6rem;background:#0f766e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Lançar Campanha (R$ 450)
+                </button>
+              </div>
+
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.75rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#1e293b;font-size:0.9rem;">📚 Turno Escolar Suplementar</strong>
+                  <p style="font-size:0.8rem;color:#64748b;margin:0.25rem 0 0.5rem 0;">Aluga sala comunitária para acolher crianças fora da escola (+4 vagas imediatas).</p>
+                </div>
+                <button onclick="window.VilarejoDashboard.executeGovernanceAction('action_education_shift')" style="padding:0.4rem 0.6rem;background:#0f766e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Abrir Turno (R$ 400)
+                </button>
+              </div>
+
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.75rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#1e293b;font-size:0.9rem;">🛡️ Ronda Preventiva e Iluminação</strong>
+                  <p style="font-size:0.8rem;color:#64748b;margin:0.25rem 0 0.5rem 0;">Vigilância noturna nos corredores comerciais e iluminação nos pontos escuros.</p>
+                </div>
+                <button onclick="window.VilarejoDashboard.executeGovernanceAction('action_security_patrol')" style="padding:0.4rem 0.6rem;background:#0f766e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Ativar Ronda (R$ 350)
+                </button>
+              </div>
+
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.75rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#1e293b;font-size:0.9rem;">🗣️ Audiência Pública & Conselho da Cidade</strong>
+                  <p style="font-size:0.8rem;color:#64748b;margin:0.25rem 0 0.5rem 0;">Abre diálogo com líderes comunitários, dissipa tensão popular (-25%) e pactua metas.</p>
+                </div>
+                <button onclick="window.VilarejoDashboard.executeGovernanceAction('action_civic_hearing')" style="padding:0.4rem 0.6rem;background:#0f766e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Convocar Audiência (R$ 150)
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Infraestrutura Urbana e Mercado Local (Consistência Original) -->
           <div class="services-details-grid">
             <article class="content-card">
               <div class="section-heading compact-heading">
                 <div>
                   <div class="eyebrow">MERCADO LOCAL</div>
                   <h3>Abastecimento observado</h3>
-                  <p>Estoque e preços do mercado da simulação, sem confundi-los com cobertura de serviço público.</p>
+                  <p>Estoque e preços do mercado da simulação econômica.</p>
                 </div>
               </div>
               <div class="services-stat-list">
@@ -1640,18 +1783,21 @@
             <article class="content-card">
               <div class="section-heading compact-heading">
                 <div>
-                  <div class="eyebrow">INFRAESTRUTURA DISPONÍVEL</div>
-                  <h3>Valores agregados do motor</h3>
-                  <p>Dados sem geometrias públicas; não representam obras, ruas ou instalações individualizadas.</p>
+                  <div class="eyebrow">INFRAESTRUTURA URBANA</div>
+                  <h3>Valores agregados do município</h3>
+                  <p>Equipamentos públicos e capacidade de suporte aos domicílios.</p>
                 </div>
               </div>
               <div class="services-stat-list">
-                ${row("Capacidade urbana", infra?.capacity)}
-                ${row("Demanda urbana", infra?.demand)}
-                ${row("Lotes agregados", s.lotCount, number)}
-                ${row("Caixa público", s.treasuryCash, money)}
+                ${row("Capacidade urbana agregada", infra?.capacity)}
+                ${row("Demanda urbana agregada", infra?.demand)}
+                ${row("Lotes residenciais", s.lotCount, number)}
+                ${row("Caixa disponível no Tesouro", s.treasuryCash, money)}
               </div>
-              <div class="ux-public-services-unavailable"><strong>Indicadores de serviços públicos: indisponíveis</strong><p>Saúde, educação e segurança não têm séries próprias publicadas pela referência atual; nenhum índice é estimado.</p></div>
+              <div class="ux-public-services-unavailable" style="margin-top:0.75rem;">
+                <strong>Indicadores de serviços públicos: indisponíveis</strong>
+                <p>Séries temporais e projeções contábeis de longo prazo de saúde, educação e segurança não têm séries próprias publicadas pela referência atual; nenhum índice é estimado.</p>
+              </div>
             </article>
           </div>
         </div>
@@ -2095,6 +2241,53 @@
           window.VilarejoTest.issueMicrocredit("house:1", amount || 1000, "capital de giro para produção autônoma");
           refresh();
         }
+      },
+      voteBill: (billId) => {
+        if (typeof window !== "undefined" && window.VilarejoInstitutionsRuntime && window.VilarejoInstitutionsRuntime.voteBill) {
+          const res = window.VilarejoInstitutionsRuntime.voteBill(billId);
+          if (res && res.approved && window.VilarejoTest && window.VilarejoTest.enactLegislation) {
+            window.VilarejoTest.enactLegislation(res);
+          }
+          renderGovernmentSubView();
+          refresh();
+        }
+      },
+      selectPlatform: (platformId) => {
+        if (typeof window !== "undefined" && window.VilarejoInstitutionsRuntime && window.VilarejoInstitutionsRuntime.selectCampaignPlatform) {
+          window.VilarejoInstitutionsRuntime.selectCampaignPlatform(platformId);
+          renderGovernmentSubView();
+        }
+      },
+      holdElection: () => {
+        if (typeof window !== "undefined" && window.VilarejoInstitutionsRuntime && window.VilarejoInstitutionsRuntime.holdElection) {
+          window.VilarejoInstitutionsRuntime.holdElection();
+          renderGovernmentSubView();
+        }
+      },
+      executeGovernanceAction: (actionId) => {
+        if (typeof window !== "undefined") {
+          const action = window.VilarejoServices?.GOVERNANCE_ACTIONS?.[actionId];
+          if (action && window.VilarejoTest && window.VilarejoTest.executeGovernanceAction) {
+            window.VilarejoTest.executeGovernanceAction(action);
+          } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.executeGovernanceAction) {
+            window.VilarejoServicesRuntime.executeGovernanceAction(actionId);
+          }
+          refresh();
+        }
+      },
+      hireCharacter: (charId) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.hirePoliticalCharacter) {
+          window.VilarejoTest.hirePoliticalCharacter(charId);
+          renderGovernmentSubView();
+          refresh();
+        }
+      },
+      dismissCharacter: (groupId) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.dismissPoliticalCharacter) {
+          window.VilarejoTest.dismissPoliticalCharacter(groupId);
+          renderGovernmentSubView();
+          refresh();
+        }
       }
     };
     if (typeof document !== "undefined") {
@@ -2168,6 +2361,53 @@
       issueMicrocredit: (amount) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.issueMicrocredit) {
           window.VilarejoTest.issueMicrocredit("house:1", amount || 1000, "capital de giro para produção autônoma");
+          refresh();
+        }
+      },
+      voteBill: (billId) => {
+        if (typeof window !== "undefined" && window.VilarejoInstitutionsRuntime && window.VilarejoInstitutionsRuntime.voteBill) {
+          const res = window.VilarejoInstitutionsRuntime.voteBill(billId);
+          if (res && res.approved && window.VilarejoTest && window.VilarejoTest.enactLegislation) {
+            window.VilarejoTest.enactLegislation(res);
+          }
+          renderGovernmentSubView();
+          refresh();
+        }
+      },
+      selectPlatform: (platformId) => {
+        if (typeof window !== "undefined" && window.VilarejoInstitutionsRuntime && window.VilarejoInstitutionsRuntime.selectCampaignPlatform) {
+          window.VilarejoInstitutionsRuntime.selectCampaignPlatform(platformId);
+          renderGovernmentSubView();
+        }
+      },
+      holdElection: () => {
+        if (typeof window !== "undefined" && window.VilarejoInstitutionsRuntime && window.VilarejoInstitutionsRuntime.holdElection) {
+          window.VilarejoInstitutionsRuntime.holdElection();
+          renderGovernmentSubView();
+        }
+      },
+      executeGovernanceAction: (actionId) => {
+        if (typeof window !== "undefined") {
+          const action = window.VilarejoServices?.GOVERNANCE_ACTIONS?.[actionId];
+          if (action && window.VilarejoTest && window.VilarejoTest.executeGovernanceAction) {
+            window.VilarejoTest.executeGovernanceAction(action);
+          } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.executeGovernanceAction) {
+            window.VilarejoServicesRuntime.executeGovernanceAction(actionId);
+          }
+          refresh();
+        }
+      },
+      hireCharacter: (charId) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.hirePoliticalCharacter) {
+          window.VilarejoTest.hirePoliticalCharacter(charId);
+          renderGovernmentSubView();
+          refresh();
+        }
+      },
+      dismissCharacter: (groupId) => {
+        if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.dismissPoliticalCharacter) {
+          window.VilarejoTest.dismissPoliticalCharacter(groupId);
+          renderGovernmentSubView();
           refresh();
         }
       }

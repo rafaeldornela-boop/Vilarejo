@@ -5,10 +5,10 @@ const vm = require("node:vm");
 const { createSimulationContext } = require("./simulation_context.js");
 
 console.log("\n========================================================");
-console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (EIXOS 1 A 14) ===");
+console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (EIXOS 1 A 17) ===");
 console.log("========================================================\n");
 
-const ctx = createSimulationContext();
+const ctx = createSimulationContext({ includeDomainModules: true });
 const api = ctx.window.VilarejoTest;
 const getS = () => vm.runInContext("S", ctx);
 const run = (code) => vm.runInContext(code, ctx);
@@ -526,6 +526,148 @@ test("13.1 Dilemas do Gabinete Executivo: gatilho, deliberação, trade-off orç
   // 4. Auditoria de conservação e SFC
   assert(run("auditCashConservation().ok"), "Conservação estrita de caixa após deliberação de crise do Gabinete");
   assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra");
+});
+
+// ---------------------------------------------------------------------------
+// 14. LEGISLAÇÃO MUNICIPAL E IMPACTOS ESTRUTURAIS REAIS
+// ---------------------------------------------------------------------------
+test("14.1 Legislação Municipal e Impactos Reais: sanção, custeio do Tesouro, expansão de capacidades e conservação SFC", () => {
+  api.reset();
+  const S = getS();
+  
+  // 1. Injetar liquidez no Tesouro
+  run("log('external', 'treasury', 25000, 'Caixa para execução de políticas públicas')");
+  const initialHousing = S.housingCapacity || 12;
+  const initialInfra = S.infrastructureCapacity || 10;
+  const initialTreasury = run("balance('treasury')");
+
+  // 2. Promulgar e sancionar PL 01 (Habitação Social) com custo de 1500 e +4 moradias
+  const bill1 = {
+    id: "pl_social_housing",
+    code: "PL 01/2026",
+    title: "Marco da Habitação Social",
+    cost: 1500,
+    impacts: { housingCapacity: 4 }
+  };
+  const res1 = api.enactLegislation(bill1);
+  assert(res1.success === true, "Lei de habitação deve ser sancionada com sucesso");
+  assert.equal(S.housingCapacity, initialHousing + 4, "Capacidade habitacional deve ser ampliada");
+  assert(run("balance('treasury')") === initialTreasury - 1500, "Custo da lei deve ser debitado do Tesouro");
+
+  // 3. Promulgar e sancionar PL 05 (Pavimentação e Logística) com custo de 2500 e +10 infraestrutura
+  const bill2 = {
+    id: "pl_urban_logistics",
+    code: "PL 05/2026",
+    title: "Fundo Especial de Pavimentação",
+    cost: 2500,
+    impacts: { infrastructureCapacity: 10 }
+  };
+  const res2 = api.enactLegislation(bill2);
+  assert(res2.success === true, "Lei de infraestrutura deve ser sancionada");
+  assert.equal(S.infrastructureCapacity, initialInfra + 10, "Capacidade de infraestrutura deve aumentar");
+
+  // 4. Fechamento mensal e integridade SFC
+  run("closeMonth()");
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa após execução orçamentária de leis");
+  assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra com projetos de lei promulgados");
+});
+
+// ---------------------------------------------------------------------------
+// 15. SERVIÇOS PÚBLICOS, SANEAMENTO, EPIDEMIAS E GOVERNABILIDADE CÍVICA
+// ---------------------------------------------------------------------------
+test("15.1 Serviços Públicos, Saneamento, Epidemias e Governabilidade Cívica", () => {
+  api.reset();
+  run("log('external', 'treasury', 10000, 'Caixa para execução de serviços públicos')");
+  const initialTreasury = run("balance('treasury')");
+
+  // 1. Executa Ação de Governabilidade: Mutirão Sanitário (Custo R$ 350)
+  const actionClean = {
+    id: "action_sanitary_clean",
+    name: "Mutirão Sanitário e Limpeza Urbana",
+    cost: 350,
+    impacts: { sanitationDelta: 8, sanitaryRiskReduction: 35 }
+  };
+  const resAction = api.executeGovernanceAction(actionClean);
+  assert(resAction.success === true, "Ação de mutirão sanitário deve ser executada com sucesso");
+  assert.equal(resAction.cost, 350, "Custo de 350 deve ser contabilizado");
+  assert.equal(run("balance('treasury')"), initialTreasury - 350, "Caixa do Tesouro deve debitar R$ 350");
+
+  // 2. Executa Campanha de Vacinação e Saúde (Custo R$ 450)
+  const actionHealth = {
+    id: "action_health_campaign",
+    name: "Campanha Comunitária de Vacinação",
+    cost: 450,
+    impacts: { preventionDelta: 14, capacityDelta: 12 }
+  };
+  const resHealth = api.executeGovernanceAction(actionHealth);
+  assert(resHealth.success === true, "Campanha de vacinação deve ser executada");
+  assert.equal(run("balance('treasury')"), initialTreasury - 350 - 450, "Caixa do Tesouro deve debitar R$ 800 acumulados");
+
+  // 3. Simula fechamento e auditoria SFC
+  run("closeMonth()");
+  assert(run("auditCashConservation().ok"), "Caixa do Tesouro e balanço bancário devem manter conservação estrita após ações de governabilidade");
+  assert(api.generateBalanceSheets().audit.allPass, "Stock-Flow Consistency 100% íntegra após custeio de serviços e saúde pública");
+});
+
+// ---------------------------------------------------------------------------
+// 16. GRUPOS DE INTERESSE: NOMEAÇÃO, APORTE EXTERNO, ATRITO E CONSERVAÇÃO SFC
+// ---------------------------------------------------------------------------
+test("16.1 Grupos de Interesse: nomeação de lideranças, bônus setoriais, injeção de capital externo, atritos políticos e conservação estrita SFC", () => {
+  api.reset();
+  const S = getS();
+  run("log('external', 'treasury', 25000, 'Caixa do Tesouro para articulação política')");
+  const initialTreasury = run("balance('treasury')");
+
+  // 1. Estado inicial sem lideranças
+  assert.deepStrictEqual(api.getActivePoliticalCharacters(), [], "Nenhuma liderança ativa inicialmente");
+  assert.strictEqual(api.getPoliticalConflicts().length, 0, "Nenhum conflito inicial");
+
+  // 2. Nomear trab01 (Vicente Almeida, R$ 5.200)
+  const hireRes1 = api.hirePoliticalCharacter("trab01");
+  assert.strictEqual(hireRes1.ok, true, "Nomeação de trab01 deve ter sucesso");
+  assert.strictEqual(hireRes1.cost, 5200, "Custo de R$ 5.200 deve ser debitado");
+  assert.strictEqual(run("balance('treasury')"), initialTreasury - 5200, "Caixa do Tesouro deve refletir débito");
+  assert.strictEqual(S.activeCharacters["trabalhadores"], "trab01");
+  assert(api.getActivePoliticalCharacters().some(c => c.id === "trab01"));
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa após contratação de trab01");
+
+  // 3. Nomear fin04 (Helena Drummond, R$ 6.100, bônus investimentoExterno R$ 9.000)
+  const hireRes2 = api.hirePoliticalCharacter("fin04");
+  assert.strictEqual(hireRes2.ok, true, "Nomeação de fin04 deve ter sucesso");
+  assert.strictEqual(hireRes2.cost, 6100, "Custo de R$ 6.100 deve ser debitado");
+  assert.strictEqual(hireRes2.externalInvestment, 9000, "Aporte externo de R$ 9.000 deve ser injetado");
+  assert.strictEqual(run("balance('treasury')"), initialTreasury - 2300, "Caixa do Tesouro após taxa e aporte externo");
+  assert.strictEqual(S.activeCharacters["financeiro"], "fin04");
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa após injeção de capital externo");
+
+  // 4. Nomear rur03 (Wellington Dutra, R$ 6.400, rival de trab01)
+  const hireRes3 = api.hirePoliticalCharacter("rur03");
+  assert.strictEqual(hireRes3.ok, true, "Nomeação de rur03 deve ter sucesso");
+  const conflicts = api.getPoliticalConflicts();
+  assert.strictEqual(conflicts.length, 1, "Deve haver 1 conflito político ativo entre trab01 e rur03");
+  assert(conflicts[0].groups.includes("trabalhadores"), "Conflito deve envolver trabalhadores");
+  assert(conflicts[0].groups.includes("proprietarios-rurais"), "Conflito deve envolver proprietarios-rurais");
+  assert.strictEqual(conflicts[0].penalty, -4, "Penalidade deve ser -4 na aprovação");
+
+  // 5. Substituir representante de trabalhadores por trab02 (Rosa Ferreira, R$ 2.800)
+  const currentTreasury = run("balance('treasury')");
+  const hireRes4 = api.hirePoliticalCharacter("trab02");
+  assert.strictEqual(hireRes4.ok, true, "Substituição por trab02 deve ter sucesso");
+  assert.strictEqual(S.activeCharacters["trabalhadores"], "trab02");
+  assert.strictEqual(run("balance('treasury')"), currentTreasury - 2800, "Custo de substituição debitado");
+  assert.strictEqual(api.getPoliticalConflicts().length, 0, "Conflito trab01 <-> rur03 deve cessar após substituição");
+
+  // 6. Dispensa voluntária de fin04 sem custo
+  const preDismissTreasury = run("balance('treasury')");
+  const dismissRes = api.dismissPoliticalCharacter("financeiro");
+  assert.strictEqual(dismissRes.ok, true, "Dispensa de fin04 deve ter sucesso");
+  assert.strictEqual(S.activeCharacters["financeiro"], undefined);
+  assert.strictEqual(run("balance('treasury')"), preDismissTreasury, "Dispensa não cobra taxa adicional do Tesouro");
+
+  // 7. Fechamento mensal e integridade Stock-Flow Consistency (SFC)
+  run("closeMonth()");
+  assert(run("auditCashConservation().ok"), "Caixa do Tesouro e balanços preservados após ciclo mensal completo");
+  assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra com grupos de interesse ativos");
 });
 
 console.log(`\n========================================================`);
