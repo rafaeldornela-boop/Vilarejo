@@ -279,6 +279,29 @@
       facts.sources.push("payload.councilSupport (economy:month-closed)");
     }
 
+    const activeChars = payload.activeCharacters || {};
+    const activeCharCount = Object.keys(activeChars).length;
+    if (activeCharCount > 0) {
+      facts.indicators.activePoliticalCharactersCount = activeCharCount;
+      facts.observed.push({
+        section: "Governo",
+        kind: "fact",
+        text: `Articulação Política: O Gabinete conta com ${activeCharCount} lideranças setoriais nomeadas para representação de classes produtivas e civis.`
+      });
+      facts.sources.push("payload.activeCharacters (economy:month-closed)");
+    }
+
+    const polConflicts = Array.isArray(payload.politicalConflicts) ? payload.politicalConflicts : [];
+    if (polConflicts.length > 0) {
+      facts.indicators.politicalConflictsCount = polConflicts.length;
+      facts.observed.push({
+        section: "Governo",
+        kind: "fact",
+        text: `Tensões Políticas: O Gabinete enfrenta atrito entre alas rivais (${polConflicts.map(c => (c.names ? c.names.join(" e ") : "lideranças")).join("; ")}), impactando o clima político local.`
+      });
+      facts.sources.push("payload.politicalConflicts (economy:month-closed)");
+    }
+
     try {
       const testApi = windowRef && windowRef.VilarejoTest;
       if (testApi && typeof testApi.stateSnapshot === "function") {
