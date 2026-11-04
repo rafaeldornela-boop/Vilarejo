@@ -1,0 +1,50 @@
+{
+  "audit_date": "2026-11-03",
+  "repository": "rafaeldornela-boop/Vilarejo",
+  "branch": "main",
+  "runtime": {
+    "engine": {
+      "name": "phaser",
+      "version": "4.2.1",
+      "license": "MIT",
+      "decision": "adopt",
+      "note": "Phaser ainda não é carregado pelo index.html. Adaptar a chamada Phaser.Geom.Point antes da integração."
+    }
+  },
+  "optional_dependencies": [
+    {
+      "name": "easystarjs",
+      "version": "0.4.4",
+      "license": "MIT",
+      "decision": "defer",
+      "reason": "Somente após existir uma grade de navegação; não necessário para seguir rotas predefinidas."
+    }
+  ],
+  "not_in_initial_install": [
+    {
+      "name": "phaser4-rex-plugins",
+      "version": "4.2.0",
+      "decision": "defer",
+      "reason": "Phaser já cobre PathFollower, tweens e recursos visuais necessários na primeira integração."
+    },
+    {
+      "name": "sebashwa/phaser3-plugin-isometric",
+      "decision": "reject",
+      "reason": "Plugin antigo; projeto já possui coordenadas próprias e Phaser tem Tilemap isométrico nativo."
+    }
+  ],
+  "assets": [
+    {"name": "Kenney Isometric Tiles City", "license": "CC0", "url": "https://kenney.nl/assets/isometric-tiles-city"},
+    {"name": "Kenney Isometric Tiles Buildings", "license": "CC0", "url": "https://kenney.nl/assets/isometric-tiles-buildings"},
+    {"name": "Kenney Isometric Tiles Landscape", "license": "CC0", "url": "https://kenney.nl/assets/isometric-tiles-landscape"},
+    {"name": "Kenney Isometric Tiles Vehicles", "license": "CC0", "url": "https://kenney.nl/assets/isometric-tiles-vehicles"}
+  ],
+  "repo_findings": {
+    "phaser_loaded_in_index": false,
+    "world_renderer_loaded_in_index": false,
+    "npm_dependencies_declared": false,
+    "prepare_dist_has_closed_script_allowlist": true,
+    "world_scene_modules_connected_to_renderer": false,
+    "second_expansion_modules_present": false
+  }
+}
