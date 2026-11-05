@@ -45,12 +45,12 @@
   const KEY = "VilarejoWorldScene";
 
   const C = {
-    grass: 0xb7cda9,
-    water: 0x8dbdc0,
-    road: 0xd8c7a2,
-    panel: 0xf7f6ec,
-    border: 0xcbd6c5,
-    selected: 0xe5b95c
+    grass: 0x9cd66c,
+    water: 0x6ec9c4,
+    road: 0xedd19d,
+    panel: 0xfcf3dc,
+    border: 0xd4af77,
+    selected: 0xffb703
   };
 
   const CATALOG = [
@@ -196,7 +196,7 @@
 
       create() {
         this.installSprites();
-        this.cameras.main.setBackgroundColor(0xdfe9d9);
+        this.cameras.main.setBackgroundColor(0x6ec9c4);
         this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
         this.cameras.main.centerOn(
           MAP_W / 2,
@@ -301,6 +301,103 @@
       }
 
       drawTerrain() {
+        const hasSproutTiles = this.hasTexture("tile_grass_1");
+
+        if (hasSproutTiles) {
+          const TILE = 48;
+          const COLS = Math.ceil(MAP_W / TILE); // 40
+          const ROWS = Math.ceil(MAP_H / TILE); // 29
+          const grassKeys = ["tile_grass_1", "tile_grass_2", "tile_grass_3"];
+
+          // Define formato orgânico de Ilha Sprout Lands + Rio sinuoso a oeste
+          const isWaterCell = (r, c) => {
+            if (r <= 1 || r >= ROWS - 2 || c <= 1 || c >= COLS - 2) return true;
+            // Enseadas arredondadas nos cantos
+            if (r <= 3 && (c <= 4 || c >= COLS - 5)) return true;
+            if (r >= ROWS - 4 && (c <= 5 || c >= COLS - 6)) return true;
+            // Rio sinuoso cortando o lado oeste da ilha
+            const riverCenter = 7 + Math.round(Math.sin(r * 0.45) * 1.3);
+            if (c === riverCenter || c === riverCenter + 1) return true;
+            // Lagoa nordeste
+            if (r >= 3 && r <= 6 && c >= 28 && c <= 33) return true;
+            return false;
+          };
+
+          for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              const x = c * TILE + TILE / 2;
+              const y = r * TILE + TILE / 2;
+              const water = isWaterCell(r, c);
+
+              if (water) {
+                // Verifica se logo acima é terra para desenhar falésia costeira com espuma
+                const landAbove = r > 0 && !isWaterCell(r - 1, c);
+                let key = "tile_water";
+                if (landAbove && this.hasTexture("tile_coast")) {
+                  key = "tile_coast";
+                } else if ((r * 7 + c * 11) % 17 === 0 && this.hasTexture("tile_water_lily")) {
+                  key = "tile_water_lily";
+                }
+                const wTile = this.add.image(x, y, key);
+                this.world.add(wTile);
+              } else {
+                const gKey = grassKeys[(r * 5 + c * 3) % grassKeys.length];
+                const gTile = this.add.image(x, y, gKey);
+                this.world.add(gTile);
+              }
+            }
+          }
+
+          // Lavoura cercada estilo Sprout Lands (próximo ao celeiro/oficina em 1370, 680)
+          if (this.hasTexture("tile_farm")) {
+            for (let fr = 15; fr <= 18; fr++) {
+              for (let fc = 25; fc <= 30; fc++) {
+                const fx = fc * TILE + TILE / 2;
+                const fy = fr * TILE + TILE / 2;
+                this.world.add(this.add.image(fx, fy, "tile_farm"));
+              }
+            }
+          }
+
+          if (this.hasTexture("prop_fence_h")) {
+            for (let fc = 25; fc <= 30; fc++) {
+              const fx = fc * TILE + TILE / 2;
+              const topFence = this.add.image(fx, 14 * TILE + 30, "prop_fence_h").setDepth(14 * TILE + 30);
+              const botFence = this.add.image(fx, 19 * TILE + 12, "prop_fence_h").setDepth(19 * TILE + 12);
+              this.world.add([topFence, botFence]);
+            }
+          }
+
+          // Poço comunitário na praça central
+          if (this.hasTexture("prop_well")) {
+            const well = this.add.image(936, 576, "prop_well").setDepth(576);
+            this.world.add(well);
+          }
+
+          // Vaquinhas e galinhas no pasto (vida rural Sprout Lands)
+          if (this.hasTexture("prop_cow")) {
+            [
+              [1510, 560],
+              [1585, 620],
+              [1475, 890]
+            ].forEach(([cx, cy]) => {
+              this.world.add(this.add.image(cx, cy, "prop_cow").setDepth(cy));
+            });
+          }
+          if (this.hasTexture("prop_chicken")) {
+            [
+              [1290, 650],
+              [1325, 685],
+              [710, 725],
+              [990, 735]
+            ].forEach(([chx, chy]) => {
+              this.world.add(this.add.image(chx, chy, "prop_chicken").setDepth(chy));
+            });
+          }
+          return;
+        }
+
+        // Fallback geométrico caso texturas não estejam carregadas
         this.polygon(
           this.world,
           [
@@ -312,106 +409,64 @@
           C.grass
         );
 
-        const hasGrassTiles = this.hasTexture("tile_grass_1");
+        for (let r = 0; r < 23; r++) {
+          for (let c = 0; c < 29; c++) {
+            const palette = [
+              0xb7cda9,
+              0xc9daba,
+              0xa9c397
+            ];
 
-        if (hasGrassTiles) {
-          const grassKeys = ["tile_grass_1", "tile_grass_2", "tile_grass_3"];
-          for (let r = 0; r < 15; r++) {
-            for (let c = 0; c < 20; c++) {
-              const key = grassKeys[(r * 5 + c * 3) % grassKeys.length];
-              const tile = this.add.image(48 + c * 96, 48 + r * 90, key);
-              if (typeof tile.setAlpha === "function") tile.setAlpha(0.75);
-              this.world.add(tile);
-            }
+            this.diamond(
+              this.world,
+              45 + c * 67 + (r % 2) * 33,
+              70 + r * 47,
+              37,
+              19,
+              palette[(r * 3 + c) % 3],
+              0.38
+            );
           }
-        } else {
-          for (let r = 0; r < 23; r++) {
-            for (let c = 0; c < 29; c++) {
-              const palette = [
-                0xb7cda9,
-                0xc9daba,
-                0xa9c397
-              ];
-
-              this.diamond(
-                this.world,
-                45 + c * 67 + (r % 2) * 33,
-                70 + r * 47,
-                37,
-                19,
-                palette[(r * 3 + c) % 3],
-                0.38
-              );
-            }
-          }
-        }
-
-        this.polygon(
-          this.world,
-          [
-            [80, 210],
-            [170, 165],
-            [300, 205],
-            [330, 270],
-            [260, 315],
-            [130, 285]
-          ],
-          C.water,
-          0.92
-        );
-
-        this.polygon(
-          this.world,
-          [
-            [0, 1030],
-            [0, 1090],
-            [430, 940],
-            [520, 970],
-            [470, 1010],
-            [80, 1145]
-          ],
-          C.water,
-          0.75
-        );
-
-        if (this.hasTexture("tile_water")) {
-          [
-            [175, 225],
-            [223, 225],
-            [271, 240],
-            [195, 265],
-            [243, 265],
-            [180, 1060],
-            [260, 1030],
-            [340, 1000],
-            [420, 975]
-          ].forEach(([wx, wy]) => {
-            const wTile = this.add.image(wx, wy, "tile_water");
-            this.world.add(wTile);
-          });
-        }
-
-        if (this.hasTexture("tile_farm")) {
-          [
-            [1280, 770],
-            [1328, 770],
-            [1376, 770],
-            [1280, 818],
-            [1328, 818],
-            [1376, 818]
-          ].forEach(([fx, fy]) => {
-            const fTile = this.add.image(fx, fy, "tile_farm");
-            this.world.add(fTile);
-          });
-        }
-
-        if (this.hasTexture("prop_well")) {
-          const well = this.add.image(915, 610, "prop_well").setDepth(610);
-          this.world.add(well);
         }
       }
 
       drawRoads() {
+        if (this.hasTexture("tile_path")) {
+          const TILE = 48;
+          const pathCells = new Set();
+          const addCell = (r, c) => pathCells.add(`${r},${c}`);
+          const addRect = (r1, c1, r2, c2) => {
+            for (let r = r1; r <= r2; r++) {
+              for (let c = c1; c <= c2; c++) addCell(r, c);
+            }
+          };
+
+          // Estrada real leste-oeste (cruza o rio na linha 12)
+          addRect(12, 4, 12, 31);
+          // Praça central em frente à Prefeitura (840, 555 -> r=11..13, c=16..20)
+          addRect(11, 16, 13, 20);
+          // Ramal norte até Posto de Saúde (590, 440) e Mercado (1050, 420)
+          addRect(9, 12, 12, 12);
+          addRect(9, 21, 12, 22);
+          addRect(10, 22, 10, 26); // até Residência 03 (1200, 480)
+          // Ramal sul para Residências (650, 680 / 790, 850 / 1040, 690) e Oficina (1370, 680)
+          addRect(12, 13, 15, 13);
+          addRect(13, 16, 18, 16);
+          addRect(12, 21, 15, 21);
+          addRect(12, 28, 15, 28);
+
+          pathCells.forEach(token => {
+            const [r, c] = token.split(",").map(Number);
+            const x = c * TILE + TILE / 2;
+            const y = r * TILE + TILE / 2;
+            const riverCenter = 7 + Math.round(Math.sin(r * 0.45) * 1.3);
+            const isBridge = c === riverCenter || c === riverCenter + 1;
+            const key = isBridge && this.hasTexture("tile_bridge") ? "tile_bridge" : "tile_path";
+            this.world.add(this.add.image(x, y, key));
+          });
+          return;
+        }
+
         const roads = [
           [
             [90, 760],
@@ -429,72 +484,43 @@
             [1470, 780],
             [1430, 790],
             [830, 535]
-          ],
-          [
-            [1020, 160],
-            [1060, 140],
-            [1160, 440],
-            [1125, 465],
-            [1090, 450]
-          ],
-          [
-            [420, 930],
-            [450, 895],
-            [950, 1090],
-            [920, 1130],
-            [880, 1135]
           ]
         ];
 
         roads.forEach(p =>
           this.polygon(this.world, p, C.road)
         );
-
-        if (this.hasTexture("tile_path")) {
-          [
-            [240, 700], [360, 655], [480, 610], [600, 565], [720, 520],
-            [830, 500], [950, 550], [1070, 600], [1190, 650], [1310, 700],
-            [1065, 240], [1095, 320], [1120, 400],
-            [540, 960], [660, 1005], [780, 1050]
-          ].forEach(([px, py]) => {
-            const pTile = this.add.image(px, py, "tile_path");
-            this.world.add(pTile);
-          });
-        }
       }
 
       drawTrees() {
         const hasTreeSprites = this.hasTexture("prop_tree_oak");
 
-        [
-          [180, 420],
-          [260, 520],
-          [430, 330],
-          [520, 800],
-          [730, 250],
-          [930, 280],
-          [1450, 360],
-          [1570, 510],
-          [1650, 880],
-          [1350, 980],
-          [1080, 1050],
-          [320, 1120],
-          [1750, 250],
-          [70, 890],
-          [1520, 1120]
-        ].forEach(([x, y], i) => {
-          if (hasTreeSprites) {
-            const shadow = this.add.ellipse(x, y + 18, 48, 20, 0x4b6447, 0.28);
-            const treeKey = i % 3 === 0 && this.hasTexture("prop_tree_pine")
-              ? "prop_tree_pine"
-              : "prop_tree_oak";
-            const tree = this.add.image(x, y - 6, treeKey).setDepth(y);
-            this.world.add([shadow, tree]);
+        const treePositions = [
+          // Bosques costeiros e pomares da ilha
+          [210, 260], [275, 310], [190, 440], [250, 520],
+          [480, 250], [550, 290], [680, 230], [760, 260],
+          [910, 240], [990, 275], [1160, 240], [1250, 290],
+          [1610, 290], [1690, 350], [1640, 470], [1710, 560],
+          [1670, 720], [1630, 860], [1540, 1020], [1420, 1060],
+          [1160, 980], [1080, 1040], [920, 1020], [640, 980],
+          [530, 860], [490, 760], [220, 820], [260, 960]
+        ];
 
-            if (i % 4 === 0 && this.hasTexture("prop_bush_flower")) {
+        treePositions.forEach(([x, y], i) => {
+          if (hasTreeSprites) {
+            let treeKey = "prop_tree_oak";
+            if (i % 3 === 0 && this.hasTexture("prop_tree_fruit")) {
+              treeKey = "prop_tree_fruit";
+            } else if (i % 4 === 0 && this.hasTexture("prop_tree_pine")) {
+              treeKey = "prop_tree_pine";
+            }
+            const tree = this.add.image(x, y - 8, treeKey).setDepth(y);
+            this.world.add(tree);
+
+            if (i % 2 === 0 && this.hasTexture("prop_bush_flower")) {
               const bush = this.add
-                .image(x + 36, y + 14, "prop_bush_flower")
-                .setDepth(y + 14);
+                .image(x + (i % 4 === 0 ? -34 : 34), y + 18, "prop_bush_flower")
+                .setDepth(y + 18);
               this.world.add(bush);
             }
           } else {
@@ -505,10 +531,6 @@
               this.add.ellipse(
                 x, y - 16, 48, 42,
                 i % 2 ? 0x477b55 : 0x5c8b5d
-              ),
-              this.add.ellipse(
-                x - 7, y - 25, 25, 22,
-                i % 2 ? 0x619968 : 0x75a66c
               )
             ]);
           }
@@ -1057,63 +1079,6 @@
             labels[session.status] || "Estado não informado"
           } · ${day} · Módulos: ${count}${people}`
         );
-
-        this.syncStateBuildings(snapshot);
-      }
-
-      syncStateBuildings(snapshot) {
-        if (!snapshot || !this.buildings) return;
-        const raw = snapshot.raw || snapshot;
-        const housingCapacity = Number(snapshot.housingCapacity ?? raw.housingCapacity ?? 12);
-        const extraHousesCount = Math.max(0, Math.floor((housingCapacity - 12) / 2));
-
-        const EXTRA_HOUSES = [
-          { id: "house_extra_1", type: "house", x: 720, y: 720, name: "Residência 05", description: "Moradia popular construída pela gestão municipal." },
-          { id: "house_extra_2", type: "house", x: 920, y: 770, name: "Residência 06", description: "Moradia popular construída pela gestão municipal." },
-          { id: "house_extra_3", type: "house", x: 570, y: 780, name: "Residência 07", description: "Moradia popular construída pela gestão municipal." },
-          { id: "house_extra_4", type: "house", x: 1120, y: 750, name: "Residência 08", description: "Moradia popular construída pela gestão municipal." },
-          { id: "house_extra_5", type: "house", x: 860, y: 690, name: "Residência 09", description: "Moradia popular construída pela gestão municipal." },
-          { id: "house_extra_6", type: "house", x: 990, y: 840, name: "Residência 10", description: "Moradia popular construída pela gestão municipal." },
-          { id: "house_extra_7", type: "house", x: 660, y: 890, name: "Residência 11", description: "Moradia popular construída pela gestão municipal." },
-          { id: "house_extra_8", type: "house", x: 1260, y: 560, name: "Residência 12", description: "Moradia popular construída pela gestão municipal." }
-        ];
-
-        for (let i = 0; i < extraHousesCount && i < EXTRA_HOUSES.length; i++) {
-          const h = EXTRA_HOUSES[i];
-          if (!this.buildings.has(h.id)) {
-            this.addBuilding(h);
-          }
-        }
-
-        const completed = (Array.isArray(snapshot.completedProjects)
-          ? snapshot.completedProjects
-          : (Array.isArray(raw.completedProjects) ? raw.completedProjects : []))
-          .map(p => (typeof p === "string" ? p : p?.id));
-
-        if (completed.includes("grain_silo") || raw.siloBuilt) {
-          const silo = { id: "proj_silo", type: "production", x: 1320, y: 860, name: "Silo de Grãos", description: "Silo regulador de safras cafeeiras." };
-          if (!this.buildings.has(silo.id)) this.addBuilding(silo);
-        }
-
-        if (completed.includes("rural_road") || (raw.ruralRoadBuilt && raw.ruralRoadBuilt > 0)) {
-          const roadPoint = { id: "proj_rural_road", type: "service", x: 380, y: 640, name: "Posto da Estrada Vicinal", description: "Conexão de abastecimento com sítios rurais." };
-          if (!this.buildings.has(roadPoint.id)) this.addBuilding(roadPoint);
-        }
-
-        if (completed.includes("sanitation_health") || raw.sanitationHealthLevel > 0) {
-          const san = { id: "proj_sanitation", type: "service", x: 500, y: 500, name: "Posto de Saneamento", description: "Estação de saneamento e água tratada." };
-          if (!this.buildings.has(san.id)) this.addBuilding(san);
-        }
-
-        const facilities = Array.isArray(raw.publicFacilities) ? raw.publicFacilities : [];
-        if (facilities.some(f => f.type === "school")) {
-          const school = { id: "fac_school", type: "civic", x: 740, y: 480, name: "Escola Municipal", description: "Unidade de ensino da comunidade." };
-          if (!this.buildings.has(school.id)) this.addBuilding(school);
-        }
-        if (facilities.some(f => f.type === "police_station")) {
-          const police = { id: "fac_police", type: "civic", x: 920, y: 490, name: "Posto Policial", description: "Base de segurança e ordem cívica." };
-          if (!this.buildings.has(police.id)) this.addBuilding(police);
-        }
       }
     };
   }
@@ -1169,7 +1134,7 @@
       parent: container,
       width: W,
       height: H,
-      backgroundColor: 0xdfe9d9,
+      backgroundColor: 0x6ec9c4,
 
       scale: {
         mode: Phaser.Scale.FIT,
@@ -1189,41 +1154,6 @@
 
     const handle = {
       game,
-
-      addBuilding(data) {
-        try {
-          const s = game.scene.getScene(KEY);
-          if (s && s.addBuilding) {
-            const b = normalize(data);
-            if (b) {
-              s.addBuilding(b);
-              s.select(b.id);
-              return b;
-            }
-          }
-        } catch (e) {}
-        return null;
-      },
-
-      focusOn(x, y, zoom) {
-        try {
-          const s = game.scene.getScene(KEY);
-          if (s && s.cameras && s.cameras.main) {
-            if (typeof s.cameras.main.pan === "function") {
-              s.cameras.main.pan(x, y, 700, "Power2");
-            } else if (typeof s.cameras.main.centerOn === "function") {
-              s.cameras.main.centerOn(x, y);
-            }
-            if (typeof zoom === "number") {
-              if (typeof s.cameras.main.zoomTo === "function") {
-                s.cameras.main.zoomTo(zoom, 700);
-              } else if (typeof s.cameras.main.setZoom === "function") {
-                s.cameras.main.setZoom(zoom);
-              }
-            }
-          }
-        } catch (e) {}
-      },
 
       refresh() {
         snapshot = readSnapshot(getSnapshot);
