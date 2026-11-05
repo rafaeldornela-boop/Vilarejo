@@ -1,2 +1,111 @@
 <!DOCTYPE html>
-<!-- PHASER BOOT MARKER - full file will be replaced -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#18372d">
+  <meta name="description" content="Vilarejo: uma simulação econômica viva. Construa, administre e acompanhe a evolução de uma comunidade.">
+  <title>Vilarejo | Uma economia viva</title>
+  <link rel="icon" type="image/svg+xml" href="public/assets/interface/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="municipal-interface">
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#inicio" aria-label="Vilarejo, início">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span class="brand-copy"><strong>vilarejo</strong><small>uma economia viva</small></span>
+      </a>
+      <div class="sidebar-caption">ACOMPANHAR E GERIR</div>
+      <nav class="main-nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="overview" aria-current="page"><span class="nav-icon">⌂</span><span>Visão geral</span></button>
+        <button class="nav-item" data-view="economy"><span class="nav-icon">↗</span><span>Economia</span></button>
+        <button class="nav-item" data-view="society"><span class="nav-icon">♧</span><span>Sociedade</span></button>
+        <button class="nav-item" data-view="government"><span class="nav-icon">▤</span><span>Governo</span></button>
+        <button class="nav-item" data-view="services"><span class="nav-icon">✚</span><span>Serviços e desenvolvimento</span></button>
+        <div class="sidebar-caption nav-section-label">ANÁLISE E MEMÓRIA</div>
+        <button class="nav-item" data-view="intelligence"><span class="nav-icon">◈</span><span>Inteligência</span></button>
+        <button class="nav-item" data-view="newspaper"><span class="nav-icon">📰</span><span>Jornal</span></button>
+        <button class="nav-item" data-view="records"><span class="nav-icon">☷</span><span>Histórico</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="season-card">
+          <div class="season-icon">☀</div>
+          <div><strong>Ciclo da comunidade</strong><span>Uma decisão por vez.</span></div>
+        </div>
+        <div class="sidebar-version">SIMULAÇÃO ECONÔMICA · V3.1</div>
+      </div>
+    </aside>
+    <main class="main-content" id="inicio">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="mobileMenu" class="mobile-menu" aria-label="Abrir navegação">☰</button>
+          <button id="btnTopHome" class="btn-top-home" type="button" title="Voltar ao início da comunidade" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('overview')">⌂ Início</button>
+          <div class="breadcrumb"><span id="breadHome" role="button" tabindex="0" title="Ir para a tela inicial" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('overview')" style="cursor:pointer">VILAREJO</span><i>/</i><strong id="pageTitle">Visão geral</strong></div>
+        </div>
+        <div class="topbar-right">
+          <button id="topbarAlertBadge" class="topbar-alert-badge hidden" title="Alertas da Central de Inteligência" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('intelligence')"><span id="topbarAlertCount">0</span> alertas</button>
+          <div class="topbar-date-block">
+            <span class="topbar-calendar-icon">📅</span>
+            <div class="topbar-date-text">
+              <strong id="topbarCivilDate">Carregando calendário...</strong>
+              <small id="dateLabel">Dia 149 · Ano 1 · Mês 0</small>
+            </div>
+          </div>
+          <span class="season-badge" id="topbarSeasonBadge">Entressafra</span>
+          <span class="status-pill" id="gameStatus">Em planejamento</span>
+          <div class="ux-time-controls no-print" role="group" aria-label="Controles da simulação">
+            <button class="btn-primary" id="start" type="button">Começar</button>
+            <button class="btn-secondary" id="pause" type="button" disabled>Pausar</button>
+            <button class="btn-secondary" id="speed" type="button">Acelerar</button>
+            <button class="btn-quiet" id="toggleAudio" type="button" aria-label="Ligar ou pausar trilha sonora" title="Trilha sonora ambiente">♫ Áudio</button>
+            <button class="btn-quiet" id="reset" type="button" aria-label="Reiniciar partida">Reiniciar</button>
+          </div>
+          <audio id="ambientAudio" loop preload="none" style="display:none">
+            <source src="public/assets/audio/morning_light_on_cobblestone.mp3" type="audio/mpeg">
+          </audio>
+        </div>
+      </header>
+      <div class="page-wrap">
+        <div class="page-intro">
+          <div><div class="eyebrow">CENTRAL DE GESTÃO MUNICIPAL</div><h1 id="pageHeading">Panorama do município</h1><p id="pageDescription">O que mudou, o que merece atenção e quais decisões estão disponíveis.</p></div>
+          <div class="intro-mark">V<span>·</span></div>
+        </div>
+        <div id="event" class="event-card event-modal hidden pulse-animation" role="presentation">
+          <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="eventTitle" aria-describedby="eventText">
+            <figure class="ux-event-illustration"><img src="public/assets/interface/community-decision-illustration.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><figcaption>Decisão de interesse da comunidade local.</figcaption></figure>
+            <div class="event-kicker">ACONTECIMENTO NA COMUNIDADE</div>
+            <h2 id="eventTitle"></h2>
+            <div id="eventText" class="event-description-box"></div>
+            <div class="opts" id="eventOptions"></div>
+          </section>
+        </div>
+        <div id="overviewAlertsContainer" class="overview-alerts-container hidden"></div>
+        <section class="view-panel active" data-view-panel="overview" aria-label="Visão geral">
+          <section class="ux-overview-pulse" id="overviewPulse" aria-label="Indicadores do último fechamento" aria-live="polite"></section>
+          <p>Carregando interface…</p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <!-- Motor gráfico Phaser 3.87.0 (CDN jsDelivr) — disponível em window.Phaser -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js"></script>
+  <script src="src/core/vilarejo_core.js"></script>
+  <script src="src/shared/vilarejo_history_store.js"></script>
+  <script src="src/events/eventos_v3.js"></script>
+  <script src="src/economy/vilarejo_economy.js"></script>
+  <script src="src/society/vilarejo_society.js"></script>
+  <script src="src/politics/vilarejo_politics.js"></script>
+  <script src="src/institutions/vilarejo_institutions.js"></script>
+  <script src="src/services/vilarejo_services.js"></script>
+  <script src="src/world/vilarejo_world_engine.js"></script>
+  <script src="src/newspaper/vilarejo_newspaper.js"></script>
+  <script src="src/intelligence/vilarejo_intelligence.js"></script>
+  <script src="src/intelligence/intelligence_view.js"></script>
+  <script src="src/ui/decision_observer.js"></script>
+  <script src="src/ui/dashboard.js"></script>
+</body>
+</html>
