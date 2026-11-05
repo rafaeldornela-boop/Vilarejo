@@ -65,6 +65,7 @@
             <button class="btn-secondary" id="pause" type="button" disabled>Pausar</button>
             <button class="btn-secondary" id="speed" type="button">Acelerar</button>
             <button class="btn-quiet" id="toggleAudio" type="button" aria-label="Ligar ou pausar trilha sonora" title="Trilha sonora ambiente">♫ Áudio</button>
+            <button class="btn-quiet" id="btnHelpGuide" type="button" aria-label="Abrir Guia do Gestor" title="Guia do Gestor: Seu papel e objetivos">? Guia</button>
             <button class="btn-quiet" id="reset" type="button" aria-label="Reiniciar partida">Reiniciar</button>
           </div>
           <audio id="ambientAudio" loop preload="none" style="display:none">
@@ -72,6 +73,92 @@
           </audio>
         </div>
       </header>
+
+      <div id="decisionFeedbackToast" class="decision-feedback-toast hidden" role="status" aria-live="polite"></div>
+
+      <!-- Modal de Boas-Vindas / Guia do Gestor -->
+      <div id="welcomeIntroModal" class="welcome-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="welcomeModalTitle">
+        <div class="welcome-modal-card">
+          <div class="welcome-modal-header">
+            <span class="welcome-badge">MANDATO MUNICIPAL</span>
+            <button id="btnCloseWelcome" class="btn-close-modal" type="button" aria-label="Fechar guia">✕</button>
+          </div>
+          <h2 id="welcomeModalTitle">Prefeitura do Vilarejo</h2>
+          <p class="welcome-lead">Você assume a administração deste município em formação no início do século XX. Cada decisão no gabinete ecoa diretamente na vida das famílias, na colheita e nas contas públicas.</p>
+          
+          <div class="welcome-grid">
+            <div class="welcome-item">
+              <span class="welcome-icon">🏛️</span>
+              <div>
+                <strong>Seu Papel de Gestor</strong>
+                <p>Equilibrar as contas do Tesouro com as demandas de saúde, moradia, emprego e saneamento.</p>
+              </div>
+            </div>
+            <div class="welcome-item">
+              <span class="welcome-icon">☕</span>
+              <div>
+                <strong>Ciclos da Economia</strong>
+                <p>Na safra de café, a arrecadação sobe e o comércio pulsa. Na entressafra, reservas evitam crises.</p>
+              </div>
+            </div>
+            <div class="welcome-item">
+              <span class="welcome-icon">⚡</span>
+              <div>
+                <strong>Ação &amp; Consequência</strong>
+                <p>Obras públicas e leis geram impactos imediatos e estruturais ao longo dos fechamentos mensais.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="welcome-action-box">
+            <div class="welcome-step-tip">
+              <strong>Como começar:</strong>
+              <span>Observe os 4 Indicadores Vitais, consulte a recomendação do Assessor e inicie a simulação.</span>
+            </div>
+            <button id="btnStartWelcome" class="btn-primary btn-welcome-cta" type="button">Assumir Governo do Vilarejo →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal de Celebração e Prestação de Contas do Fechamento Mensal -->
+      <div id="monthCloseModal" class="month-close-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="monthCloseTitle">
+        <div class="month-close-card">
+          <div class="month-close-header">
+            <span class="eyebrow">BALANÇO MUNICIPAL</span>
+            <h2 id="monthCloseTitle">Mês Encerrado</h2>
+            <p id="monthCloseSub">Prestação de contas do período e acontecimentos na comunidade.</p>
+          </div>
+          
+          <div class="month-close-balance-grid">
+            <div class="month-balance-item revenue">
+              <small>RECEITAS TRIBUTÁRIAS</small>
+              <strong id="monthCloseRevenue">+ R$ 0</strong>
+              <span id="monthCloseRevDetail">Tributos e circulação</span>
+            </div>
+            <div class="month-balance-item expense">
+              <small>DESPESAS &amp; CUSTEIO</small>
+              <strong id="monthCloseExpense">- R$ 0</strong>
+              <span id="monthCloseExpDetail">Serviços e investimentos</span>
+            </div>
+            <div class="month-balance-item result" id="monthCloseResultBox">
+              <small>RESULTADO LÍQUIDO</small>
+              <strong id="monthCloseResult">R$ 0</strong>
+              <span id="monthCloseResDetail">Superávit operacional</span>
+            </div>
+          </div>
+
+          <div class="month-close-highlights">
+            <div class="eyebrow">PRINCIPAIS TRANSFORMAÇÕES DO MÊS</div>
+            <ul id="monthCloseHighlightsList" class="month-highlights-list">
+              <li>A comunidade manteve estabilidade nas contas e na rotina de trabalho.</li>
+            </ul>
+          </div>
+
+          <div class="month-close-footer">
+            <button id="btnCloseMonthSummary" class="btn-primary" type="button">Prosseguir para o Próximo Mês →</button>
+          </div>
+        </div>
+      </div>
 
       <div class="page-wrap">
         <div class="page-intro">
@@ -92,6 +179,15 @@
         <div id="overviewAlertsContainer" class="overview-alerts-container hidden"></div>
 
         <section class="view-panel active" data-view-panel="overview" aria-label="Visão geral">
+          <!-- Guia dos Primeiros Minutos -->
+          <div id="onboardingGuide" class="onboarding-guide-container"></div>
+
+          <!-- Indicadores Vitais de Primeiro Nível -->
+          <section id="cityVitalHud" class="city-vital-hud" aria-label="Indicadores Vitais do Município"></section>
+
+          <!-- Orientação Dinâmica: O que fazer agora? -->
+          <section id="cityAdvisor" class="city-advisor-card" aria-label="Orientação Estratégica do Gestor"></section>
+
           <section class="ux-overview-pulse" id="overviewPulse" aria-label="Indicadores do último fechamento" aria-live="polite"></section>
           <section class="calendar-board" id="calendarBoard" aria-label="Calendário do Vilarejo">
             <div class="calendar-primary">

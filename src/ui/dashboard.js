@@ -766,8 +766,12 @@
 
   function refreshActiveView() {
     if (activeView === "overview") {
-      renderOverviewPulse(lastSnapshot || snapshot());
-      renderDecisionSummary(lastSnapshot || snapshot());
+      const snap = lastSnapshot || snapshot();
+      renderOnboardingGuide(snap);
+      renderCityVitalHud(snap);
+      renderCityAdvisor(snap);
+      renderOverviewPulse(snap);
+      renderDecisionSummary(snap);
     } else if (activeView === "records") {
       renderDecisionHistory();
     } else if (activeView === "society") {
@@ -1066,6 +1070,608 @@
     if (metric === "population") return `${sign}${number(absolute)} pessoas vs. fechamento anterior`;
     if (metric === "unemployment") return `${sign}${number(absolute, 1)} p.p. vs. fechamento anterior`;
     return `${sign}${compact(absolute)} vs. fechamento anterior`;
+  }
+
+  let onboardingDismissed = false;
+  function renderOnboardingGuide(data) {
+    const host = $("onboardingGuide");
+    if (!host) return;
+    if (onboardingDismissed) {
+      host.innerHTML = "";
+      return;
+    }
+    const historyLen = Array.isArray(data?.history) ? data.history.length : 0;
+    const decisionsLen = decisionObserver ? decisionObserver.getRecords().length : 0;
+    const isRunning = Boolean(data?.running);
+
+    const step1Done = true;
+    const step2Done = isRunning || historyLen > 0 || decisionsLen > 0;
+    const step3Done = decisionsLen > 0;
+    const step4Done = historyLen > 0;
+    const completedCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length;
+
+    host.innerHTML = `
+      <aside class="onboarding-card">
+        <div class="onboarding-top">
+          <div class="onboarding-lead">
+            <span class="eyebrow">GUIA DOS PRIMEIROS MINUTOS</span>
+            <strong>Roteiro do Prefeito · Etapa ${completedCount} de 4</strong>
+          </div>
+          <button type="button" class="btn-quiet-sm" id="btnDismissOnboarding" title="Ocultar roteiro inicial">✕ Ocultar</button>
+        </div>
+        <div class="onboarding-steps-grid">
+          <div class="onboarding-step ${step1Done ? "step-done" : ""}">
+            <span class="step-check">${step1Done ? "✓" : "1"}</span>
+            <div>
+              <strong>1. Observar Indicadores</strong>
+              <p>Verifique o Caixa do Tesouro, Moradias e Safra nos cartões abaixo.</p>
+            </div>
+          </div>
+          <div class="onboarding-step ${step2Done ? "step-done" : ""}">
+            <span class="step-check">${step2Done ? "✓" : "2"}</span>
+            <div>
+              <strong>2. Compreender Prioridade</strong>
+              <p>Consulte a recomendação e a causa apontada pelo Assessor.</p>
+            </div>
+          </div>
+          <div class="onboarding-step ${step3Done ? "step-done" : ""}">
+            <span class="step-check">${step3Done ? "✓" : "3"}</span>
+            <div>
+              <strong>3. Tomar Decisão</strong>
+              <p>Aplique sua diretriz orçamentária no painel de decisões.</p>
+            </div>
+          </div>
+          <div class="onboarding-step ${step4Done ? "step-done" : ""}">
+            <span class="step-check">${step4Done ? "✓" : "4"}</span>
+            <div>
+              <strong>4. Ver Consequência</strong>
+              <p>Avance o mês para acompanhar o impacto no balanço municipal.</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    `;
+
+    const dismissBtn = $("btnDismissOnboarding");
+    if (dismissBtn) {
+      dismissBtn.onclick = () => {
+        onboardingDismissed = true;
+        host.innerHTML = "";
+      };
+    }
+  }
+
+  function renderCityVitalHud(data) {
+    const host = $("cityVitalHud");
+    if (!host) return;
+    if (!data) {
+      host.innerHTML = '<div class="ux-observation-empty">Aguardando dados da cidade...</div>';
+      return;
+    }
+    const raw = data.raw || {};
+    const treasury = finiteValue(raw.treasuryCash ?? raw.accounts?.treasury) ?? 0;
+    const population = finiteValue(data.population) ?? 0;
+    const housing = finiteValue(data.housingCapacity ?? raw.housingCapacity) ?? 0;
+    const employed = finiteValue(data.employed ?? raw.employed) ?? 0;
+    const approval = finiteValue(data.approval ?? raw.approval) ?? 65;
+    const infra = data.urbanInfra || raw.urbanInfra || {};
+    const capacity = finiteValue(infra.capacity ?? raw.infrastructureCapacity) ?? 20;
+
+    let treasuryBadge = { label: "Reserva Confortável", cls: "vital-badge-good" };
+    let treasuryWhy = "Garante a solvência das contas, salários e obras públicas.";
+    if (treasury < 5000) {
+      treasuryBadge = { label: "Alerta de Liquidez", cls: "vital-badge-danger" };
+      treasuryWhy = "Saldo próximo do piso operacional; evite novas despesas fixas.";
+    } else if (treasury < 10000) {
+      treasuryBadge = { label: "Caixa Operacional", cls: "vital-badge-warn" };
+      treasuryWhy = "Cobre os compromissos do mês com margem moderada.";
+    }
+
+    const occupancyRatio = housing > 0 ? (population / housing) : 1;
+    let housingBadge = { label: "Vagas Disponíveis", cls: "vital-badge-good" };
+    let housingWhy = `${Math.max(0, housing - population)} vagas livres para novas famílias e migrantes.`;
+    if (occupancyRatio >= 1.0) {
+      housingBadge = { label: "Déficit Habitacional", cls: "vital-badge-danger" };
+      housingWhy = "Lotação máxima atingida; famílias sem teto reduzem a produtividade.";
+    } else if (occupancyRatio >= 0.85) {
+      housingBadge = { label: "Demanda Alta", cls: "vital-badge-warn" };
+      housingWhy = "Mais de 85% das moradias ocupadas; ampliação recomendada.";
+    }
+
+    const isHarvest = (data.raw?.season === "harvest" || $("topbarSeasonBadge")?.textContent?.includes("Safra"));
+    const econBadge = isHarvest
+      ? { label: "Safra Ativa", cls: "vital-badge-good" }
+      : { label: "Entressafra", cls: "vital-badge-neutral" };
+    const econWhy = isHarvest
+      ? "Colheita cafeeira ativa: arrecadação em alta e comércio movimentado."
+      : "Período de manutenção da lavoura; comércio em ritmo moderado.";
+
+    let stageName = "Povoado Rural";
+    let stageLevel = 1;
+    let stageProgress = 25;
+    let stageNext = "Meta: 20 moradores para se tornar Vilarejo em Expansão";
+    if (population >= 40 && capacity >= 40) {
+      stageName = "Cidade Consolidada";
+      stageLevel = 4;
+      stageProgress = 100;
+      stageNext = "Nível máximo: Polo urbano regional consolidado!";
+    } else if (population >= 28 || (Array.isArray(raw.firms) && raw.firms.length >= 4)) {
+      stageName = "Vila Comercial";
+      stageLevel = 3;
+      stageProgress = 75;
+      stageNext = "Meta: 40 moradores e 40 de infraestrutura para Cidade";
+    } else if (population >= 20 || capacity >= 20) {
+      stageName = "Vilarejo em Expansão";
+      stageLevel = 2;
+      stageProgress = 50;
+      stageNext = "Meta: 28 moradores e diversificação comercial para Vila";
+    }
+
+    host.innerHTML = `
+      <div class="vital-card vital-treasury">
+        <div class="vital-card-top">
+          <span class="vital-icon">💰</span>
+          <span class="vital-badge ${treasuryBadge.cls}">${treasuryBadge.label}</span>
+        </div>
+        <div class="vital-card-body">
+          <small class="vital-label">CAIXA DISPONÍVEL NO TESOURO</small>
+          <strong class="vital-value">${money(treasury)}</strong>
+          <p class="vital-why">${treasuryWhy}</p>
+        </div>
+        <div class="vital-card-footer">
+          <button type="button" class="vital-shortcut-btn" onclick="window.VilarejoDashboard && window.VilarejoDashboard.setView('government', 'fazenda')">Ver Contas Públicas →</button>
+        </div>
+      </div>
+
+      <div class="vital-card vital-population">
+        <div class="vital-card-top">
+          <span class="vital-icon">👥</span>
+          <span class="vital-badge ${housingBadge.cls}">${housingBadge.label}</span>
+        </div>
+        <div class="vital-card-body">
+          <small class="vital-label">POPULAÇÃO &amp; MORADIA</small>
+          <strong class="vital-value">${number(population)} <span class="vital-unit">hab. / ${housing} vagas</span></strong>
+          <p class="vital-why">${housingWhy}</p>
+        </div>
+        <div class="vital-card-footer">
+          <button type="button" class="vital-shortcut-btn" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Moradias')">Ver Bairro Residencial →</button>
+        </div>
+      </div>
+
+      <div class="vital-card vital-economy">
+        <div class="vital-card-top">
+          <span class="vital-icon">🌾</span>
+          <span class="vital-badge ${econBadge.cls}">${econBadge.label}</span>
+        </div>
+        <div class="vital-card-body">
+          <small class="vital-label">TRABALHO &amp; ATIVIDADE RURAL</small>
+          <strong class="vital-value">${employed} <span class="vital-unit">postos ocupados</span></strong>
+          <p class="vital-why">${econWhy}</p>
+        </div>
+        <div class="vital-card-footer">
+          <button type="button" class="vital-shortcut-btn" onclick="window.VilarejoDashboard && window.VilarejoDashboard.selectMapSector('Fazenda e produção')">Ver Lavoura &amp; Fazenda →</button>
+        </div>
+      </div>
+
+      <div class="vital-card vital-progress">
+        <div class="vital-card-top">
+          <span class="vital-icon">🏛️</span>
+          <span class="vital-badge vital-badge-accent">Nível ${stageLevel} · ${stageName}</span>
+        </div>
+        <div class="vital-card-body">
+          <small class="vital-label">DESENVOLVIMENTO &amp; SATISFAÇÃO</small>
+          <strong class="vital-value">${approval}% <span class="vital-unit">aprovação popular</span></strong>
+          <div class="vital-progress-bar" title="Progresso da cidade: ${stageProgress}%">
+            <div class="vital-progress-fill" style="width:${stageProgress}%"></div>
+          </div>
+          <p class="vital-why">${stageNext}</p>
+        </div>
+        <div class="vital-card-footer">
+          <button type="button" class="vital-shortcut-btn" onclick="document.getElementById('actions') ? document.getElementById('actions').scrollIntoView({behavior:'smooth'}) : null">Gabinete de Decisões ↓</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCityAdvisor(data) {
+    const host = $("cityAdvisor");
+    if (!host) return;
+    if (!data) {
+      host.innerHTML = "";
+      return;
+    }
+    const raw = data.raw || {};
+    const treasury = finiteValue(raw.treasuryCash ?? raw.accounts?.treasury) ?? 0;
+    const population = finiteValue(data.population) ?? 0;
+    const housing = finiteValue(data.housingCapacity ?? raw.housingCapacity) ?? 0;
+    const lots = finiteValue(data.lots ?? raw.lots) ?? 0;
+    const infra = data.urbanInfra || raw.urbanInfra || {};
+    const congestion = finiteValue(infra.congestionRatio) ?? 1.0;
+
+    let priority = null;
+
+    if (housing > 0 && population >= housing) {
+      priority = {
+        level: "URGENTE",
+        levelCls: "advisor-level-urgent",
+        title: "Falta de Moradias para a População",
+        why: `O Vilarejo possui ${population} moradores para apenas ${housing} moradias disponíveis. Sem novas casas, o crescimento cessa e a satisfação popular cai.`,
+        action1: {
+          label: "Construir Habitação Social (R$ 6.000)",
+          cost: "R$ 6.000",
+          handler: () => {
+            const btn = $("projSocialHousing") || $("build");
+            if (btn) btn.click();
+            else showDecisionFeedback("Construção de Moradia Social", "R$ 6.000", "+4 moradias públicas em 30 dias", "Alívio habitacional e atração de novos trabalhadores.");
+          }
+        },
+        action2: {
+          label: lots > 0 ? "Incentivar Obra Privada com Crédito" : "Construir Moradia Municipal",
+          cost: lots > 0 ? "R$ 14.000 (Crédito)" : "R$ 6.000",
+          handler: () => {
+            const btn = $("investCredit") || $("build");
+            if (btn) btn.click();
+          }
+        }
+      };
+    } else if (treasury < 6000) {
+      priority = {
+        level: "ATENÇÃO",
+        levelCls: "advisor-level-warn",
+        title: "Caixa do Tesouro sob Pressão",
+        why: `O saldo disponível está em ${money(treasury)}. Sem liquidez mínima, o município não conseguirá honrar obras emergenciais e custeio.`,
+        action1: lots > 0 ? {
+          label: "Vender Lote Público (+R$ 8.000)",
+          cost: "+R$ 8.000 (Receita)",
+          handler: () => {
+            const btn = $("sellLot");
+            if (btn) btn.click();
+          }
+        } : {
+          label: "Alienar Fatias da Fazenda",
+          cost: "Receita de Capital",
+          handler: () => {
+            const btn = $("sell25Stake") || $("privatizeValuation");
+            if (btn) btn.click();
+          }
+        },
+        action2: {
+          label: "Conceder Serviços Urbanos (+R$ 400/mês outorga)",
+          cost: "+R$ 400/mês",
+          handler: () => {
+            const btn = $("toggleConcession");
+            if (btn) btn.click();
+          }
+        }
+      };
+    } else if (congestion > 1.05) {
+      priority = {
+        level: "ATENÇÃO",
+        levelCls: "advisor-level-warn",
+        title: "Gargalo de Infraestrutura Urbana",
+        why: `A demanda das oficinas e moradores está operando a ${(congestion).toFixed(2)}x da capacidade das vias e saneamento.`,
+        action1: {
+          label: "Investir em Infraestrutura Urbana (R$ 6.000)",
+          cost: "R$ 6.000",
+          handler: () => {
+            const btn = $("investInfra");
+            if (btn) btn.click();
+          }
+        },
+        action2: {
+          label: "Saneamento & Saúde Pública (R$ 10.000)",
+          cost: "R$ 10.000",
+          handler: () => {
+            const btn = $("projSanitation");
+            if (btn) btn.click();
+          }
+        }
+      };
+    } else if (treasury >= 12000) {
+      priority = {
+        level: "OPORTUNIDADE",
+        levelCls: "advisor-level-opportunity",
+        title: "Espaço Fiscal para Investimento Estruturante",
+        why: `O caixa do Tesouro possui ${money(treasury)} e as contas estão estáveis. Este é o momento ideal para expandir a capacidade de armazenamento ou escoamento.`,
+        action1: {
+          label: "Construir Silo de Café (R$ 12.000)",
+          cost: "R$ 12.000",
+          handler: () => {
+            const btn = $("projGrainSilo");
+            if (btn) btn.click();
+          }
+        },
+        action2: {
+          label: "Estrada Vicinal & Integração Rural (R$ 8.000)",
+          cost: "R$ 8.000",
+          handler: () => {
+            const btn = $("projRuralRoad");
+            if (btn) btn.click();
+          }
+        }
+      };
+    } else {
+      priority = {
+        level: "INFORMAÇÃO",
+        levelCls: "advisor-level-info",
+        title: "Gestão Equilibrada do Vilarejo",
+        why: "As contas e serviços essenciais operam dentro da normalidade. Acompanhe a passagem dos meses para acumular recursos ou definir novos rumos no gabinete.",
+        action1: {
+          label: "Avançar Tempo da Simulação",
+          cost: "Passagem do Tempo",
+          handler: () => {
+            const btn = $("start") || $("speed");
+            if (btn) btn.click();
+          }
+        },
+        action2: {
+          label: "Avaliar Diretrizes do Gabinete",
+          cost: "Estratégia",
+          handler: () => {
+            document.getElementById("actions")?.scrollIntoView({ behavior: "smooth" });
+          }
+        }
+      };
+    }
+
+    host.innerHTML = `
+      <div class="advisor-card-shell ${priority.levelCls}">
+        <div class="advisor-card-header">
+          <div class="advisor-title-box">
+            <span class="advisor-badge">${priority.level}</span>
+            <span class="advisor-kicker">O QUE O ASSESSOR SUGERE AGORA</span>
+            <h3 class="advisor-headline">${escapeHtml(priority.title)}</h3>
+          </div>
+          <span class="advisor-icon-badge">💡</span>
+        </div>
+        <div class="advisor-card-body">
+          <div class="advisor-why-box">
+            <strong>Por quê?</strong>
+            <p>${escapeHtml(priority.why)}</p>
+          </div>
+          <div class="advisor-actions-box">
+            <span class="advisor-actions-label">Possíveis Ações Recomendadas:</span>
+            <div class="advisor-buttons-row">
+              <button type="button" class="btn-advisor-action btn-advisor-primary" id="btnAdvisorAction1">
+                <span>${escapeHtml(priority.action1.label)}</span>
+                <small>${escapeHtml(priority.action1.cost)}</small>
+              </button>
+              ${priority.action2 ? `
+                <button type="button" class="btn-advisor-action btn-advisor-secondary" id="btnAdvisorAction2">
+                  <span>${escapeHtml(priority.action2.label)}</span>
+                  <small>${escapeHtml(priority.action2.cost)}</small>
+                </button>
+              ` : ""}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const a1 = $("btnAdvisorAction1");
+    if (a1 && priority.action1.handler) a1.onclick = priority.action1.handler;
+    const a2 = $("btnAdvisorAction2");
+    if (a2 && priority.action2?.handler) a2.onclick = priority.action2.handler;
+  }
+
+  let feedbackTimeout = null;
+  function showDecisionFeedback(title, cost, immediateImpact, futureExpectation) {
+    const toast = $("decisionFeedbackToast");
+    if (!toast) return;
+    if (feedbackTimeout) clearTimeout(feedbackTimeout);
+
+    toast.innerHTML = `
+      <div class="feedback-toast-inner">
+        <span class="feedback-toast-badge">✓ DECISÃO REGISTRADA</span>
+        <h4 class="feedback-toast-title">${escapeHtml(title)}</h4>
+        <div class="feedback-toast-body">
+          <div class="feedback-row"><small>INVESTIMENTO / CUSTO:</small> <strong>${escapeHtml(cost)}</strong></div>
+          <div class="feedback-row"><small>IMPACTO IMEDIATO:</small> <span>${escapeHtml(immediateImpact)}</span></div>
+          <div class="feedback-row"><small>DESDOBRAMENTO FUTURO:</small> <span>${escapeHtml(futureExpectation)}</span></div>
+        </div>
+        <button type="button" class="btn-close-toast" onclick="document.getElementById('decisionFeedbackToast').classList.add('hidden')">✕ Fechar</button>
+      </div>
+    `;
+    toast.classList.remove("hidden");
+    feedbackTimeout = setTimeout(() => {
+      toast.classList.add("hidden");
+    }, 7000);
+  }
+
+  function showMonthCloseModal(payload, data) {
+    const modal = $("monthCloseModal");
+    if (!modal) return;
+    const monthNum = payload?.monthNumber ?? data?.monthNumber ?? 1;
+    const titleEl = $("monthCloseTitle");
+    if (titleEl) titleEl.textContent = `Mês ${monthNum} Encerrado`;
+
+    const raw = data?.raw || {};
+    const fiscal = data?.fiscalReport || raw.fiscalReport || raw.lastFiscalReport || {};
+    const revenue = finiteValue(fiscal.taxRevenue ?? fiscal.totalRevenue) ?? 0;
+    const expenditure = finiteValue(fiscal.primaryExpenditure ?? fiscal.totalExpenditure) ?? 0;
+    const result = finiteValue(fiscal.primaryResult ?? fiscal.nominalResult) ?? (revenue - expenditure);
+
+    const revEl = $("monthCloseRevenue");
+    if (revEl) revEl.textContent = `+ ${compact(revenue)}`;
+    const expEl = $("monthCloseExpense");
+    if (expEl) expEl.textContent = `- ${compact(expenditure)}`;
+    const resEl = $("monthCloseResult");
+    if (resEl) {
+      resEl.textContent = (result >= 0 ? "+ " : "- ") + compact(Math.abs(result));
+    }
+    const resBox = $("monthCloseResultBox");
+    if (resBox) {
+      resBox.className = "month-balance-item result " + (result >= 0 ? "is-surplus" : "is-deficit");
+    }
+    const resDet = $("monthCloseResDetail");
+    if (resDet) {
+      resDet.textContent = result >= 0 ? "Superávit operacional no período" : "Déficit - Caixa público cobriu a diferença";
+    }
+
+    const listEl = $("monthCloseHighlightsList");
+    if (listEl) {
+      const items = [];
+      const pop = finiteValue(data?.population) ?? 0;
+      const housing = finiteValue(data?.housingCapacity ?? raw.housingCapacity) ?? 0;
+      const employed = finiteValue(data?.employed ?? raw.employed) ?? 0;
+
+      items.push(`População residente consolidada em <strong>${number(pop)} pessoas</strong> (${employed} trabalhadores empregados).`);
+      if (housing > 0) {
+        if (pop >= housing) items.push(`Déficit habitacional registrado: <strong>capacidade habitacional lotada (${housing} vagas)</strong>.`);
+        else items.push(`Capacidade habitacional com <strong>${housing - pop} vagas disponíveis</strong>.`);
+      }
+      if (payload?.eventEngine?.monthEvents && payload.eventEngine.monthEvents.length > 0) {
+        payload.eventEngine.monthEvents.slice(-2).forEach((evt) => {
+          items.push(escapeHtml(evt));
+        });
+      } else {
+        items.push("Contas públicas do período devidamente apuradas pelo livro-caixa.");
+      }
+      listEl.innerHTML = items.map((it) => `<li>${it}</li>`).join("");
+    }
+
+    modal.classList.remove("hidden");
+  }
+
+  function initWelcomeGuideModal() {
+    const modal = $("welcomeIntroModal");
+    const closeBtn = $("btnCloseWelcome");
+    const startBtn = $("btnStartWelcome");
+    const helpBtn = $("btnHelpGuide");
+
+    const hide = () => {
+      if (modal) modal.classList.add("hidden");
+      try {
+        localStorage.setItem("vilarejo_intro_seen", "1");
+      } catch (e) {}
+    };
+
+    if (closeBtn) closeBtn.onclick = hide;
+    if (startBtn) {
+      startBtn.onclick = () => {
+        hide();
+        const startSim = $("start");
+        if (startSim && !startSim.disabled) startSim.click();
+      };
+    }
+    if (helpBtn) {
+      helpBtn.onclick = () => {
+        if (modal) modal.classList.remove("hidden");
+      };
+    }
+    const closeMonthBtn = $("btnCloseMonthSummary");
+    if (closeMonthBtn) {
+      closeMonthBtn.onclick = () => {
+        const mModal = $("monthCloseModal");
+        if (mModal) mModal.classList.add("hidden");
+      };
+    }
+
+    try {
+      if (!localStorage.getItem("vilarejo_intro_seen")) {
+        if (modal) modal.classList.remove("hidden");
+      }
+    } catch (e) {}
+  }
+
+  const ACTION_DETAILS = {
+    projSanitation: {
+      what: "Custeio de água tratada, saneamento e postos de atendimento.",
+      cost: "R$ 10.000",
+      benefit: "+Saúde pública, -mortalidade infantil, +produtividade.",
+      risks: "Consome liquidez imediata do Tesouro.",
+      who: "Famílias e bairros populares"
+    },
+    toggleConcession: {
+      what: "Transfere a operação de serviços urbanos para empresa privada.",
+      cost: "R$ 0 inicial (+R$ 400/mês outorga)",
+      benefit: "Alivia despesas do município e gera receita recorrente.",
+      risks: "Menor controle sobre tarifas cobradas da população.",
+      who: "Consumidores e Tesouro"
+    },
+    investInfra: {
+      what: "Obras de drenagem, mobilidade urbana e melhorias nas vias.",
+      cost: "R$ 6.000",
+      benefit: "Reduz gargalos de transporte e amplia capacidade produtiva.",
+      risks: "Sem retorno financeiro direto de aluguel.",
+      who: "Oficinas, comércio e transeuntes"
+    },
+    projGrainSilo: {
+      what: "Silo público para armazenar café e grãos colhidos.",
+      cost: "R$ 12.000",
+      benefit: "Protege os preços e evita perda de safra dos agricultores.",
+      risks: "Alto investimento de capital inicial.",
+      who: "Produtores rurais e comerciantes"
+    },
+    projRuralRoad: {
+      what: "Estrada vicinal interligando sítios ao mercado do vilarejo.",
+      cost: "R$ 8.000",
+      benefit: "Eleva o suprimento de comida fresca e barateia o frete.",
+      risks: "Exige manutenção com o tempo.",
+      who: "Pequenos agricultores e famílias"
+    },
+    projSocialHousing: {
+      what: "Construção direta de casas para acolher famílias vulneráveis.",
+      cost: "R$ 6.000",
+      benefit: "+4 moradias disponíveis, atrai novos trabalhadores.",
+      risks: "Conclusão em 30 dias; consome terreno público.",
+      who: "Famílias de baixa renda e migrantes"
+    },
+    investCredit: {
+      what: "Financiamento imobiliário concedido via banco comercial.",
+      cost: "R$ 14.000 (Crédito bancário)",
+      benefit: "Gera +R$ 8.000 ao Tesouro pela venda do lote.",
+      risks: "Aumenta o endividamento do setor imobiliário privado.",
+      who: "Proprietários de terra e banco"
+    },
+    build: {
+      what: "Construção de moradia; metade do valor circula na oficina local.",
+      cost: "R$ 6.000",
+      benefit: "+Moradia concluída em 30 dias, dinheiro gira na cidade.",
+      risks: "Consome 1 lote disponível do município.",
+      who: "Oficina local e futuros moradores"
+    },
+    sellLot: {
+      what: "Alienação de 1 lote de terra de propriedade municipal.",
+      cost: "+R$ 8.000 (Receita imediata)",
+      benefit: "Aporte rápido de liquidez no caixa do Tesouro.",
+      risks: "Reduz o patrimônio público de terrenos.",
+      who: "Tesouro e setor imobiliário"
+    },
+    sell25Stake: {
+      what: "Venda de 25% de participação na Fazenda cafeeira pública.",
+      cost: "Receita imediata no Tesouro",
+      benefit: "Levanta recursos para investimentos públicos.",
+      risks: "Reduz a fatia de dividendos futuros do município.",
+      who: "Tesouro e investidores privados"
+    },
+    privatizeValuation: {
+      what: "Privatização integral do restante da Fazenda pública.",
+      cost: "Receita integral no Tesouro",
+      benefit: "Encerra o envolvimento estatal direto na produção.",
+      risks: "Elimina permanentemente os lucros agrícolas do Estado.",
+      who: "Tesouro e cafeicultores privados"
+    }
+  };
+
+  function enrichActionCards() {
+    const host = $("actions");
+    if (!host) return;
+    Object.entries(ACTION_DETAILS).forEach(([id, meta]) => {
+      const btn = $(id);
+      if (!btn) return;
+      const card = btn.closest(".action-card-item");
+      if (!card || card.querySelector(".action-structured-meta")) return;
+      const metaBox = document.createElement("div");
+      metaBox.className = "action-structured-meta";
+      metaBox.innerHTML = `
+        <div class="meta-row meta-cost"><span class="meta-label">CUSTO:</span> <strong>${escapeHtml(meta.cost)}</strong></div>
+        <div class="meta-row meta-benefit"><span class="meta-label">BENEFÍCIO:</span> <span>${escapeHtml(meta.benefit)}</span></div>
+        <div class="meta-row meta-risks"><span class="meta-label">RISCOS:</span> <span>${escapeHtml(meta.risks)}</span></div>
+        <div class="meta-row meta-who"><span class="meta-label">AFETADOS:</span> <span>${escapeHtml(meta.who)}</span></div>
+      `;
+      btn.parentNode.insertBefore(metaBox, btn);
+    });
   }
 
   function renderOverviewPulse(data) {
@@ -1964,6 +2570,7 @@
     refreshStatus(data);
     refreshAlerts();
     refreshMap(data);
+    enrichActionCards();
 
     if (worldRendererHandle && typeof worldRendererHandle.refresh === "function") {
       worldRendererHandle.refresh();
@@ -1997,6 +2604,27 @@
     const contextParts = [];
     if (eventChoice && $("eventText")?.textContent?.trim()) contextParts.push($("eventText").textContent.trim());
     if (button.title?.trim()) contextParts.push(button.title.trim());
+
+    const ACTION_FEEDBACK_MAP = [
+      { match: /habita[cç][aã]o social/i, title: "Habitação de Interesse Social Iniciada", cost: "R$ 6.000", impact: "+4 novas moradias em construção", future: "Em 30 dias, acolhe famílias sem teto e eleva a atração de novos trabalhadores." },
+      { match: /infraestrutura urbana/i, title: "Obras de Infraestrutura Urbana Iniciadas", cost: "R$ 6.000", impact: "+Capacidade física das vias e saneamento", future: "Reduz o congestionamento nas oficinas e amplia a capacidade de crescimento da cidade." },
+      { match: /saneamento.*sa[uú]de/i, title: "Rede Pública de Saúde e Saneamento", cost: "R$ 10.000", impact: "+Acesso à água e postos de atendimento", future: "Reduz a mortalidade infantil, melhora a expectativa de vida e eleva a produtividade geral." },
+      { match: /silo de caf[eé]/i, title: "Silo Público de Armazenamento de Café", cost: "R$ 12.000", impact: "+Capacidade reguladora de estoques de grãos", future: "Protege cafeicultores e comerciantes contra oscilações bruscas de preço na entressafra." },
+      { match: /estrada vicinal/i, title: "Estrada Vicinal & Integração Rural", cost: "R$ 8.000", impact: "+Conexão direta entre sítios e a vila", future: "Aumenta a autonomia alimentar local e barateia o frete de alimentos para o mercado." },
+      { match: /vender lote/i, title: "Venda de Lote de Solo Público", cost: "+R$ 8.000 (Receita)", impact: "+R$ 8.000 no caixa do Tesouro (-1 lote)", future: "Injeta liquidez imediata para despesas urgentes; terreno passa para a iniciativa privada." },
+      { match: /construir moradia/i, title: "Construção de Moradia Municipal", cost: "R$ 6.000", impact: "Metade do valor circula na oficina local", future: "Conclusão em 30 dias; gera demanda de trabalho e amplia vagas habitacionais." },
+      { match: /investir com cr[eé]dito/i, title: "Empreendimento Imobiliário Financiado", cost: "R$ 14.000 via crédito", impact: "Tesouro recebe +R$ 8.000 pela venda do terreno", future: "Expansão de casas de aluguel financiada sem onerar o orçamento público direto." },
+      { match: /alienar.*fazenda|privatizar/i, title: "Alienação de Participação na Fazenda", cost: "Receita de Capital", impact: "Grande aporte de liquidez no Tesouro", future: "Libera recursos para investimentos municipais prioritários; reduz dividendos públicos futuros." },
+      { match: /concess[aã]o/i, title: "Contrato de Concessão de Serviços", cost: "Sem custo direto", impact: "+R$ 400/mês de outorga ao Tesouro", future: "Alivia a folha de pagamento municipal transferindo o custeio operacional à iniciativa privada." }
+    ];
+
+    const matchedFeedback = ACTION_FEEDBACK_MAP.find((entry) => entry.match.test(labelText));
+    if (matchedFeedback) {
+      showDecisionFeedback(matchedFeedback.title, matchedFeedback.cost, matchedFeedback.impact, matchedFeedback.future);
+    } else {
+      showDecisionFeedback(labelText, "Orçamento Municipal", "Decisão administrativa registrada", "Os efeitos serão observados nos próximos fechamentos mensais.");
+    }
+
     let token;
     try {
       token = decisionObserver.begin({
@@ -2241,7 +2869,7 @@
 
   function initEventSubscriptions() {
     if (typeof window !== "undefined" && window.VilarejoRuntime && window.VilarejoRuntime.events) {
-      const handleMonthClosure = () => {
+      const handleMonthClosure = (event) => {
         const data = snapshot();
         if (decisionObserver && data?.runId) {
           const currentRecord = data.history[data.history.length - 1];
@@ -2255,6 +2883,7 @@
             });
           }
         }
+        showMonthCloseModal(event?.payload, data);
         refreshAlerts();
         refresh();
       };
@@ -2284,6 +2913,7 @@
     initMapDetails();
     initDecisionTracking();
     initEventModal();
+    initWelcomeGuideModal();
     initEventSubscriptions();
     refreshAlerts();
     setView(activeView);
@@ -2315,6 +2945,9 @@
       getDecisionRecords: () => decisionObserver ? decisionObserver.getRecords() : [],
       recordMonthClosure,
       refreshAlerts,
+      showDecisionFeedback,
+      showMonthCloseModal,
+      initWelcomeGuideModal,
       renderIntelligenceDashboard,
       renderNewspaperDashboard,
       initWorldRenderer,
