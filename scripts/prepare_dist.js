@@ -14,6 +14,11 @@ const DIST = path.join(ROOT, "dist");
 
 const ROOT_FILES = ["index.html", "style.css"];
 
+/** Scripts externos (CDN). Não são copiados para dist/; só validados no index. */
+const EXTERNAL_SCRIPTS = [
+  "https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js"
+];
+
 /** Módulos de runtime referenciados por index.html (ordem irrelevante para cópia). */
 const RUNTIME_SCRIPTS = [
   "src/core/vilarejo_core.js",
@@ -77,13 +82,14 @@ function resetDist() {
 
 function verifyIndexScripts(indexHtml) {
   const referenced = [...indexHtml.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].map((m) => m[1]);
-  const missingInBundle = referenced.filter((src) => !RUNTIME_SCRIPTS.includes(src));
+  const allowed = new Set([...EXTERNAL_SCRIPTS, ...RUNTIME_SCRIPTS]);
+  const missingInBundle = referenced.filter((src) => !allowed.has(src));
   if (missingInBundle.length) {
     throw new Error(
       `index.html referencia scripts não listados no bundle de publicação: ${missingInBundle.join(", ")}`
     );
   }
-  const missingOnDisk = RUNTIME_SCRIPTS.filter((src) => !referenced.includes(src));
+  const missingOnDisk = [...EXTERNAL_SCRIPTS, ...RUNTIME_SCRIPTS].filter((src) => !referenced.includes(src));
   if (missingOnDisk.length) {
     throw new Error(
       `Bundle lista scripts ausentes no index.html: ${missingOnDisk.join(", ")}`
@@ -115,7 +121,6 @@ function main() {
 
   manifest.publicAssets = copyDirectoryContents("public");
 
-  // Manifesto leve para auditoria local (não é necessário em runtime).
   const report = {
     generatedAt: new Date().toISOString(),
     rootFiles: manifest.root,
