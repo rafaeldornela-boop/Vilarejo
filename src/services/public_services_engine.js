@@ -332,6 +332,7 @@
     snapshot,
     serialize,
     restore,
-    integrateWithServices
+    integrateWithServices,
+    catalog
   };
 });
