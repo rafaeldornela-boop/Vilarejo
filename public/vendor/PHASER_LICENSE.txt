@@ -1,4 +1,10 @@
-Phaser 3.87.0 (minified)
-Source: https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js
+Phaser 3.87.0
+
+Carregado em index.html via CDN jsDelivr:
+https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js
+
+Disponível em window.Phaser após o carregamento do script.
 License: MIT — https://github.com/phaserjs/phaser
-Vendored for offline/Netlify static deploy. Do not edit.
+
+Cópia local opcional (desenvolvimento offline):
+public/vendor/phaser.min.js
