@@ -35,6 +35,7 @@
 (function (root, factory) {
   "use strict";
   const api = factory(root);
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.VilarejoWorldRenderer = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   "use strict";
