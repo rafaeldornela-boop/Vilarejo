@@ -39,9 +39,9 @@
     }));
     const state = {
       schema: SCHEMA, version: VERSION, currentMonth: month,
-      counters: { department: departments.length + 1, person: 1, goal: 1, request: 1, meeting: 1, project: 1, task: 1, event: 1 },
+      counters: { department: departments.length + 1, person: 1, goal: 1, request: 1, meeting: 1, project: 1, task: 1, event: 1, commitment: 1 },
       executive: { title: text(options.executiveTitle, "Chefe do Executivo"), name: text(options.executiveName, "") },
-      departments, people: [], meetings: [], tasks: [], issues: [], audit: [], outbox: [], monthlyReviews: [],
+      departments, people: [], meetings: [], tasks: [], issues: [], audit: [], outbox: [], monthlyReviews: [], annualBudgets: [],
       metadata: { createdAtMonth: month, lastAdvancedMonth: month, adapterVersion: null }
     };
     validateState(state);
@@ -50,7 +50,7 @@
 
   function validateState(s) {
     assert(s && s.schema === SCHEMA && s.version === VERSION, `Estado incompatível. Esperado ${VERSION}.`, TypeError);
-    for (const key of ["departments", "people", "meetings", "tasks", "issues", "audit", "outbox", "monthlyReviews"]) assert(Array.isArray(s[key]), `Estado inválido: ${key}.`, TypeError);
+    for (const key of ["departments", "people", "meetings", "tasks", "issues", "audit", "outbox", "monthlyReviews", "annualBudgets"]) assert(Array.isArray(s[key]), `Estado inválido: ${key}.`, TypeError);
     assert(Number.isInteger(s.currentMonth) && s.currentMonth >= 0, "Mês atual inválido.", TypeError);
     unique(s.departments, x => x.id); unique(s.people, x => x.id); unique(s.meetings, x => x.id); unique(s.tasks, x => x.id); unique(s.issues, x => x.id);
     for (const d of s.departments) {
@@ -172,6 +172,184 @@
     req.status = result.status; req.externalReference = text(result.externalReference); req.fiscalAmount = isNum(result.amount) ? Number(result.amount) : req.amount;
     emit(d, "budget.fiscal_result_registered", { departmentId: dep.id, requestId, status: req.status, externalReference: req.externalReference, amount: req.fiscalAmount }); return req;
   }); }
+
+  function createAnnualBudget(s, year, allocations = {}) {
+    return transact(s, d => {
+      const y = Math.max(1, integer(year, Math.floor(d.currentMonth / 12) + 1));
+      let loa = d.annualBudgets.find(b => b.year === y);
+      assert(!loa, `Orçamento LOA para o ano ${y} já foi aprovado e está vigente.`);
+      
+      const defaultAllocation = {
+        finance: 18000,
+        health: 30000,
+        education: 24000,
+        infrastructure: 26000,
+        security: 6000,
+        development: 6000,
+        culture: 5000,
+        social: 5000
+      };
+      
+      const allocs = {};
+      let total = 0;
+      for (const dep of d.departments.filter(x => x.status === "active")) {
+        const initVal = isNum(allocations[dep.id]) ? Math.max(0, Number(allocations[dep.id])) : (defaultAllocation[dep.id] || 5000);
+        allocs[dep.id] = {
+          initial: initVal,
+          supplemented: 0,
+          committed: 0,
+          liquidated: 0,
+          paid: 0,
+          available: initVal
+        };
+        total += initVal;
+      }
+      
+      loa = {
+        year: y,
+        totalAllocated: total,
+        enactedMonth: d.currentMonth,
+        allocations: allocs,
+        commitments: []
+      };
+      
+      d.annualBudgets.push(loa);
+      emit(d, "budget.loa_enacted", { year: y, totalAllocated: total, enactedMonth: d.currentMonth });
+      return clone(loa);
+    });
+  }
+
+  function getBudgetSummary(s, year) {
+    validateState(s);
+    const y = Math.max(1, integer(year, Math.floor(s.currentMonth / 12) + 1));
+    const loa = s.annualBudgets.find(b => b.year === y);
+    if (!loa) return null;
+    return clone(loa);
+  }
+
+  function commitBudget(s, departmentId, amount, purpose, options = {}) {
+    return transact(s, d => {
+      const dep = getDepartment(d, departmentId);
+      const val = Number(amount);
+      assert(isNum(val) && val > 0, "Valor do empenho deve ser positivo.", RangeError);
+      const purp = text(purpose);
+      assert(purp, "Finalidade do empenho obrigatória.", TypeError);
+      
+      const y = Math.max(1, integer(options.year, Math.floor(d.currentMonth / 12) + 1));
+      let loa = d.annualBudgets.find(b => b.year === y);
+      if (!loa) {
+        loa = {
+          year: y,
+          totalAllocated: 120000,
+          enactedMonth: d.currentMonth,
+          allocations: {},
+          commitments: []
+        };
+        for (const dp of d.departments.filter(x => x.status === "active")) {
+          const init = dp.id === "health" ? 30000 : dp.id === "infrastructure" ? 26000 : dp.id === "education" ? 24000 : 15000;
+          loa.allocations[dp.id] = { initial: init, supplemented: 0, committed: 0, liquidated: 0, paid: 0, available: init };
+        }
+        d.annualBudgets.push(loa);
+      }
+      
+      const alloc = loa.allocations[dep.id];
+      assert(alloc, `Dotação não encontrada para a secretaria ${dep.id} na LOA do ano ${y}.`);
+      assert(alloc.available >= val, `Saldo orçamentário insuficiente na secretaria ${dep.id}. Disponível: R$ ${alloc.available}, Solicitado: R$ ${val}.`, RangeError);
+      
+      alloc.available = Math.max(0, alloc.available - val);
+      alloc.committed += val;
+      
+      const commit = {
+        id: nextId(d, "commitment", "emp"),
+        year: y,
+        departmentId: dep.id,
+        amount: val,
+        purpose: purp,
+        status: "committed",
+        month: d.currentMonth,
+        externalReference: options.externalReference || null
+      };
+      
+      loa.commitments.push(commit);
+      emit(d, "budget.committed", { commitmentId: commit.id, departmentId: dep.id, amount: val, purpose: purp });
+      return commit;
+    });
+  }
+
+  function liquidateBudget(s, departmentId, commitmentId, options = {}) {
+    return transact(s, d => {
+      const dep = getDepartment(d, departmentId);
+      const y = Math.max(1, integer(options.year, Math.floor(d.currentMonth / 12) + 1));
+      const loa = d.annualBudgets.find(b => b.year === y);
+      assert(loa, `LOA do ano ${y} não encontrada.`);
+      const commit = loa.commitments.find(c => c.id === commitmentId && c.departmentId === dep.id);
+      assert(commit && commit.status === "committed", "Empenho pendente de liquidação não encontrado.");
+      
+      commit.status = "liquidated";
+      commit.liquidatedMonth = d.currentMonth;
+      commit.liquidationNote = text(options.note, "Serviços/bens atestados com sucesso");
+      
+      const alloc = loa.allocations[dep.id];
+      alloc.committed = Math.max(0, alloc.committed - commit.amount);
+      alloc.liquidated += commit.amount;
+      
+      emit(d, "budget.liquidated", { commitmentId, departmentId: dep.id, amount: commit.amount });
+      return commit;
+    });
+  }
+
+  function executeBudgetPayment(s, departmentId, commitmentId, options = {}) {
+    return transact(s, d => {
+      const dep = getDepartment(d, departmentId);
+      const y = Math.max(1, integer(options.year, Math.floor(d.currentMonth / 12) + 1));
+      const loa = d.annualBudgets.find(b => b.year === y);
+      assert(loa, `LOA do ano ${y} não encontrada.`);
+      const commit = loa.commitments.find(c => c.id === commitmentId && c.departmentId === dep.id);
+      assert(commit && (commit.status === "liquidated" || commit.status === "committed"), "Empenho apto para pagamento não encontrado.");
+      
+      const alloc = loa.allocations[dep.id];
+      if (commit.status === "committed") {
+        alloc.committed = Math.max(0, alloc.committed - commit.amount);
+      } else {
+        alloc.liquidated = Math.max(0, alloc.liquidated - commit.amount);
+      }
+      alloc.paid += commit.amount;
+      commit.status = "paid";
+      commit.paidMonth = d.currentMonth;
+      commit.paymentReference = text(options.paymentReference, `ORD-PAG-${commit.id}`);
+      
+      emit(d, "budget.paid", { commitmentId, departmentId: dep.id, amount: commit.amount, reference: commit.paymentReference });
+      return commit;
+    });
+  }
+
+  function supplementBudget(s, toDeptId, amount, fromDeptId = null, reason = "") {
+    return transact(s, d => {
+      const targetDep = getDepartment(d, toDeptId);
+      const val = Number(amount);
+      assert(isNum(val) && val > 0, "Valor da suplementação deve ser positivo.", RangeError);
+      const y = Math.floor(d.currentMonth / 12) + 1;
+      const loa = d.annualBudgets.find(b => b.year === y);
+      assert(loa, `LOA do ano ${y} não encontrada.`);
+      
+      if (fromDeptId) {
+        const srcDep = getDepartment(d, fromDeptId);
+        const srcAlloc = loa.allocations[srcDep.id];
+        assert(srcAlloc && srcAlloc.available >= val, `Saldo insuficiente para remanejamento na pasta ${srcDep.id}.`);
+        srcAlloc.available -= val;
+        srcAlloc.supplemented -= val;
+      } else {
+        loa.totalAllocated += val;
+      }
+      
+      const targetAlloc = loa.allocations[targetDep.id];
+      targetAlloc.available += val;
+      targetAlloc.supplemented += val;
+      
+      emit(d, "budget.supplemented", { toDeptId, fromDeptId, amount: val, reason: text(reason) });
+      return { toDeptId, fromDeptId, amount: val, targetAvailable: targetAlloc.available };
+    });
+  }
   function createProject(s, departmentId, input = {}) { return transact(s, d => {
     const dep = getDepartment(d, departmentId), name = text(input.name); assert(name, "Nome do projeto obrigatório.", TypeError);
     const project = { id: nextId(d, "project", "project"), name, description: text(input.description), status: "proposed", priority: clamp(input.priority ?? 50),
@@ -340,6 +518,7 @@
 
   return Object.freeze({ VERSION, SCHEMA, DEFAULT_DEPARTMENTS: clone(DEPARTMENTS), STATUSES, createState, validateState, getSnapshot, resetState,
     addDepartment, appointSecretary, dismissSecretary, replaceSecretary, addGoal, updateGoal, requestBudget, decideBudget, registerBudgetExecution,
+    createAnnualBudget, getBudgetSummary, commitBudget, liquidateBudget, executeBudgetPayment, supplementBudget,
     createProject, updateProject, createMeeting, addMeetingDecision, createTask, updateTask, registerIssue, updateIssue, reviewSecretary, mergeDepartments, closeDepartment,
     advanceMonth, getPendingEvents, acknowledgeEvents, exportState, importState, migrateV1ToV2 });
 });

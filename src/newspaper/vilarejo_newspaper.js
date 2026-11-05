@@ -255,6 +255,36 @@
       facts.sources.push("payload.cooperativeActive (economy:month-closed)");
     }
 
+    if (payload.millActive) {
+      facts.indicators.millActive = true;
+      facts.observed.push({
+        section: "Desenvolvimento",
+        kind: "fact",
+        text: "Indústria Local: O Moinho Municipal manteve o processamento de grãos e torrefação, abastecendo o comércio com farinhas e café com menor custo."
+      });
+      facts.sources.push("payload.millActive (economy:month-closed)");
+    }
+
+    if (payload.brickyardActive) {
+      facts.indicators.brickyardActive = true;
+      facts.observed.push({
+        section: "Desenvolvimento",
+        kind: "fact",
+        text: "Manufatura de Base: A Olaria e Serraria Comunitária produziu tijolos e madeiras tratadas para obras públicas e reformas residenciais."
+      });
+      facts.sources.push("payload.brickyardActive (economy:month-closed)");
+    }
+
+    const activeConstructions = Array.isArray(payload.activeConstructions) ? payload.activeConstructions : [];
+    for (const c of activeConstructions.filter(w => w.status === "in_progress")) {
+      facts.observed.push({
+        section: "Infraestrutura",
+        kind: "fact",
+        text: `Canteiro de Obras: "${c.name}" atingiu ${c.progressPercent}% de execução físico-financeira com operários locais em atividade.`
+      });
+    }
+    if (activeConstructions.length) facts.sources.push("payload.activeConstructions (economy:month-closed)");
+
     const microCount = finiteOrNull(payload.microcreditCount);
     if (microCount !== null && microCount > 0) {
       facts.indicators.microcreditCount = microCount;

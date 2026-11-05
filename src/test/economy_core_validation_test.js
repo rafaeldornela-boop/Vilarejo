@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const { createSimulationContext } = require("./simulation_context.js");
 
 console.log("\n========================================================");
-console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (EIXOS 1 A 17) ===");
+console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (EIXOS 1 A 20) ===");
 console.log("========================================================\n");
 
 const ctx = createSimulationContext({ includeDomainModules: true });
@@ -668,6 +668,131 @@ test("16.1 Grupos de Interesse: nomeação de lideranças, bônus setoriais, inj
   run("closeMonth()");
   assert(run("auditCashConservation().ok"), "Caixa do Tesouro e balanços preservados após ciclo mensal completo");
   assert(api.generateBalanceSheets().audit.allPass, "SFC íntegra com grupos de interesse ativos");
+});
+
+// ---------------------------------------------------------------------------
+// 18. GESTÃO ORÇAMENTÁRIA POR SECRETARIAS & CICLO ANUAL LOA/LDO
+// ---------------------------------------------------------------------------
+test("17.1 Gestão Orçamentária LOA/LDO: dotações setoriais, empenho prévio, suplementação e liquidação SFC", () => {
+  api.reset();
+  const S = getS();
+  run("log('external', 'treasury', 60000, 'Aporte orçamentário inicial')");
+
+  // 1. Promulgação da LOA anual com dotações proporcionais por secretaria
+  const loa = api.initAnnualBudget(1);
+  assert.ok(loa, "LOA do exercício deve ser gerada");
+  assert.strictEqual(loa.year, 1);
+  assert.ok(loa.allocations.health.initial > 10000, "Saúde recebe dotação proporcional");
+  assert.ok(loa.allocations.infrastructure.initial > 10000, "Infraestrutura recebe dotação proporcional");
+
+  // 2. Empenho prévio de despesa na pasta de Saúde
+  const initialHealthAvail = loa.allocations.health.available;
+  const commitRes = api.commitDepartmentBudget("health", 6000, "Aquisição de insumos médico-hospitalares");
+  assert.strictEqual(commitRes.ok, true, "Empenho deve ser aprovado com dotação suficiente");
+  assert.strictEqual(loa.allocations.health.committed, 6000);
+  assert.strictEqual(loa.allocations.health.available, initialHealthAvail - 6000);
+
+  // 3. Bloqueio estrito de gasto sem dotação orçamentária
+  const rejectRes = api.commitDepartmentBudget("health", 999999, "Gasto não autorizado na LOA");
+  assert.strictEqual(rejectRes.ok, false, "Empenho que excede a dotação deve ser bloqueado");
+
+  // 4. Abertura de crédito suplementar por remanejamento
+  const preInfraAvail = loa.allocations.infrastructure.available;
+  const supRes = api.supplementDepartmentBudget("health", 5000, "infrastructure", "Remanejamento para emergência sanitária");
+  assert.strictEqual(supRes.ok, true, "Suplementação orçamentária deve ser aprovada");
+  assert.strictEqual(loa.allocations.infrastructure.available, preInfraAvail - 5000);
+
+  // 5. Liquidação e pagamento financeiro com conservação SFC
+  const preTreasury = run("balance('treasury')");
+  const payRes = api.liquidateAndPayDepartmentBudget(commitRes.commitment.id, "workshop");
+  assert.strictEqual(payRes.ok, true, "Liquidação e pagamento financeiro devem ter sucesso");
+  assert.strictEqual(payRes.paid, 6000);
+  assert.strictEqual(run("balance('treasury')"), preTreasury - 6000, "Débito financeiro exato no Tesouro");
+  assert.strictEqual(loa.allocations.health.paid, 6000);
+  assert.strictEqual(loa.allocations.health.committed, 0);
+
+  // 6. Auditoria de conservação contábil
+  assert(run("auditCashConservation().ok"), "Conservação monetária estrita mantida no ciclo LOA");
+});
+
+// ---------------------------------------------------------------------------
+// 19. CADEIAS PRODUTIVAS EXPANDIDAS (INDÚSTRIA, TRANSFORMAÇÃO & INSUMO-PRODUTO)
+// ---------------------------------------------------------------------------
+test("18.1 Cadeias Produtivas Expandidas: moinho, olaria, insumo-produto intersetorial e agregação de valor", () => {
+  api.reset();
+  const S = getS();
+  run("log('external', 'treasury', 50000, 'Capitalização para expansão fabril')");
+
+  // 1. Fundação e capitalização inicial do Moinho e da Olaria
+  const mill = api.foundMill(5000, "treasury");
+  assert.ok(mill, "Moinho deve ser fundado com sucesso");
+  assert.strictEqual(mill.id, "mill");
+  assert.strictEqual(run("balance('mill')"), 5000);
+
+  const brick = api.foundBrickyard(6000, "treasury");
+  assert.ok(brick, "Olaria comunitária deve ser fundada com sucesso");
+  assert.strictEqual(brick.id, "brickyard");
+  assert.strictEqual(run("balance('brickyard')"), 6000);
+
+  // 2. Matriz Insumo-Produto: Moinho adquire grãos da lavoura e Olaria produz materiais
+  S.farmLocalFoodStock = 20;
+  run("runFirmProductionPhase({ day: 160 })");
+  assert.ok(mill.inventory.quantity > 0, "Moinho deve processar grãos em fardos de farinha e café torrado");
+  assert.ok(brick.inventory.quantity > 0, "Olaria deve fabricar tijolos e madeiras estruturais");
+
+  // 3. Comercialização intersetorial e abastecimento do Comércio
+  run("log('external', 'commerce', 2000, 'Giro comercial')");
+  run("runFirmCommercializationPhase({ day: 160 })");
+
+  // 4. Fechamento mensal e apuração de resultados com as novas indústrias
+  run("closeMonth()");
+  assert(run("auditCashConservation().ok"), "Conservação monetária mantida com as indústrias ativas");
+  const bs = api.generateBalanceSheets();
+  assert(bs.audit.allPass, "Reconciliação dos balanços setoriais SFC íntegra com novas manufaturas");
+});
+
+// ---------------------------------------------------------------------------
+// 20. PLANO DE OBRAS COM LICITAÇÃO E CRONOGRAMA FÍSICO-FINANCEIRO MULTITEMPORAL
+// ---------------------------------------------------------------------------
+test("19.1 Plano de Obras com Licitação: canteiro multitemporal, medições mensais e entrega de infraestrutura", () => {
+  api.reset();
+  const S = getS();
+  run("log('external', 'treasury', 40000, 'Dotação para obras públicas estruturantes')");
+
+  // 1. Licitação e abertura de canteiro ativo para a Ponte e Anel Viário (3 meses)
+  const work = api.startStructuredPublicWork("bridge");
+  assert.ok(work, "Licitação da ponte deve ser homologada");
+  assert.strictEqual(work.type, "bridge");
+  assert.strictEqual(work.durationMonths, 3);
+  assert.strictEqual(work.status, "in_progress");
+  assert.strictEqual(work.progressPercent, 0);
+
+  const initialUrbanCap = S.infrastructureCapacity || 20;
+
+  // 2. 1º Mês de Obra: 1ª medição física e financeira
+  run("closeMonth()");
+  assert.strictEqual(work.elapsedMonths, 1);
+  assert.strictEqual(work.progressPercent, 33);
+  assert.strictEqual(work.status, "in_progress");
+  assert(run("auditCashConservation().ok"), "SFC preservada após 1ª medição");
+
+  // 3. 2º Mês de Obra: 2ª medição física e avanço dos operários
+  run("closeMonth()");
+  assert.strictEqual(work.elapsedMonths, 2);
+  assert.strictEqual(work.progressPercent, 67);
+  assert.strictEqual(work.status, "in_progress");
+
+  // 4. 3º Mês de Obra: Conclusão, comissionamento e inauguração oficial
+  run("closeMonth()");
+  assert.strictEqual(work.status, "completed");
+  assert.strictEqual(work.progressPercent, 100);
+  assert.ok(S.infrastructureCapacity > initialUrbanCap, "Capacidade urbana expandida após entrega da obra");
+  assert.ok((S.completedProjects || []).some(p => p.type === "bridge"), "Obra registrada no rol de projetos concluídos");
+
+  // 5. Auditoria patrimonial SFC e Teorema da Riqueza Real
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa preservada durante e após a obra");
+  const finalBS = api.generateBalanceSheets();
+  assert(finalBS.audit.allPass, "Balanços setoriais reconciliados com capital público agregado");
 });
 
 console.log(`\n========================================================`);

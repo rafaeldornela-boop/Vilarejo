@@ -31,8 +31,7 @@ const MIME_TYPES = {
   ".woff": "font/woff",
   ".woff2": "font/woff2",
   ".ttf": "font/ttf",
-  ".otf": "font/otf",
-  ".txt": "text/plain; charset=utf-8"
+  ".otf": "font/otf"
 };
 
 // index.html e style.css são os únicos arquivos permitidos na raiz.
@@ -41,8 +40,8 @@ const RUNTIME_SRC_DIRS = new Set([
   "core", "economy", "events", "executive", "institutions", "intelligence", "newspaper", "politics", "services", "shared", "society", "ui", "world"
 ]);
 const PUBLIC_ASSET_EXTENSIONS = new Set([
-  ".avif", ".bmp", ".css", ".gif", ".ico", ".jpeg", ".jpg", ".js", ".mp3", ".m4a", ".ogg", ".png",
-  ".svg", ".txt", ".wav", ".webm", ".webp", ".mp4", ".aac", ".otf", ".ttf", ".woff", ".woff2"
+  ".avif", ".bmp", ".css", ".gif", ".ico", ".jpeg", ".jpg", ".mp3", ".m4a", ".ogg", ".png",
+  ".svg", ".wav", ".webm", ".webp", ".mp4", ".aac", ".otf", ".ttf", ".woff", ".woff2"
 ]);
 const BLOCKED_FILE_PATTERNS = [
   /^\.env(?:\..*)?$/i,

@@ -35,5 +35,41 @@ test("outbox permite integração idempotente por IDs e confirmação", () => { 
 test("exporta e importa estado validado", () => { const restored = E.importState(E.exportState(s)); assert.equal(E.getSnapshot(restored).currentMonth, s.currentMonth); });
 test("rejeita arquivo de estado incompatível", () => { assert.throws(() => E.importState({ format: "vilarejo-executive", version: "9.0.0", state: {} }), /incompatível/); });
 test("migra estado legado v1 preservando secretários e metas", () => { const legacy = { version: "1.0.0", currentMonth: 4, executive: { headOfGovernment: "Prefeito" }, departments: [{ id: "health", name: "Saúde", purpose: "x", status: "active", secretaryId: "sec-1", goals: [{ id: "goal-1", title: "Fila", status: "in_progress" }], budgetRequests: [], createdMonth: 0 }], secretaries: [{ id: "sec-1", name: "Ana", departmentId: "health", status: "active", skills: {} }], history: [] }; const migrated = E.migrateV1ToV2(legacy); assert.equal(migrated.currentMonth, 4); assert.equal(migrated.departments[0].secretaryId, "sec-1"); assert.equal(E.getSnapshot(migrated).summary.activeSecretaries, 1); const nextGoal = E.addGoal(migrated, "health", { title: "Nova meta" }); assert.notEqual(nextGoal.id, "goal-1"); });
+test("cria LOA anual e distribui dotacoes por secretaria", () => {
+  const loa = E.createAnnualBudget(s, 1, { health: 35000, infrastructure: 25000 });
+  assert.equal(loa.year, 1);
+  assert.equal(loa.allocations.health.initial, 35000);
+  assert.equal(loa.allocations.health.available, 35000);
+  assert.equal(loa.allocations.infrastructure.initial, 25000);
+  assert.throws(() => E.createAnnualBudget(s, 1), /já foi aprovado/);
+});
+test("empenha despesa dentro da dotacao e rejeita gasto sem saldo", () => {
+  const emp = E.commitBudget(s, "health", 15000, "Insumos hospitalares", { year: 1 });
+  assert.equal(emp.status, "committed");
+  assert.equal(emp.amount, 15000);
+  const summary = E.getBudgetSummary(s, 1);
+  assert.equal(summary.allocations.health.available, 20000);
+  assert.equal(summary.allocations.health.committed, 15000);
+  assert.throws(() => E.commitBudget(s, "health", 25000, "Gasto excessivo", { year: 1 }), /insuficiente/);
+});
+test("liquida e conclui pagamento de empenho na LOA", () => {
+  const loa = E.getBudgetSummary(s, 1);
+  const empId = loa.commitments[0].id;
+  const liq = E.liquidateBudget(s, "health", empId, { year: 1 });
+  assert.equal(liq.status, "liquidated");
+  const pago = E.executeBudgetPayment(s, "health", empId, { year: 1 });
+  assert.equal(pago.status, "paid");
+  const finalSummary = E.getBudgetSummary(s, 1);
+  assert.equal(finalSummary.allocations.health.paid, 15000);
+  assert.equal(finalSummary.allocations.health.committed, 0);
+  assert.equal(finalSummary.allocations.health.liquidated, 0);
+});
+test("suplementacao remaneja dotacao entre pastas", () => {
+  const res = E.supplementBudget(s, "infrastructure", 5000, "health");
+  assert.equal(res.toDeptId, "infrastructure");
+  const summary = E.getBudgetSummary(s, 1);
+  assert.equal(summary.allocations.infrastructure.available, 30000);
+  assert.equal(summary.allocations.health.available, 15000);
+});
 test("reset restaura estado limpo", () => { E.resetState(s, { executiveTitle: "Prefeito" }); assert.equal(E.getSnapshot(s).summary.activeSecretaries, 0); assert.equal(E.getSnapshot(s).summary.departments, 9); });
 console.log(`\n${passed} testes aprovados.`);
