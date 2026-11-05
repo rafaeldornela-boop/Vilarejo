@@ -44,6 +44,7 @@
   let activeMapSector = "Visão do território";
   let decisionObserver = null;
   let lastDecisionRunId = null;
+  let worldRendererHandle = null;
 
   const UNAVAILABLE = "Indisponível";
 
@@ -280,6 +281,13 @@
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
     if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "Panorama do município" : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
+
+    if (name === "overview") {
+      initWorldRenderer();
+      if (worldRendererHandle && typeof worldRendererHandle.refresh === "function") {
+        worldRendererHandle.refresh();
+      }
+    }
 
     if (subTab && name === "government") {
       setGovTab(subTab);
@@ -1957,6 +1965,10 @@
     refreshAlerts();
     refreshMap(data);
 
+    if (worldRendererHandle && typeof worldRendererHandle.refresh === "function") {
+      worldRendererHandle.refresh();
+    }
+
     const history = data.history || [];
     const signature = (data.sessionId || "session-local") + ":" + history.length + ":" +
       (history.length ? JSON.stringify(history[history.length - 1]) : "inicio");
@@ -2156,6 +2168,7 @@
   }
 
   function initMapDetails() {
+    initWorldRenderer();
     const map = $("villageMap");
     if (!map) return;
     map.querySelectorAll("[data-district]").forEach((district) => {
@@ -2167,6 +2180,63 @@
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectDistrict(); }
       });
     });
+  }
+
+  function initWorldRenderer() {
+    if (typeof document === "undefined") return;
+    const container = $("worldCanvas");
+    if (!container) return;
+
+    const renderer = (typeof window !== "undefined" && window.VilarejoWorldRenderer) ||
+                     (typeof globalThis !== "undefined" && globalThis.VilarejoWorldRenderer);
+    const phaser = (typeof window !== "undefined" && window.Phaser) ||
+                   (typeof globalThis !== "undefined" && globalThis.Phaser);
+
+    if (!renderer || typeof renderer.mount !== "function" || !phaser) {
+      return;
+    }
+
+    if (worldRendererHandle || container.__vilarejoWorld) {
+      return;
+    }
+
+    try {
+      worldRendererHandle = renderer.mount({
+        container,
+        Phaser: phaser,
+        getSnapshot: () => snapshot() || {}
+      });
+      container.setAttribute("data-world-status", "mounted");
+    } catch (err) {
+      console.warn("Falha ao inicializar VilarejoWorldRenderer:", err);
+    }
+  }
+
+  function destroyWorldRenderer() {
+    if (worldRendererHandle) {
+      try {
+        if (typeof worldRendererHandle.destroy === "function") {
+          worldRendererHandle.destroy();
+        }
+      } catch (e) {
+        console.warn("Erro ao destruir VilarejoWorldRenderer:", e);
+      }
+      worldRendererHandle = null;
+    }
+    if (typeof document !== "undefined") {
+      const container = $("worldCanvas");
+      if (container) {
+        if (container.__vilarejoWorld) {
+          try {
+            if (typeof container.__vilarejoWorld.destroy === "function") {
+              container.__vilarejoWorld.destroy();
+            }
+          } catch (e) {}
+          delete container.__vilarejoWorld;
+        }
+        container.setAttribute("data-world-status", "awaiting-engine");
+      }
+    }
   }
 
   function initEventSubscriptions() {
@@ -2247,6 +2317,9 @@
       refreshAlerts,
       renderIntelligenceDashboard,
       renderNewspaperDashboard,
+      initWorldRenderer,
+      destroyWorldRenderer,
+      getWorldRenderer: () => worldRendererHandle,
       resolveCabinetDilemma: (choiceId) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
           const snap = window.VilarejoTest.stateSnapshot();
@@ -2389,6 +2462,9 @@
       refreshAlerts,
       renderIntelligenceDashboard,
       renderNewspaperDashboard,
+      initWorldRenderer,
+      destroyWorldRenderer,
+      getWorldRenderer: () => worldRendererHandle,
       resolveCabinetDilemma: (choiceId) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
           const snap = window.VilarejoTest.stateSnapshot();
