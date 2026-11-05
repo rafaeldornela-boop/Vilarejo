@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-11-04T23:56:46.711Z",
+  "rootFiles": [
+    "index.html",
+    "style.css"
+  ],
+  "scripts": [
+    "src/core/vilarejo_core.js",
+    "src/shared/vilarejo_history_store.js",
+    "src/events/eventos_v3.js",
+    "src/economy/vilarejo_economy.js",
+    "src/society/vilarejo_society.js",
+    "src/politics/vilarejo_politics.js",
+    "src/institutions/vilarejo_institutions.js",
+    "src/services/vilarejo_services.js",
+    "src/world/vilarejo_world_engine.js",
+    "src/newspaper/vilarejo_newspaper.js",
+    "src/intelligence/vilarejo_intelligence.js",
+    "src/intelligence/intelligence_view.js",
+    "src/ui/decision_observer.js",
+    "src/ui/dashboard.js"
+  ],
+  "publicAssets": [
+    "public/assets/audio/morning_light_on_cobblestone.mp3",
+    "public/assets/interface/community-decision-illustration.jpg",
+    "public/assets/interface/favicon.svg"
+  ],
+  "scriptCount": 14,
+  "referencedByIndex": [
+    "src/core/vilarejo_core.js",
+    "src/shared/vilarejo_history_store.js",
+    "src/events/eventos_v3.js",
+    "src/economy/vilarejo_economy.js",
+    "src/society/vilarejo_society.js",
+    "src/politics/vilarejo_politics.js",
+    "src/institutions/vilarejo_institutions.js",
+    "src/services/vilarejo_services.js",
+    "src/world/vilarejo_world_engine.js",
+    "src/newspaper/vilarejo_newspaper.js",
+    "src/intelligence/vilarejo_intelligence.js",
+    "src/intelligence/intelligence_view.js",
+    "src/ui/decision_observer.js",
+    "src/ui/dashboard.js"
+  ]
+}
