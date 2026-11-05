@@ -44,6 +44,7 @@
   let activeMapSector = "Visão do território";
   let decisionObserver = null;
   let lastDecisionRunId = null;
+  let worldRendererHandle = null;
 
   const UNAVAILABLE = "Indisponível";
 
@@ -280,6 +281,13 @@
     if ($("pageTitle")) $("pageTitle").textContent = item[0];
     if ($("pageHeading")) $("pageHeading").textContent = item[0] === "Visão geral" ? "Panorama do município" : item[0] + ".";
     if ($("pageDescription")) $("pageDescription").textContent = item[1];
+
+    if (name === "overview") {
+      initWorldRenderer();
+      if (worldRendererHandle && typeof worldRendererHandle.refresh === "function") {
+        worldRendererHandle.refresh();
+      }
+    }
 
     if (subTab && name === "government") {
       setGovTab(subTab);
@@ -617,10 +625,83 @@
             ${coopCard}
             ${microCard}
           </div>
+          ${renderPrivateEconomyHtml()}
         </div>
       `;
     } catch (e) {
       return '';
+    }
+  }
+
+  function renderPrivateEconomyHtml() {
+    try {
+      const testApi = window.VilarejoTest;
+      const stats = testApi?.getPrivateEconomyStats ? testApi.getPrivateEconomyStats() : null;
+      if (!stats || !stats.firms || !stats.firms.length) return "";
+      const ind = stats.indicators || {};
+
+      const statusLabels = {
+        expansao: { text: "Em Expansão", color: "#15803d", bg: "#dcfce7" },
+        saudavel: { text: "Saudável", color: "#0369a1", bg: "#e0f2fe" },
+        deficitaria: { text: "Deficitária", color: "#b45309", bg: "#fef3c7" },
+        critica: { text: "Crise / Risco", color: "#b91c1c", bg: "#fee2e2" },
+        fechada: { text: "Inativa", color: "#64748b", bg: "#f1f5f9" }
+      };
+
+      const actionBadges = {
+        contratacao: '<span style="color:#15803d;font-weight:700;font-size:0.7rem;">▲ Contratando</span>',
+        abertura: '<span style="color:#15803d;font-weight:700;font-size:0.7rem;">★ Nova empresa</span>',
+        demissao: '<span style="color:#b91c1c;font-weight:700;font-size:0.7rem;">▼ Demitindo</span>',
+        fechamento: '<span style="color:#b91c1c;font-weight:700;font-size:0.7rem;">✖ Fechamento</span>',
+        estavel: '<span style="color:#64748b;font-size:0.7rem;">● Estável</span>'
+      };
+
+      const sectorCards = stats.firms.map((f) => {
+        const st = statusLabels[f.financialStatus] || statusLabels.saudavel;
+        const act = actionBadges[f.lastAction] || actionBadges.estavel;
+        return `
+          <div style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:0.75rem;display:flex;flex-direction:column;gap:0.4rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <strong style="color:var(--forest,#14342b);font-size:0.84rem;">${escapeHtml(f.name)}</strong>
+              <span style="color:${st.color};background:${st.bg};padding:2px 6px;border-radius:4px;font-weight:700;font-size:0.68rem;">${st.text}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.74rem;color:#475569;">
+              <span>Empresas: <b>${f.firmCount}</b> (${escapeHtml(f.size)})</span>
+              <span>Empregados: <b>${f.employees}</b></span>
+              ${act}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.35rem;font-size:0.7rem;background:#f8fafc;padding:0.35rem;border-radius:4px;">
+              <div><span style="color:#64748b;display:block;">Receita</span><b>${money(f.revenue)}</b></div>
+              <div><span style="color:#64748b;display:block;">Salários</span><b>${money(f.wages)}</b></div>
+              <div><span style="color:#64748b;display:block;">Lucro Líq.</span><b style="color:${f.profit >= 0 ? '#15803d' : '#b91c1c'};">${money(f.profit)}</b></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      const diagList = (ind.diagnostics || []).map((d) => `<li style="margin-bottom:0.2rem;">${escapeHtml(d)}</li>`).join("");
+
+      return `
+        <div class="private-economy-panel" style="margin-top:1rem;padding-top:0.9rem;border-top:1px dashed #cbd5e1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.65rem;">
+            <div>
+              <span class="eyebrow" style="font-weight:700;color:var(--forest,#14342b);">ATIVIDADE EMPRESARIAL E MERCADO PRIVADO</span>
+              <h4 style="margin:0.15rem 0 0;font-size:0.95rem;color:#0f172a;">Termômetro da Economia Privada (${ind.totalFirms || 0} empresas · ${ind.privateJobs || 0} empregos privados)</h4>
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;font-size:0.75rem;">
+              <span style="background:#f1f5f9;padding:3px 8px;border-radius:4px;">Massa Salarial: <b>${money(ind.totalWageBill || 0)}</b></span>
+              <span style="background:#f1f5f9;padding:3px 8px;border-radius:4px;">Investimento: <b>${money(ind.privateInvestment || 0)}</b></span>
+              <span style="background:#f1f5f9;padding:3px 8px;border-radius:4px;">Produtividade: <b>${((ind.averageProductivity || 1) * 100).toFixed(0)}%</b></span>
+            </div>
+          </div>
+          ${diagList ? `<ul style="margin:0 0 0.75rem;padding-left:1.1rem;font-size:0.78rem;color:#334155;background:#f8fafc;padding:0.5rem 0.75rem 0.5rem 1.6rem;border-radius:6px;border-left:3px solid #0284c7;">${diagList}</ul>` : ""}
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.6rem;">
+            ${sectorCards}
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      return "";
     }
   }
 
@@ -1957,6 +2038,10 @@
     refreshAlerts();
     refreshMap(data);
 
+    if (worldRendererHandle && typeof worldRendererHandle.refresh === "function") {
+      worldRendererHandle.refresh();
+    }
+
     const history = data.history || [];
     const signature = (data.sessionId || "session-local") + ":" + history.length + ":" +
       (history.length ? JSON.stringify(history[history.length - 1]) : "inicio");
@@ -2156,6 +2241,7 @@
   }
 
   function initMapDetails() {
+    initWorldRenderer();
     const map = $("villageMap");
     if (!map) return;
     map.querySelectorAll("[data-district]").forEach((district) => {
@@ -2167,6 +2253,63 @@
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectDistrict(); }
       });
     });
+  }
+
+  function initWorldRenderer() {
+    if (typeof document === "undefined") return;
+    const container = $("worldCanvas");
+    if (!container) return;
+
+    const renderer = (typeof window !== "undefined" && window.VilarejoWorldRenderer) ||
+                     (typeof globalThis !== "undefined" && globalThis.VilarejoWorldRenderer);
+    const phaser = (typeof window !== "undefined" && window.Phaser) ||
+                   (typeof globalThis !== "undefined" && globalThis.Phaser);
+
+    if (!renderer || typeof renderer.mount !== "function" || !phaser) {
+      return;
+    }
+
+    if (worldRendererHandle || container.__vilarejoWorld) {
+      return;
+    }
+
+    try {
+      worldRendererHandle = renderer.mount({
+        container,
+        Phaser: phaser,
+        getSnapshot: () => snapshot() || {}
+      });
+      container.setAttribute("data-world-status", "mounted");
+    } catch (err) {
+      console.warn("Falha ao inicializar VilarejoWorldRenderer:", err);
+    }
+  }
+
+  function destroyWorldRenderer() {
+    if (worldRendererHandle) {
+      try {
+        if (typeof worldRendererHandle.destroy === "function") {
+          worldRendererHandle.destroy();
+        }
+      } catch (e) {
+        console.warn("Erro ao destruir VilarejoWorldRenderer:", e);
+      }
+      worldRendererHandle = null;
+    }
+    if (typeof document !== "undefined") {
+      const container = $("worldCanvas");
+      if (container) {
+        if (container.__vilarejoWorld) {
+          try {
+            if (typeof container.__vilarejoWorld.destroy === "function") {
+              container.__vilarejoWorld.destroy();
+            }
+          } catch (e) {}
+          delete container.__vilarejoWorld;
+        }
+        container.setAttribute("data-world-status", "awaiting-engine");
+      }
+    }
   }
 
   function initEventSubscriptions() {
@@ -2247,6 +2390,9 @@
       refreshAlerts,
       renderIntelligenceDashboard,
       renderNewspaperDashboard,
+      initWorldRenderer,
+      destroyWorldRenderer,
+      getWorldRenderer: () => worldRendererHandle,
       resolveCabinetDilemma: (choiceId) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
           const snap = window.VilarejoTest.stateSnapshot();
@@ -2389,6 +2535,9 @@
       refreshAlerts,
       renderIntelligenceDashboard,
       renderNewspaperDashboard,
+      initWorldRenderer,
+      destroyWorldRenderer,
+      getWorldRenderer: () => worldRendererHandle,
       resolveCabinetDilemma: (choiceId) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
           const snap = window.VilarejoTest.stateSnapshot();

@@ -828,6 +828,135 @@ test("20.1 Rede Operacional de Serviços Públicos: construção, lotação, cus
   assert(bs.audit.allPass, "Balanço setorial SFC aprovado com rede pública física");
 });
 
+// ---------------------------------------------------------------------------
+// 22. SISTEMA DE EMPRESAS, MERCADO E ATIVIDADE ECONÔMICA PRIVADA (CAUSALIDADE)
+// ---------------------------------------------------------------------------
+test("21.1 Economia Privada Setorial: 6 setores, ciclo mensal e 8 relações causais determinísticas", () => {
+  api.reset();
+  let S = getS();
+
+  // 1. Verificar inicialização dos 6 setores: agricultura, indústria, comércio, serviços, construção e tecnologia
+  const privInit = api.initPrivateSector({ reset: true });
+  assert.ok(privInit && privInit.firms, "Estrutura S.privateSector deve ser inicializada");
+  const expectedSectors = ["agriculture", "industry", "commerce", "services", "construction", "technology"];
+  for (const sec of expectedSectors) {
+    const f = privInit.firms[sec];
+    assert.ok(f, `Setor privado '${sec}' deve existir`);
+    assert.ok(f.id && f.name && f.sector === sec && f.size, `Atributos estruturais de '${sec}' devem estar presentes`);
+  }
+
+  // Causalidade 1: Aumento da demanda aumenta produção
+  api.initPrivateSector({ reset: true });
+  api.runPrivateSectorCycle({ demandMultiplier: 0.80 });
+  const prodLowDemand = api.getPrivateEconomyStats().totalProduction;
+
+  api.initPrivateSector({ reset: true });
+  api.runPrivateSectorCycle({ demandMultiplier: 1.50 });
+  const prodHighDemand = api.getPrivateEconomyStats().totalProduction;
+  assert.ok(prodHighDemand > prodLowDemand, `Aumento da demanda deve aumentar a produção (${prodHighDemand} > ${prodLowDemand})`);
+
+  // Causalidade 2: Aumento da produção e demanda favorável aumenta emprego privado
+  api.initPrivateSector({ reset: true });
+  const jobsBeforeExpansion = api.getPrivateEconomyStats().privateJobs;
+  api.runPrivateSectorCycle({ demandMultiplier: 1.45, profitTax: 12, employerTax: 10 });
+  const jobsAfterExpansion = api.getPrivateEconomyStats().privateJobs;
+  assert.ok(jobsAfterExpansion > jobsBeforeExpansion, `Expansão produtiva deve aumentar empregos privados (${jobsAfterExpansion} > ${jobsBeforeExpansion})`);
+
+  // Causalidade 3: Aumento dos salários pagos pelas empresas aumenta a renda das famílias
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  S.households.forEach(h => { h.cashIncome = 0; });
+  api.runPrivateSectorCycle({ demandMultiplier: 1.10, minimumWage: 1400 });
+  const incomeLowWage = S.households.reduce((acc, h) => acc + (h.cashIncome || 0), 0);
+
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  S.households.forEach(h => { h.cashIncome = 0; });
+  api.runPrivateSectorCycle({ demandMultiplier: 1.10, minimumWage: 2200 });
+  const incomeHighWage = S.households.reduce((acc, h) => acc + (h.cashIncome || 0), 0);
+  assert.ok(incomeHighWage > incomeLowWage, `Salários maiores nas empresas devem aumentar a renda familiar (${incomeHighWage} > ${incomeLowWage})`);
+
+  // Causalidade 4: Aumento da renda aumenta o consumo das famílias
+  api.reset();
+  S = getS();
+  S.households.forEach(h => { h.cash = 400; h.deposit = 0; });
+  api.marketConsumption();
+  const consLowIncome = S.lastConsumption;
+
+  api.reset();
+  S = getS();
+  S.households.forEach(h => { run(`log('external', 'house:${h.id}', 4000, 'Renda salarial privada')`); });
+  api.marketConsumption();
+  const consHighIncome = S.lastConsumption;
+  assert.ok(consHighIncome > consLowIncome, `Maior renda disponível deve elevar o consumo no mercado (${consHighIncome} > ${consLowIncome})`);
+
+  // Causalidade 5: Aumento do imposto reduz margem líquida (lucro líquido agregado)
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  api.runPrivateSectorCycle({ demandMultiplier: 1.20, profitTax: 10, employerTax: 10 });
+  const profitLowTax = api.getPrivateEconomyStats().aggregateProfit;
+
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  api.runPrivateSectorCycle({ demandMultiplier: 1.20, profitTax: 45, employerTax: 35 });
+  const profitHighTax = api.getPrivateEconomyStats().aggregateProfit;
+  assert.ok(profitHighTax < profitLowTax, `Aumento de impostos deve reduzir a margem líquida empresarial (${profitHighTax} < ${profitLowTax})`);
+
+  // Causalidade 6: Queda da demanda reduz faturamento das empresas
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  api.runPrivateSectorCycle({ demandMultiplier: 1.30 });
+  const revNormal = api.getPrivateEconomyStats().totalRevenue;
+
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  api.runPrivateSectorCycle({ demandMultiplier: 0.60 });
+  const revDrop = api.getPrivateEconomyStats().totalRevenue;
+  assert.ok(revDrop < revNormal, `Queda da demanda deve reduzir o faturamento (${revDrop} < ${revNormal})`);
+
+  // Causalidade 7: Empresas persistentemente deficitárias reduzem emprego e podem fechar
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  S.privateSector.firms.industry.employees = 4;
+  S.privateSector.firms.industry.firmCount = 2;
+  const empBeforeCrisis = S.privateSector.firms.industry.employees;
+  // Forçar cenário deficitário severo (demanda baixa + salário/encargo elevado) por 3 ciclos
+  api.runPrivateSectorCycle({ demandMultiplier: 0.55, minimumWage: 3200, employerTax: 40, profitTax: 40 });
+  api.runPrivateSectorCycle({ demandMultiplier: 0.55, minimumWage: 3200, employerTax: 40, profitTax: 40 });
+  api.runPrivateSectorCycle({ demandMultiplier: 0.55, minimumWage: 3200, employerTax: 40, profitTax: 40 });
+  const empAfterCrisis = S.privateSector.firms.industry.employees;
+  const firmsAfterCrisis = S.privateSector.firms.industry.firmCount;
+  assert.ok(empAfterCrisis < empBeforeCrisis, `Empresas deficitárias devem demitir trabalhadores (${empAfterCrisis} < ${empBeforeCrisis})`);
+  assert.ok(firmsAfterCrisis < 2, `Prejuízos persistentes devem causar fechamento de empresas (${firmsAfterCrisis} < 2)`);
+
+  // Causalidade 8: Investimento aumenta capacidade produtiva futura e estoque de capital
+  api.reset();
+  S = getS();
+  api.initPrivateSector({ reset: true });
+  const capBeforeInvest = S.privateSector.firms.technology.baseCapacity;
+  const stockBeforeInvest = S.privateSector.firms.technology.capitalStock;
+  api.runPrivateSectorCycle({ demandMultiplier: 1.60, profitTax: 10, employerTax: 10, tfpFactor: 1.25 });
+  const capAfterInvest = S.privateSector.firms.technology.baseCapacity;
+  const stockAfterInvest = S.privateSector.firms.technology.capitalStock;
+  const totalInv = api.getPrivateEconomyStats().privateInvestment;
+  assert.ok(totalInv > 0, "Ambiente favorável com lucro deve gerar investimento privado positivo");
+  assert.ok(capAfterInvest > capBeforeInvest && stockAfterInvest > stockBeforeInvest, "Investimento deve expandir a capacidade produtiva futura");
+
+  // Verificação de conservação monetária e SFC após ciclo completo no closeMonth()
+  api.reset();
+  S = getS();
+  run("closeMonth()");
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa mantida com economia privada integrada");
+  assert(api.generateBalanceSheets().audit.allPass, "Balanços patrimoniais SFC 100% íntegros após fechamento mensal");
+});
+
 console.log(`\n========================================================`);
 console.log(`=== TODOS OS ${passedTests}/${totalTests} TESTES ESTRUTURAIS APROVADOS COM SUCESSO! ===`);
 console.log(`========================================================\n`);

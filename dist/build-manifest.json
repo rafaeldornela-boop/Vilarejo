@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-05T00:48:46.805Z",
+  "generatedAt": "2026-11-05T17:30:48.880Z",
   "rootFiles": [
     "index.html",
     "style.css"
@@ -18,6 +18,8 @@
     "src/intelligence/vilarejo_intelligence.js",
     "src/intelligence/intelligence_view.js",
     "src/ui/decision_observer.js",
+    "src/ui/world_sprites_pixelart.js",
+    "src/ui/world_renderer_phaser.js",
     "src/ui/dashboard.js"
   ],
   "publicAssets": [
@@ -26,7 +28,7 @@
     "public/assets/interface/favicon.svg",
     "public/vendor/PHASER_LICENSE.txt"
   ],
-  "scriptCount": 14,
+  "scriptCount": 16,
   "referencedByIndex": [
     "https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js",
     "src/core/vilarejo_core.js",
@@ -42,6 +44,8 @@
     "src/intelligence/vilarejo_intelligence.js",
     "src/intelligence/intelligence_view.js",
     "src/ui/decision_observer.js",
+    "src/ui/world_sprites_pixelart.js",
+    "src/ui/world_renderer_phaser.js",
     "src/ui/dashboard.js"
   ]
 }
