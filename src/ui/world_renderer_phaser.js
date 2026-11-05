@@ -56,37 +56,42 @@
   const CATALOG = [
     {
       type: "house",
+      spriteKey: "bld_house",
       label: "Residência",
       category: "Moradia",
-      color: 0x9b7659,
+      color: 0xd96b43,
       description: "Edificação residencial ilustrativa."
     },
     {
       type: "commerce",
+      spriteKey: "bld_market",
       label: "Mercado",
       category: "Comércio",
-      color: 0xb9854e,
+      color: 0xd49b3b,
       description: "Ponto comercial ilustrativo."
     },
     {
       type: "production",
+      spriteKey: "bld_barn",
       label: "Oficina",
       category: "Produção",
-      color: 0x8b765e,
+      color: 0x8c5a3c,
       description: "Unidade produtiva ilustrativa."
     },
     {
       type: "service",
+      spriteKey: "bld_health",
       label: "Posto de saúde",
       category: "Serviços",
-      color: 0x698b7a,
+      color: 0x568f7c,
       description: "Equipamento de serviço público ilustrativo."
     },
     {
       type: "civic",
+      spriteKey: "bld_civic",
       label: "Prefeitura",
       category: "Administração",
-      color: 0x8b9a78,
+      color: 0x5f7464,
       description: "Edificação administrativa ilustrativa."
     }
   ];
@@ -164,7 +169,33 @@
         this.drag = null;
       }
 
+      preload() {
+        this.installSprites();
+      }
+
+      installSprites() {
+        const spriteLib =
+          (root && root.VilarejoPixelArtSprites) ||
+          (typeof globalThis !== "undefined" && globalThis.VilarejoPixelArtSprites) ||
+          (typeof window !== "undefined" && window.VilarejoPixelArtSprites);
+
+        if (spriteLib && typeof spriteLib.install === "function") {
+          spriteLib.install(this);
+        }
+      }
+
+      hasTexture(key) {
+        return Boolean(
+          this.textures &&
+          typeof this.textures.exists === "function" &&
+          this.textures.exists(key) &&
+          this.add &&
+          typeof this.add.image === "function"
+        );
+      }
+
       create() {
+        this.installSprites();
         this.cameras.main.setBackgroundColor(0xdfe9d9);
         this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
         this.cameras.main.centerOn(
@@ -281,23 +312,37 @@
           C.grass
         );
 
-        for (let r = 0; r < 23; r++) {
-          for (let c = 0; c < 29; c++) {
-            const palette = [
-              0xb7cda9,
-              0xc9daba,
-              0xa9c397
-            ];
+        const hasGrassTiles = this.hasTexture("tile_grass_1");
 
-            this.diamond(
-              this.world,
-              45 + c * 67 + (r % 2) * 33,
-              70 + r * 47,
-              37,
-              19,
-              palette[(r * 3 + c) % 3],
-              0.38
-            );
+        if (hasGrassTiles) {
+          const grassKeys = ["tile_grass_1", "tile_grass_2", "tile_grass_3"];
+          for (let r = 0; r < 15; r++) {
+            for (let c = 0; c < 20; c++) {
+              const key = grassKeys[(r * 5 + c * 3) % grassKeys.length];
+              const tile = this.add.image(48 + c * 96, 48 + r * 90, key);
+              if (typeof tile.setAlpha === "function") tile.setAlpha(0.75);
+              this.world.add(tile);
+            }
+          }
+        } else {
+          for (let r = 0; r < 23; r++) {
+            for (let c = 0; c < 29; c++) {
+              const palette = [
+                0xb7cda9,
+                0xc9daba,
+                0xa9c397
+              ];
+
+              this.diamond(
+                this.world,
+                45 + c * 67 + (r % 2) * 33,
+                70 + r * 47,
+                37,
+                19,
+                palette[(r * 3 + c) % 3],
+                0.38
+              );
+            }
           }
         }
 
@@ -328,6 +373,42 @@
           C.water,
           0.75
         );
+
+        if (this.hasTexture("tile_water")) {
+          [
+            [175, 225],
+            [223, 225],
+            [271, 240],
+            [195, 265],
+            [243, 265],
+            [180, 1060],
+            [260, 1030],
+            [340, 1000],
+            [420, 975]
+          ].forEach(([wx, wy]) => {
+            const wTile = this.add.image(wx, wy, "tile_water");
+            this.world.add(wTile);
+          });
+        }
+
+        if (this.hasTexture("tile_farm")) {
+          [
+            [1280, 770],
+            [1328, 770],
+            [1376, 770],
+            [1280, 818],
+            [1328, 818],
+            [1376, 818]
+          ].forEach(([fx, fy]) => {
+            const fTile = this.add.image(fx, fy, "tile_farm");
+            this.world.add(fTile);
+          });
+        }
+
+        if (this.hasTexture("prop_well")) {
+          const well = this.add.image(915, 610, "prop_well").setDepth(610);
+          this.world.add(well);
+        }
       }
 
       drawRoads() {
@@ -368,9 +449,23 @@
         roads.forEach(p =>
           this.polygon(this.world, p, C.road)
         );
+
+        if (this.hasTexture("tile_path")) {
+          [
+            [240, 700], [360, 655], [480, 610], [600, 565], [720, 520],
+            [830, 500], [950, 550], [1070, 600], [1190, 650], [1310, 700],
+            [1065, 240], [1095, 320], [1120, 400],
+            [540, 960], [660, 1005], [780, 1050]
+          ].forEach(([px, py]) => {
+            const pTile = this.add.image(px, py, "tile_path");
+            this.world.add(pTile);
+          });
+        }
       }
 
       drawTrees() {
+        const hasTreeSprites = this.hasTexture("prop_tree_oak");
+
         [
           [180, 420],
           [260, 520],
@@ -388,19 +483,35 @@
           [70, 890],
           [1520, 1120]
         ].forEach(([x, y], i) => {
-          this.world.add([
-            this.add.rectangle(
-              x, y + 8, 10, 31, 0x80694b
-            ),
-            this.add.ellipse(
-              x, y - 16, 48, 42,
-              i % 2 ? 0x477b55 : 0x5c8b5d
-            ),
-            this.add.ellipse(
-              x - 7, y - 25, 25, 22,
-              i % 2 ? 0x619968 : 0x75a66c
-            )
-          ]);
+          if (hasTreeSprites) {
+            const shadow = this.add.ellipse(x, y + 18, 48, 20, 0x4b6447, 0.28);
+            const treeKey = i % 3 === 0 && this.hasTexture("prop_tree_pine")
+              ? "prop_tree_pine"
+              : "prop_tree_oak";
+            const tree = this.add.image(x, y - 6, treeKey).setDepth(y);
+            this.world.add([shadow, tree]);
+
+            if (i % 4 === 0 && this.hasTexture("prop_bush_flower")) {
+              const bush = this.add
+                .image(x + 36, y + 14, "prop_bush_flower")
+                .setDepth(y + 14);
+              this.world.add(bush);
+            }
+          } else {
+            this.world.add([
+              this.add.rectangle(
+                x, y + 8, 10, 31, 0x80694b
+              ),
+              this.add.ellipse(
+                x, y - 16, 48, 42,
+                i % 2 ? 0x477b55 : 0x5c8b5d
+              ),
+              this.add.ellipse(
+                x - 7, y - 25, 25, 22,
+                i % 2 ? 0x619968 : 0x75a66c
+              )
+            ]);
+          }
         });
       }
 
@@ -447,35 +558,6 @@
           0, 25, 116, 46, 0x71856b, 0.28
         );
 
-        const left = this.add.polygon(
-          -31,
-          -3,
-          [-39, -34, 0, -55, 0, 18, -39, 39],
-          0xeee4d1
-        );
-
-        const right = this.add.polygon(
-          0,
-          -18,
-          [0, -37, 39, -16, 39, 39, 0, 18],
-          0xd3c4aa
-        );
-
-        const roof = this.add.polygon(
-          0,
-          -50,
-          [-48, -4, 0, -31, 48, -4, 0, 23],
-          meta.color
-        );
-
-        const door = this.add.rectangle(
-          -7, 17, 14, 31, 0x765d46
-        );
-
-        const win = this.add.rectangle(
-          21, -3, 13, 16, 0xa9c7c4
-        );
-
         const ring = this.add.ellipse(
           0, 2, 122, 72, 0xffffff, 0
         )
@@ -496,16 +578,57 @@
           }
         ).setOrigin(0.5, 0);
 
-        group.add([
-          shadow,
-          left,
-          right,
-          roof,
-          door,
-          win,
-          ring,
-          label
-        ]);
+        const spriteKey = meta.spriteKey || "bld_house";
+
+        if (this.hasTexture(spriteKey)) {
+          const sprite = this.add.image(0, -10, spriteKey);
+          group.add([
+            shadow,
+            ring,
+            sprite,
+            label
+          ]);
+        } else {
+          const left = this.add.polygon(
+            -31,
+            -3,
+            [-39, -34, 0, -55, 0, 18, -39, 39],
+            0xeee4d1
+          );
+
+          const right = this.add.polygon(
+            0,
+            -18,
+            [0, -37, 39, -16, 39, 39, 0, 18],
+            0xd3c4aa
+          );
+
+          const roof = this.add.polygon(
+            0,
+            -50,
+            [-48, -4, 0, -31, 48, -4, 0, 23],
+            meta.color
+          );
+
+          const door = this.add.rectangle(
+            -7, 17, 14, 31, 0x765d46
+          );
+
+          const win = this.add.rectangle(
+            21, -3, 13, 16, 0xa9c7c4
+          );
+
+          group.add([
+            shadow,
+            left,
+            right,
+            roof,
+            door,
+            win,
+            ring,
+            label
+          ]);
+        }
 
         group
           .setSize(116, 125)
@@ -999,7 +1122,8 @@
       },
 
       render: {
-        antialias: true,
+        pixelArt: true,
+        antialias: false,
         roundPixels: true
       },
 
