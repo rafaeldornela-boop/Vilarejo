@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const EventosV3 = require("../events/eventos_v3.js");
+const VilarejoPublicServices = require("../services/public_services_engine.js");
 
 const ROOT = path.join(__dirname, "../../");
 const DOMAIN_SCRIPTS = [
@@ -79,6 +80,7 @@ function createSimulationContext({ includeDomainModules = false } = {}) {
     Infinity,
     NaN,
     EventosV3,
+    VilarejoPublicServices,
     setInterval: () => 1,
     clearInterval: () => {},
     setTimeout: () => 1,
