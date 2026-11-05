@@ -7,6 +7,7 @@ const vm = require("node:vm");
 
 const ROOT = path.join(__dirname, "../../");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+const worldSpritesCode = fs.readFileSync(path.join(ROOT, "src/ui/world_sprites_pixelart.js"), "utf8");
 const worldRendererCode = fs.readFileSync(path.join(ROOT, "src/ui/world_renderer_phaser.js"), "utf8");
 const dashboardCode = fs.readFileSync(path.join(ROOT, "src/ui/dashboard.js"), "utf8");
 
@@ -33,6 +34,7 @@ function createMockPhaser() {
       setOrigin: function() { return this; },
       setScrollFactor: function() { return this; },
       setDepth: function() { return this; },
+      setAlpha: function() { return this; },
       setText: function() { return this; },
       setVisible: function() { return this; },
       setInteractive: function() { return this; },
@@ -78,6 +80,7 @@ function createMockPhaser() {
           strokeCircle: function() { return this; }
         }),
         text: () => makeBaseObject(),
+        image: () => makeBaseObject(),
         rectangle: () => makeBaseObject(),
         ellipse: () => makeBaseObject(),
         polygon: () => makeBaseObject(),
@@ -86,6 +89,15 @@ function createMockPhaser() {
           add: function() { return this; },
           setSize: function() { return this; }
         })
+      };
+      const registeredTextures = new Map();
+      this.textures = {
+        exists: (key) => registeredTextures.has(key),
+        addCanvas: (key, canvas) => {
+          registeredTextures.set(key, canvas);
+          return canvas;
+        },
+        getRegisteredKeys: () => [...registeredTextures.keys()]
       };
       this.input = {
         on: function() { return this; },
@@ -238,18 +250,21 @@ test("index.html declara container #worldCanvas com data-engine='phaser' e scrip
   assert.ok(html.includes('data-engine="phaser"'), "data-engine deve ser phaser");
 
   const phaserCdnIndex = html.indexOf("cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js");
+  const worldSpritesIndex = html.indexOf("src/ui/world_sprites_pixelart.js");
   const worldRendererIndex = html.indexOf("src/ui/world_renderer_phaser.js");
   const dashboardIndex = html.indexOf("src/ui/dashboard.js");
 
   assert.ok(phaserCdnIndex >= 0, "Phaser CDN deve estar referenciado");
+  assert.ok(worldSpritesIndex >= 0, "world_sprites_pixelart.js deve estar referenciado");
   assert.ok(worldRendererIndex >= 0, "world_renderer_phaser.js deve estar referenciado");
   assert.ok(dashboardIndex >= 0, "dashboard.js deve estar referenciado");
 
-  assert.ok(phaserCdnIndex < worldRendererIndex, "Phaser deve carregar antes do world_renderer");
+  assert.ok(phaserCdnIndex < worldSpritesIndex, "Phaser deve carregar antes do world_sprites_pixelart");
+  assert.ok(worldSpritesIndex < worldRendererIndex, "world_sprites_pixelart deve carregar antes do world_renderer");
   assert.ok(worldRendererIndex < dashboardIndex, "world_renderer deve carregar antes de dashboard");
 });
 
-test("VilarejoWorldRenderer.mount() valida parâmetros e instancia Game no container", () => {
+test("VilarejoWorldRenderer.mount() valida parâmetros, instala sprites pixel-art e instancia Game no container", () => {
   const Phaser = createMockPhaser();
   const dom = createMockDOM();
   const container = dom.getElementById("worldCanvas");
@@ -262,7 +277,12 @@ test("VilarejoWorldRenderer.mount() valida parâmetros e instancia Game no conta
   sandbox.globalThis = sandbox;
 
   vm.createContext(sandbox);
+  vm.runInContext(worldSpritesCode, sandbox);
   vm.runInContext(worldRendererCode, sandbox);
+
+  const sprites = sandbox.VilarejoPixelArtSprites;
+  assert.ok(sprites, "VilarejoPixelArtSprites deve estar disponível");
+  assert.ok(Array.isArray(sprites.spriteKeys) && sprites.spriteKeys.length >= 12, "Deve exportar catálogo de sprites pixel-art");
 
   const renderer = sandbox.VilarejoWorldRenderer;
   assert.ok(renderer, "VilarejoWorldRenderer deve estar disponível");
@@ -293,6 +313,11 @@ test("VilarejoWorldRenderer.mount() valida parâmetros e instancia Game no conta
 
   assert.ok(container.children.some((c) => c.tagName === "CANVAS"), "O canvas do Phaser deve estar no container");
   assert.equal(container.__vilarejoWorld, handle, "Referência __vilarejoWorld associada ao container");
+  assert.equal(handle.game.config.render.pixelArt, true, "Configuração render.pixelArt deve estar ativa");
+  assert.equal(handle.game.config.render.antialias, false, "Configuração render.antialias deve estar desativada para pixel-art");
+  assert.ok(handle.game.activeScene.textures.exists("bld_house"), "Textura bld_house deve estar instalada na cena");
+  assert.ok(handle.game.activeScene.textures.exists("bld_civic"), "Textura bld_civic deve estar instalada na cena");
+  assert.ok(handle.game.activeScene.textures.exists("prop_tree_oak"), "Textura prop_tree_oak deve estar instalada na cena");
 
   // Testa refresh
   const refreshed = handle.refresh();
@@ -340,7 +365,8 @@ test("Dashboard inicializa VilarejoWorldRenderer no overview, atualiza no refres
 
   vm.createContext(sandbox);
 
-  // Carrega renderer e depois dashboard
+  // Carrega sprites, renderer e depois dashboard
+  vm.runInContext(worldSpritesCode, sandbox);
   vm.runInContext(worldRendererCode, sandbox);
   vm.runInContext(dashboardCode, sandbox);
 
