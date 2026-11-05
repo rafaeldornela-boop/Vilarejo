@@ -40,6 +40,7 @@ const expectedScripts = [
   "src/intelligence/vilarejo_intelligence.js",
   "src/intelligence/intelligence_view.js",
   "src/ui/decision_observer.js",
+  "src/ui/world_renderer_phaser.js",
   "src/ui/dashboard.js"
 ];
 report("Todos os scripts carregam uma única vez na ordem completa do contrato", JSON.stringify(loadedScripts) === JSON.stringify(expectedScripts));
