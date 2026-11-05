@@ -2057,6 +2057,7 @@
     if (!decisionObserver || !event?.target?.closest) return;
     const button = event.target.closest("#actions button, #eventOptions button[data-choice]");
     if (!button || button.disabled) return;
+    if (button.closest("#actions") && window.VilarejoActionFlow) return;
     const data = snapshot();
     const monthNumber = finiteValue(data?.monthNumber);
     if (!data?.runId || monthNumber === null) return;
@@ -2149,6 +2150,7 @@
   function initDecisionTracking() {
     if (typeof document === "undefined" || !window.VilarejoDecisionObserver?.createDecisionObserver) return;
     decisionObserver = window.VilarejoDecisionObserver.createDecisionObserver();
+    window.__vilarejoDecisionObserver = decisionObserver;
     document.addEventListener("click", captureDecisionClick, true);
   }
 

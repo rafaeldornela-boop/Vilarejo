@@ -2962,15 +2962,138 @@ body.event-modal-open { overflow: hidden; }
   color: var(--muted);
 }
 
-.btn-alert-shortcut {
-  margin-top: 6px;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font-size: 0.74rem;
+.btn-alert-shortcut:hover {
+  color: var(--forest);
+}
+
+/* Modal de Confirmação de Ações & Feedback */
+.action-confirm-card {
+  max-width: 540px;
+}
+
+.action-confirm-card .welcome-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.action-confirm-card .welcome-item {
+  background: #fbfbf8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.action-confirm-card .welcome-item small {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+.action-confirm-card .welcome-item strong {
+  font-size: 0.95rem;
+  color: var(--forest);
+}
+
+.action-confirm-card .welcome-item p {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--ink-2);
+  line-height: 1.35;
+}
+
+.action-warning-box {
+  background: #fef2f2;
+  border: 1px solid #f87171;
+  border-left: 4px solid #dc2626;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 1rem 0;
+  color: #991b1b;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.action-warning-box strong {
+  display: block;
+  font-size: 0.92rem;
+  margin-bottom: 0.25rem;
+  color: #b91c1c;
+}
+
+/* Obras e Projetos em Andamento */
+.ongoing-projects-container {
+  margin-bottom: 1.25rem;
+}
+
+.ongoing-card {
+  background: #fbf8f1;
+  border: 1px solid #d9c49d;
+  border-left: 4px solid #b45309;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.ongoing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.ongoing-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #92400e;
+  letter-spacing: 0.6px;
+}
+
+.ongoing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ongoing-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: #ffffff;
+  border: 1px solid #e7ded0;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.ongoing-item-title {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
   font-weight: 700;
-  color: var(--forest-3);
-  cursor: pointer;
-  text-decoration: underline;
+  color: var(--forest);
+}
+
+.ongoing-item-desc {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.ongoing-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ongoing-progress-fill {
+  height: 100%;
+  background: #0d9488;
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 

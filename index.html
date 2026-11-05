@@ -73,6 +73,29 @@
         </div>
       </header>
 
+      <!-- Modal de Confirmação e Validação Prévia de Ações -->
+      <div id="actionConfirmModal" class="welcome-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="actionConfirmTitle">
+        <div class="welcome-modal-card action-confirm-card">
+          <div class="welcome-modal-header">
+            <span class="welcome-badge" id="actionConfirmBadge">CONFIRMAÇÃO DE DIRETRIZ MUNICIPAL</span>
+            <button id="btnCloseActionConfirm" class="btn-close-modal" type="button" aria-label="Fechar janela">✕</button>
+          </div>
+          <h2 id="actionConfirmTitle">Construir Moradia</h2>
+          <p class="welcome-lead" id="actionConfirmDesc">Confirme a destinação de recursos públicos e as metas desta deliberação.</p>
+          
+          <div id="actionConfirmGrid" class="welcome-grid"></div>
+
+          <div id="actionConfirmValidationWarning" class="action-warning-box hidden"></div>
+
+          <div class="welcome-action-box" id="actionConfirmButtonsBox">
+            <button id="btnCancelAction" class="btn-secondary" type="button">Cancelar</button>
+            <button id="btnProceedAction" class="btn-primary" type="button">Confirmar Ação →</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="decisionFeedbackToast" class="decision-feedback-toast hidden" role="status" aria-live="polite"></div>
+
       <div class="page-wrap">
         <div class="page-intro">
           <div><div class="eyebrow">CENTRAL DE GESTÃO MUNICIPAL</div><h1 id="pageHeading">Panorama do município</h1><p id="pageDescription">O que mudou, o que merece atenção e quais decisões estão disponíveis.</p></div>
@@ -233,6 +256,7 @@
 
           <section class="content-card action-card">
             <div class="section-heading"><div><div class="eyebrow">DIRETRIZES E AÇÕES DA GESTÃO</div><h2>Decisões estratégicas para o município</h2><p>Escolha onde aplicar os recursos públicos e defina o modelo de desenvolvimento da comunidade.</p></div><span class="section-symbol">✳</span></div>
+            <div id="ongoingProjectsHost" class="ongoing-projects-container"></div>
             <div class="action-buttons" id="actions"></div>
           </section>
           <section class="content-card ux-decision-follow-up">

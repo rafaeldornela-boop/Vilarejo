@@ -1057,6 +1057,63 @@
             labels[session.status] || "Estado não informado"
           } · ${day} · Módulos: ${count}${people}`
         );
+
+        this.syncStateBuildings(snapshot);
+      }
+
+      syncStateBuildings(snapshot) {
+        if (!snapshot || !this.buildings) return;
+        const raw = snapshot.raw || snapshot;
+        const housingCapacity = Number(snapshot.housingCapacity ?? raw.housingCapacity ?? 12);
+        const extraHousesCount = Math.max(0, Math.floor((housingCapacity - 12) / 2));
+
+        const EXTRA_HOUSES = [
+          { id: "house_extra_1", type: "house", x: 720, y: 720, name: "Residência 05", description: "Moradia popular construída pela gestão municipal." },
+          { id: "house_extra_2", type: "house", x: 920, y: 770, name: "Residência 06", description: "Moradia popular construída pela gestão municipal." },
+          { id: "house_extra_3", type: "house", x: 570, y: 780, name: "Residência 07", description: "Moradia popular construída pela gestão municipal." },
+          { id: "house_extra_4", type: "house", x: 1120, y: 750, name: "Residência 08", description: "Moradia popular construída pela gestão municipal." },
+          { id: "house_extra_5", type: "house", x: 860, y: 690, name: "Residência 09", description: "Moradia popular construída pela gestão municipal." },
+          { id: "house_extra_6", type: "house", x: 990, y: 840, name: "Residência 10", description: "Moradia popular construída pela gestão municipal." },
+          { id: "house_extra_7", type: "house", x: 660, y: 890, name: "Residência 11", description: "Moradia popular construída pela gestão municipal." },
+          { id: "house_extra_8", type: "house", x: 1260, y: 560, name: "Residência 12", description: "Moradia popular construída pela gestão municipal." }
+        ];
+
+        for (let i = 0; i < extraHousesCount && i < EXTRA_HOUSES.length; i++) {
+          const h = EXTRA_HOUSES[i];
+          if (!this.buildings.has(h.id)) {
+            this.addBuilding(h);
+          }
+        }
+
+        const completed = (Array.isArray(snapshot.completedProjects)
+          ? snapshot.completedProjects
+          : (Array.isArray(raw.completedProjects) ? raw.completedProjects : []))
+          .map(p => (typeof p === "string" ? p : p?.id));
+
+        if (completed.includes("grain_silo") || raw.siloBuilt) {
+          const silo = { id: "proj_silo", type: "production", x: 1320, y: 860, name: "Silo de Grãos", description: "Silo regulador de safras cafeeiras." };
+          if (!this.buildings.has(silo.id)) this.addBuilding(silo);
+        }
+
+        if (completed.includes("rural_road") || (raw.ruralRoadBuilt && raw.ruralRoadBuilt > 0)) {
+          const roadPoint = { id: "proj_rural_road", type: "service", x: 380, y: 640, name: "Posto da Estrada Vicinal", description: "Conexão de abastecimento com sítios rurais." };
+          if (!this.buildings.has(roadPoint.id)) this.addBuilding(roadPoint);
+        }
+
+        if (completed.includes("sanitation_health") || raw.sanitationHealthLevel > 0) {
+          const san = { id: "proj_sanitation", type: "service", x: 500, y: 500, name: "Posto de Saneamento", description: "Estação de saneamento e água tratada." };
+          if (!this.buildings.has(san.id)) this.addBuilding(san);
+        }
+
+        const facilities = Array.isArray(raw.publicFacilities) ? raw.publicFacilities : [];
+        if (facilities.some(f => f.type === "school")) {
+          const school = { id: "fac_school", type: "civic", x: 740, y: 480, name: "Escola Municipal", description: "Unidade de ensino da comunidade." };
+          if (!this.buildings.has(school.id)) this.addBuilding(school);
+        }
+        if (facilities.some(f => f.type === "police_station")) {
+          const police = { id: "fac_police", type: "civic", x: 920, y: 490, name: "Posto Policial", description: "Base de segurança e ordem cívica." };
+          if (!this.buildings.has(police.id)) this.addBuilding(police);
+        }
       }
     };
   }
@@ -1132,6 +1189,41 @@
 
     const handle = {
       game,
+
+      addBuilding(data) {
+        try {
+          const s = game.scene.getScene(KEY);
+          if (s && s.addBuilding) {
+            const b = normalize(data);
+            if (b) {
+              s.addBuilding(b);
+              s.select(b.id);
+              return b;
+            }
+          }
+        } catch (e) {}
+        return null;
+      },
+
+      focusOn(x, y, zoom) {
+        try {
+          const s = game.scene.getScene(KEY);
+          if (s && s.cameras && s.cameras.main) {
+            if (typeof s.cameras.main.pan === "function") {
+              s.cameras.main.pan(x, y, 700, "Power2");
+            } else if (typeof s.cameras.main.centerOn === "function") {
+              s.cameras.main.centerOn(x, y);
+            }
+            if (typeof zoom === "number") {
+              if (typeof s.cameras.main.zoomTo === "function") {
+                s.cameras.main.zoomTo(zoom, 700);
+              } else if (typeof s.cameras.main.setZoom === "function") {
+                s.cameras.main.setZoom(zoom);
+              }
+            }
+          }
+        } catch (e) {}
+      },
 
       refresh() {
         snapshot = readSnapshot(getSnapshot);

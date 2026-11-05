@@ -4208,6 +4208,952 @@ function applyGovernanceStance(stance){
  render();
 }
 
+const ACTION_CATALOG = {
+  build: {
+    id: "build",
+    title: "Construir Moradia Municipal",
+    category: "TERRITÓRIO E MORADIA · PÚBLICO",
+    description: "Inicie a construção de uma nova moradia no setor residencial para expandir a capacidade habitacional do Vilarejo.",
+    cost: 6000,
+    costLabel: "R$ 6.000 (R$ 3.000 para oficina local + R$ 3.000 materiais externos)",
+    benefitLabel: "+1 moradia (+2 vagas para moradores)",
+    impactLabel: "Injeta R$ 3.000 de faturamento na oficina de serviços local e evita déficit habitacional com a chegada de famílias.",
+    locationLabel: "Bairro Residencial (Setor Moradias)",
+    durationLabel: "30 dias (conclusão prevista no próximo ciclo)",
+    worldCoords: { x: 320, y: 240, zoom: 1.25 },
+    validate: (state) => {
+      if (state.lots <= 0) {
+        return {
+          canExecute: false,
+          reason: "Não há terrenos disponíveis para construir.",
+          details: "O município utilizou todos os lotes de expansão urbana disponíveis. Aguarde novas demarcações ou libere lotes."
+        };
+      }
+      const tBalance = balance("treasury");
+      if (tBalance < 6000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
+          details: "O município não dispõe de saldo para custear os R$ 3.000 da oficina local e os R$ 3.000 de materiais externos. Aguarde arrecadação ou venda ativos."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: (state) => {
+      const paidWs = log("treasury", "workshop", 3000, "Obra pública: serviços e mão de obra locais");
+      const paidExt = log("treasury", "external", 3000, "Obra pública: materiais importados");
+      const totalPaid = paidWs + paidExt;
+      if (state.currentMonthTracking) {
+        state.currentMonthTracking.publicWorks = (state.currentMonthTracking.publicWorks || 0) + totalPaid;
+        state.currentMonthTracking.importedCapitalGoods = (state.currentMonthTracking.importedCapitalGoods || 0) + paidExt;
+        state.currentMonthTracking.workshopRevenue = (state.currentMonthTracking.workshopRevenue || 0) + paidWs;
+      }
+      state.lots--;
+      const dueDay = state.day + 30;
+      state.buildings.push({
+        id: "bld_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+        due: dueDay,
+        type: "house",
+        name: "Moradia Municipal",
+        cost: totalPaid,
+        startedAt: state.day
+      });
+      feed(`Obra iniciada: moradia pública no Bairro Residencial. Metade do custo (${money(paidWs)}) circulou na oficina local. Conclusão no dia ${dueDay}.`);
+      return {
+        summary: "Construção de moradia municipal iniciada com sucesso.",
+        changes: [
+          { label: "Caixa do Tesouro", delta: `-${money(totalPaid)}`, type: "cost" },
+          { label: "Lotes Públicos", delta: `${state.lots} restantes`, type: "neutral" },
+          { label: "Capacidade Prevista", delta: "+2 vagas (obra em andamento)", type: "benefit" },
+          { label: "Prazo de Execução", delta: `30 dias (conclusão no dia ${dueDay})`, type: "neutral" }
+        ]
+      };
+    }
+  },
+
+  sellLot: {
+    id: "sellLot",
+    title: "Vender Lote Público",
+    category: "TERRITÓRIO E PATRIMÔNIO · MERCADO",
+    description: "Aliene um lote de terra de domínio público para o mercado para gerar receita imediata no caixa do Tesouro.",
+    cost: 0,
+    costLabel: "Consumo de 1 lote público municipal (custo de oportunidade: sem terra pública para obras)",
+    benefitLabel: "+R$ 8.000 direto no caixa do Tesouro",
+    impactLabel: "Injeta liquidez imediata para equilibrar as contas públicas ou financiar outras urgências, mas reduz a reserva territorial.",
+    locationLabel: "Perímetro Urbano Municipal",
+    durationLabel: "Imediato",
+    worldCoords: { x: 500, y: 270, zoom: 1.15 },
+    validate: (state) => {
+      if (state.lots <= 0) {
+        return {
+          canExecute: false,
+          reason: "Não há terrenos disponíveis para alienação.",
+          details: "O estoque de lotes municipais está zerado."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: (state) => {
+      state.lots--;
+      const revenue = log("external", "treasury", 8000, "Venda de terreno público");
+      if (state.currentMonthTracking) state.currentMonthTracking.assetSales = (state.currentMonthTracking.assetSales || 0) + revenue;
+      feed(`Lote público alienado por ${money(revenue)} injetados diretamente no Tesouro.`);
+      return {
+        summary: "Lote público vendido com sucesso.",
+        changes: [
+          { label: "Caixa do Tesouro", delta: `+${money(revenue)}`, type: "benefit" },
+          { label: "Lotes Públicos Restantes", delta: `${state.lots} lotes`, type: "neutral" },
+          { label: "Efeito Patrimonial", delta: "Conversão de ativo imobiliário em caixa líquido", type: "neutral" }
+        ]
+      };
+    }
+  },
+
+  investCredit: {
+    id: "investCredit",
+    title: "Investimento Imobiliário com Crédito",
+    category: "TERRITÓRIO E MORADIA · MERCADO",
+    description: "Incentive o proprietário privado a contratar financiamento imobiliário no banco local para erguer habitação de aluguel.",
+    cost: 14000,
+    costLabel: "R$ 14.000 em crédito bancário privado (+R$ 8.000 entram no Tesouro)",
+    benefitLabel: "+2 vagas habitacionais de mercado em 30 dias",
+    impactLabel: "O Tesouro arrecada R$ 8.000 pela venda do solo, R$ 3.000 remuneram a oficina local e R$ 3.000 em materiais externos, sem gasto público.",
+    locationLabel: "Bairro Residencial (Setor Moradias)",
+    durationLabel: "30 dias (conclusão prevista no próximo ciclo)",
+    worldCoords: { x: 320, y: 240, zoom: 1.25 },
+    validate: (state) => {
+      if (state.lots <= 0) {
+        return {
+          canExecute: false,
+          reason: "Não há terrenos disponíveis para o empreendimento imobiliário.",
+          details: "O proprietário necessita de pelo menos um lote público para aquisição e edificação."
+        };
+      }
+      const freeCredit = availableCredit();
+      if (freeCredit < 14000) {
+        return {
+          canExecute: false,
+          reason: `Crédito bancário insuficiente: banco dispõe de apenas ${money(freeCredit)} livres.`,
+          details: "O banco local preserva a exigência prudencial de reservas mínimas dos depositantes. Aguarde aumento dos depósitos das famílias."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: (state) => {
+      const loan = issueLoan("landlord", 14000, "aquisição de terreno e construção de moradia");
+      if (loan < 13999) {
+        feed("Crédito insuficiente: o banco preserva a reserva mínima dos depositantes.");
+        return { summary: "Crédito recusado pelo banco.", changes: [] };
+      }
+      log("landlord", "treasury", 8000, "Compra de terreno para empreendimento imobiliário");
+      log("landlord", "workshop", 3000, "Obra privada: serviços e mão de obra locais");
+      if (state.currentMonthTracking) {
+        state.currentMonthTracking.workshopRevenue = (state.currentMonthTracking.workshopRevenue || 0) + 3000;
+        state.currentMonthTracking.privateFixedInvestment = (state.currentMonthTracking.privateFixedInvestment || 0) + 6000;
+        state.currentMonthTracking.importedCapitalGoods = (state.currentMonthTracking.importedCapitalGoods || 0) + 3000;
+      }
+      log("landlord", "external", 3000, "Obra privada: materiais importados");
+      state.lots--;
+      const dueDay = state.day + 30;
+      state.buildings.push({
+        id: "bld_priv_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+        due: dueDay,
+        type: "house",
+        name: "Residência Privada",
+        cost: 6000,
+        startedAt: state.day
+      });
+      feed("Investimento imobiliário financiado com crédito privado; obra iniciada no bairro residencial.");
+      return {
+        summary: "Empreendimento imobiliário financiado e iniciado.",
+        changes: [
+          { label: "Arrecadação do Tesouro", delta: `+${money(8000)} (Venda de solo)`, type: "benefit" },
+          { label: "Crédito Bancário Contratado", delta: `${money(14000)}`, type: "cost" },
+          { label: "Capacidade Prevista", delta: "+2 vagas em 30 dias", type: "benefit" },
+          { label: "Faturamento da Oficina", delta: `+${money(3000)} em serviços locais`, type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  investInfra: {
+    id: "investInfra",
+    title: "Infraestrutura Urbana Geral",
+    category: "INFRAESTRUTURA E MOBILIDADE · COLETIVO",
+    description: "Execução de drenagem, pavimentação de vias centrais e ampliação da capacidade urbana do município.",
+    cost: 6000,
+    costLabel: "R$ 6.000 (R$ 3.000 oficina local + R$ 3.000 externos)",
+    benefitLabel: "+4 capacidade urbana geral e -15% de congestionamento",
+    impactLabel: "Desafoga o tráfego nos bairros, melhora a circulação e aumenta o estoque de capital público.",
+    locationLabel: "Vias Centrais e Setor de Serviços",
+    durationLabel: "Imediato",
+    worldCoords: { x: 380, y: 400, zoom: 1.2 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 6000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
+          details: "Mobilize superávit ou aguarde o encerramento do mês."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      const paid = investInInfrastructure();
+      return {
+        summary: "Obras de infraestrutura urbana concluídas.",
+        changes: [
+          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
+          { label: "Capacidade Urbana", delta: `+4 pontos (${S.infrastructureCapacity} total)`, type: "benefit" },
+          { label: "Estoque de Capital", delta: `+${money(6000)} no patrimônio público`, type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  projSocialHousing: {
+    id: "projSocialHousing",
+    title: "Habitação de Interesse Social (HIS)",
+    category: "TERRITÓRIO E HABITAÇÃO · PÚBLICO",
+    description: "Construção direta e emergencial de moradias públicas para acolher famílias vulneráveis e novos migrantes.",
+    cost: 6000,
+    costLabel: "R$ 6.000 (R$ 3.000 oficina local + R$ 3.000 externos)",
+    benefitLabel: "+4 vagas habitacionais imediatas",
+    impactLabel: "Erradica déficit habitacional imediato e amplia a atratividade do vilarejo para novos trabalhadores.",
+    locationLabel: "Bairro Residencial (Setor Moradias)",
+    durationLabel: "Imediato",
+    worldCoords: { x: 320, y: 240, zoom: 1.25 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 6000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
+          details: "Recursos em caixa são insuficientes para a aquisição de insumos e mão de obra de HIS."
+        };
+      }
+      if (state.lots <= 0) {
+        return {
+          canExecute: false,
+          reason: "Não há terrenos disponíveis para implantação de Habitação Social.",
+          details: "É necessário disponibilizar lote público para assentar o núcleo habitacional."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      const paid = executeInfrastructureProject("social_housing");
+      return {
+        summary: "Habitação de Interesse Social entregue com sucesso.",
+        changes: [
+          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
+          { label: "Capacidade Habitacional", delta: `+4 vagas (${S.housingCapacity} total)`, type: "benefit" },
+          { label: "Lotes Públicos", delta: "-1 lote", type: "neutral" }
+        ]
+      };
+    }
+  },
+
+  projRuralRoad: {
+    id: "projRuralRoad",
+    title: "Pavimentação de Estrada Vicinal",
+    category: "PRODUÇÃO E LOGÍSTICA · COLETIVO",
+    description: "Pavimente a principal via de escoamento agrícola interligando a fazenda e os produtores rurais ao centro comercial.",
+    cost: 8000,
+    costLabel: "R$ 8.000 (R$ 4.000 oficina local + R$ 4.000 externos)",
+    benefitLabel: "+5% de produtividade física permanente da lavoura",
+    impactLabel: "Facilita o transporte da safra, diminui perdas de colheita e barateia o custo de suprimentos.",
+    locationLabel: "Estrada da Fazenda ao Vilarejo",
+    durationLabel: "Imediato",
+    worldCoords: { x: 680, y: 180, zoom: 1.2 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 8000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(8000)}.`,
+          details: "Saldo do Tesouro insuficiente para contratação das obras de pavimentação."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      const paid = executeInfrastructureProject("rural_road");
+      return {
+        summary: "Estrada vicinal pavimentada com sucesso.",
+        changes: [
+          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
+          { label: "Produtividade Agrícola", delta: "+5% na colheita da lavoura", type: "benefit" },
+          { label: "Logística", delta: "Acesso permanente para escoamento da safra", type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  projSanitation: {
+    id: "projSanitation",
+    title: "Saneamento Básico & Posto de Saúde",
+    category: "SAÚDE E SANEAMENTO · PÚBLICO",
+    description: "Implantação de rede coletora de esgoto, estação de água potável e posto de pronto atendimento à comunidade.",
+    cost: 10000,
+    costLabel: "R$ 10.000 (R$ 5.000 oficina local + R$ 5.000 externos)",
+    benefitLabel: "+6 capacidade urbana e +2% produtividade geral (TFP)",
+    impactLabel: "Reduz doenças hídricas, eleva a satisfação comunitária e viabiliza a expansão populacional saudável.",
+    locationLabel: "Setor de Serviços e Saúde",
+    durationLabel: "Imediato",
+    worldCoords: { x: 380, y: 400, zoom: 1.2 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 10000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(10000)}.`,
+          details: "Obra estruturante exige disponibilidade mínima de R$ 10.000 no caixa municipal."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      const paid = executeInfrastructureProject("sanitation_health");
+      return {
+        summary: "Rede de saneamento básico e posto de saúde instalados.",
+        changes: [
+          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
+          { label: "Capacidade Urbana", delta: `+6 pontos (${S.infrastructureCapacity} total)`, type: "benefit" },
+          { label: "Produtividade e Saúde", delta: "+2% TFP para todos os setores", type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  projGrainSilo: {
+    id: "projGrainSilo",
+    title: "Silo e Armazém Geral de Café",
+    category: "PRODUÇÃO E SEGURANÇA ALIMENTAR · PÚBLICO",
+    description: "Construção de armazém climatizado e silo de grãos para estoque regulador da produção cafeeira.",
+    cost: 12000,
+    costLabel: "R$ 12.000 (R$ 6.000 oficina local + R$ 6.000 externos)",
+    benefitLabel: "+50 sacas de capacidade de estocagem de café",
+    impactLabel: "Permite reter produção para venda em períodos de cotação elevada no mercado externo.",
+    locationLabel: "Setor Fazenda e Produção",
+    durationLabel: "Imediato",
+    worldCoords: { x: 680, y: 180, zoom: 1.2 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 12000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(12000)}.`,
+          details: "Aguarde receitas de exportação ou venda de ativos para custear o armazém."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      const paid = executeInfrastructureProject("grain_silo");
+      return {
+        summary: "Silo regulador de café concluído.",
+        changes: [
+          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
+          { label: "Capacidade do Silo", delta: `+50 sacas (${S.siloCapacity} total)`, type: "benefit" },
+          { label: "Segurança de Mercado", delta: "Estoque regulador ativado", type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  sell25Stake: {
+    id: "sell25Stake",
+    title: "Alienar 25% da Fazenda Pública",
+    category: "ESTRUTURA SOCIETÁRIA · MERCADO",
+    description: "Venda um quarto da propriedade da Fazenda para investidores privados a valor de mercado.",
+    cost: 0,
+    costLabel: "Cessão de 25% dos lucros e dividendos futuros da Fazenda",
+    benefitLabel: "Receita de capital imediata calculada sobre o valuation da empresa",
+    impactLabel: "Injeta grande volume de recursos no Tesouro, mas reduz os dividendos públicos nos anos seguintes.",
+    locationLabel: "Fazenda Municipal",
+    durationLabel: "Imediato",
+    worldCoords: { x: 680, y: 180, zoom: 1.2 },
+    validate: (state) => {
+      if ((state.farmOwnership?.treasury || 0) < 0.25) {
+        return {
+          canExecute: false,
+          reason: "Participação estatal insuficiente para alienar 25%.",
+          details: `O Tesouro detém apenas ${((state.farmOwnership?.treasury || 0) * 100).toFixed(1)}% das cotas.`
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      const fVal = calculateFirmValuation("farm");
+      const price25 = round2(fVal.valuation * 0.25);
+      const paid = sellFarmStake(0.25);
+      return {
+        summary: "Alienação de 25% da Fazenda concluída.",
+        changes: [
+          { label: "Receita Patrimonial do Tesouro", delta: `+${money(paid || price25)}`, type: "benefit" },
+          { label: "Participação Pública Restante", delta: `${((S.farmOwnership?.treasury || 0) * 100).toFixed(0)}%`, type: "cost" },
+          { label: "Governança", delta: "Entrada de investidores privados no conselho", type: "neutral" }
+        ]
+      };
+    }
+  },
+
+  privatizeValuation: {
+    id: "privatizeValuation",
+    title: "Privatização Integral da Participação Remanescente",
+    category: "ESTRUTURA SOCIETÁRIA · MERCADO",
+    description: "Venda toda a fatia estatal restante da Fazenda para o setor privado a valor presente líquido.",
+    cost: 0,
+    costLabel: "Desestatização completa: o município não receberá mais dividendos operacionais da safra",
+    benefitLabel: "Liquidação total da participação pública a valor de mercado",
+    impactLabel: "Encerra o papel de acionista estatal da Fazenda, tornando-a uma sociedade 100% privada com foco em rentabilidade.",
+    locationLabel: "Fazenda Municipal",
+    durationLabel: "Imediato",
+    worldCoords: { x: 680, y: 180, zoom: 1.2 },
+    validate: (state) => {
+      if ((state.farmOwnership?.treasury || 0) <= 0.005) {
+        return {
+          canExecute: false,
+          reason: "A Fazenda já é 100% privada.",
+          details: "O município não possui ações remanescentes a alienar."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      const gStake = S.farmOwnership?.treasury || 0;
+      const fVal = calculateFirmValuation("farm");
+      const fullPrice = round2(fVal.valuation * gStake);
+      const paid = sellFarmStake(gStake);
+      return {
+        summary: "Privatização da Fazenda concluída.",
+        changes: [
+          { label: "Receita de Capital do Tesouro", delta: `+${money(paid || fullPrice)}`, type: "benefit" },
+          { label: "Propriedade da Fazenda", delta: "100% Privada", type: "neutral" },
+          { label: "Dividendos Públicos", delta: "Cessados (R$ 0/mês)", type: "cost" }
+        ]
+      };
+    }
+  },
+
+  toggleConcession: {
+    id: "toggleConcession",
+    title: "Concessão Privada de Serviços Urbanos",
+    category: "SERVIÇOS E REGULAÇÃO · CONTRATOS",
+    description: "Defina o modelo de gestão dos serviços urbanos entre concessão privada com outorga ou operação pública direta.",
+    cost: 0,
+    costLabel: S.concessionActive ? "Rescisão do contrato de concessão privada" : "Transferência da operação urbana para empresa concessionária",
+    benefitLabel: S.concessionActive ? "Retomada do controle público direto dos serviços" : "Outorga mensal de R$ 400 aos cofres do Tesouro",
+    impactLabel: S.concessionActive ? "Retoma gestão pública, mas encerra a receita mensal de outorga." : "Gera receita mensal estável de R$ 400 e incentiva investimento privado.",
+    locationLabel: "Setor de Serviços do Vilarejo",
+    durationLabel: "Imediato",
+    worldCoords: { x: 380, y: 400, zoom: 1.2 },
+    validate: () => ({ canExecute: true }),
+    execute: (state) => {
+      state.concessionActive = !state.concessionActive;
+      feed(state.concessionActive ? "Contrato de concessão firmado: concessionária assume a operação e recolhe outorga mensal ao Tesouro." : "Contrato de concessão encerrado: serviços voltam à operação municipal direta.");
+      return {
+        summary: state.concessionActive ? "Concessão privada firmada com sucesso." : "Concessão privada encerrada com sucesso.",
+        changes: [
+          { label: "Status do Contrato", delta: state.concessionActive ? "Concessionária Privada Ativa" : "Operação Pública Direta", type: "benefit" },
+          { label: "Outorga Mensal", delta: state.concessionActive ? "+R$ 400/mês ao Tesouro" : "Encerrada (R$ 0)", type: state.concessionActive ? "benefit" : "cost" },
+          { label: "Espectro de Gestão", delta: state.concessionActive ? "Incentivo pró-mercado" : "Retorno estatista", type: "neutral" }
+        ]
+      };
+    }
+  },
+
+  buildFacility_health_post: {
+    id: "buildFacility_health_post",
+    title: "Construir Posto de Saúde Comunitário",
+    category: "SERVIÇOS PÚBLICOS · SAÚDE",
+    description: "Construa uma nova unidade de saúde básica no vilarejo para ampliar o atendimento médico preventivo e curativo.",
+    cost: 5000,
+    costLabel: "R$ 5.000 do Tesouro Municipal",
+    benefitLabel: "+1 Posto de Saúde (Capacidade +50 consultas/mês)",
+    impactLabel: "Aumenta a cobertura sanitária, reduz tempo de espera e previne agravamento de enfermidades locais.",
+    locationLabel: "Setor de Serviços Públicos",
+    durationLabel: "Imediato",
+    worldCoords: { x: 380, y: 400, zoom: 1.25 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 5000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(5000)}.`,
+          details: "Recursos insuficientes no Tesouro para a edificação do Posto de Saúde."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: (state, options) => {
+      if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
+        window.VilarejoTest.buildPublicFacility("health_post", options?.options);
+      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
+        window.VilarejoServicesRuntime.buildFacility("health_post", options?.options);
+      }
+      return {
+        summary: "Posto de Saúde Comunitário construído.",
+        changes: [
+          { label: "Investimento do Tesouro", delta: "-R$ 5.000", type: "cost" },
+          { label: "Equipamento Público", delta: "Posto de Saúde Ativo", type: "benefit" },
+          { label: "Capacidade de Atendimento", delta: "+50 pacientes/mês", type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  buildFacility_school: {
+    id: "buildFacility_school",
+    title: "Construir Escola Municipal",
+    category: "SERVIÇOS PÚBLICOS · EDUCAÇÃO",
+    description: "Implante uma escola municipal de ensino fundamental para garantir acesso à educação das crianças da comunidade.",
+    cost: 6000,
+    costLabel: "R$ 6.000 do Tesouro Municipal",
+    benefitLabel: "+1 Escola Municipal (Capacidade +60 vagas escolares)",
+    impactLabel: "Eleva o nível educacional, a produtividade futura da força de trabalho e a satisfação comunitária.",
+    locationLabel: "Setor Centro e Educação",
+    durationLabel: "Imediato",
+    worldCoords: { x: 500, y: 270, zoom: 1.25 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 6000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
+          details: "Recursos insuficientes no Tesouro para a edificação da Escola."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: (state, options) => {
+      if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
+        window.VilarejoTest.buildPublicFacility("school", options?.options);
+      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
+        window.VilarejoServicesRuntime.buildFacility("school", options?.options);
+      }
+      return {
+        summary: "Escola Municipal construída com sucesso.",
+        changes: [
+          { label: "Investimento do Tesouro", delta: "-R$ 6.000", type: "cost" },
+          { label: "Equipamento Público", delta: "Escola Municipal Ativa", type: "benefit" },
+          { label: "Capacidade Educacional", delta: "+60 alunos", type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  buildFacility_police_station: {
+    id: "buildFacility_police_station",
+    title: "Construir Posto Policial",
+    category: "SERVIÇOS PÚBLICOS · SEGURANÇA",
+    description: "Instale uma base de patrulhamento da guarda municipal para manter a paz e prevenir desordens no vilarejo.",
+    cost: 5000,
+    costLabel: "R$ 5.000 do Tesouro Municipal",
+    benefitLabel: "+1 Posto Policial (Capacidade +40 ocorrências/mês)",
+    impactLabel: "Reduz índices de criminalidade, protege o comércio e eleva a segurança pública.",
+    locationLabel: "Setor Centro e Segurança",
+    durationLabel: "Imediato",
+    worldCoords: { x: 500, y: 270, zoom: 1.25 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 5000) {
+        return {
+          canExecute: false,
+          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(5000)}.`,
+          details: "Recursos insuficientes no Tesouro para a edificação do Posto Policial."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: (state, options) => {
+      if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
+        window.VilarejoTest.buildPublicFacility("police_station", options?.options);
+      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
+        window.VilarejoServicesRuntime.buildFacility("police_station", options?.options);
+      }
+      return {
+        summary: "Posto Policial construído com sucesso.",
+        changes: [
+          { label: "Investimento do Tesouro", delta: "-R$ 5.000", type: "cost" },
+          { label: "Equipamento Público", delta: "Posto Policial Ativo", type: "benefit" },
+          { label: "Segurança Comunitária", delta: "+40 capacidade de patrulha", type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  govAction_action_sanitary_clean: {
+    id: "govAction_action_sanitary_clean",
+    title: "Mutirão Sanitário de Limpeza",
+    category: "AÇÕES DE GOVERNO · SAÚDE",
+    description: "Mobilize equipes municipais e moradores para desentupimento de valas e eliminação de focos transmissores de doenças.",
+    cost: 800,
+    costLabel: "R$ 800 do Tesouro Municipal",
+    benefitLabel: "Melhoria imediata nas condições sanitárias e contenção de surtos",
+    impactLabel: "Diminui a pressão sobre o posto de saúde e previne epidemias na comunidade.",
+    locationLabel: "Bairros e Vias Públicas",
+    durationLabel: "Imediato",
+    worldCoords: { x: 380, y: 400, zoom: 1.25 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 800) {
+        return {
+          canExecute: false,
+          reason: `Caixa insuficiente no Tesouro: possui ${money(tBalance)}, necessário ${money(800)}.`,
+          details: "Saldo insuficiente para custear os equipamentos e horas extras do mutirão sanitário."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      if (window.VilarejoTest && window.VilarejoTest.executeGovernanceAction) {
+        window.VilarejoTest.executeGovernanceAction("action_sanitary_clean");
+      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.executeGovernanceAction) {
+        window.VilarejoServicesRuntime.executeGovernanceAction("action_sanitary_clean");
+      }
+      return {
+        summary: "Mutirão Sanitário executado com sucesso.",
+        changes: [
+          { label: "Custo Operacional", delta: "-R$ 800", type: "cost" },
+          { label: "Higiene Urbana", delta: "Focos de infecção erradicados", type: "benefit" },
+          { label: "Alívio na Saúde", delta: "Redução da procura hospitalar", type: "benefit" }
+        ]
+      };
+    }
+  },
+
+  govAction_action_security_patrol: {
+    id: "govAction_action_security_patrol",
+    title: "Ronda Noturna Intensiva",
+    category: "AÇÕES DE GOVERNO · SEGURANÇA",
+    description: "Mobilização de patrulha extra nas ruas comerciais e residenciais nos períodos noturnos.",
+    cost: 600,
+    costLabel: "R$ 600 do Tesouro Municipal",
+    benefitLabel: "Redução de pequenos delitos e aumento da sensação de segurança",
+    impactLabel: "Protege o comércio local e inibe arrombamentos durante a noite.",
+    locationLabel: "Centro Comercial e Bairros",
+    durationLabel: "Imediato",
+    worldCoords: { x: 675, y: 350, zoom: 1.25 },
+    validate: (state) => {
+      const tBalance = balance("treasury");
+      if (tBalance < 600) {
+        return {
+          canExecute: false,
+          reason: `Caixa insuficiente no Tesouro: possui ${money(tBalance)}, necessário ${money(600)}.`,
+          details: "Saldo insuficiente para custear combustível e diárias de patrulha."
+        };
+      }
+      return { canExecute: true };
+    },
+    execute: () => {
+      if (window.VilarejoTest && window.VilarejoTest.executeGovernanceAction) {
+        window.VilarejoTest.executeGovernanceAction("action_security_patrol");
+      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.executeGovernanceAction) {
+        window.VilarejoServicesRuntime.executeGovernanceAction("action_security_patrol");
+      }
+      return {
+        summary: "Ronda Noturna concluída com êxito.",
+        changes: [
+          { label: "Custo Operacional", delta: "-R$ 600", type: "cost" },
+          { label: "Ordem Pública", delta: "Patrulhamento ostensivo intensificado", type: "benefit" }
+        ]
+      };
+    }
+  }
+};
+
+window.VilarejoActionFlow = {
+  catalog: ACTION_CATALOG,
+  pendingActionId: null,
+  pendingOptions: null,
+
+  openConfirmation(actionId, options = {}) {
+    const action = ACTION_CATALOG[actionId];
+    if (!action) {
+      console.warn("Ação não catalogada:", actionId);
+      return { canExecute: false, reason: "Ação não encontrada." };
+    }
+    this.pendingActionId = actionId;
+    this.pendingOptions = options;
+
+    const modal = $("actionConfirmModal");
+    if (!modal) {
+      return this.executeAction(actionId, options);
+    }
+
+    const titleEl = $("actionConfirmTitle");
+    const badgeEl = $("actionConfirmBadge");
+    const descEl = $("actionConfirmDesc");
+    const gridEl = $("actionConfirmGrid");
+    const warnEl = $("actionConfirmValidationWarning");
+    const boxEl = $("actionConfirmButtonsBox");
+
+    const val = typeof action.validate === "function" ? action.validate(S, options) : { canExecute: true };
+
+    if (!val.canExecute) {
+      if (titleEl) titleEl.textContent = `Ação Indisponível: ${action.title}`;
+      if (badgeEl) {
+        badgeEl.textContent = "AÇÃO RECUSADA · PRÉ-REQUISITO NÃO ATENDIDO";
+        badgeEl.style.color = "#dc2626";
+      }
+      if (descEl) descEl.textContent = "As condições atuais da simulação não permitem a execução desta medida.";
+
+      if (warnEl) {
+        warnEl.innerHTML = `
+          <strong>Motivo da recusa:</strong>
+          <p>${val.reason}</p>
+          ${val.details ? `<p style="margin-top:0.4rem;font-size:0.78rem;color:#7f1d1d;">${val.details}</p>` : ''}
+        `;
+        warnEl.classList.remove("hidden");
+      }
+
+      if (gridEl) {
+        gridEl.innerHTML = `
+          <div class="welcome-item">
+            <small>CUSTO REQUERIDO</small>
+            <strong>${action.costLabel || money(action.cost || 0)}</strong>
+            <p>Valor necessário para mobilização da medida.</p>
+          </div>
+          <div class="welcome-item">
+            <small>SALDO DISPONÍVEL NO TESOURO</small>
+            <strong style="color:${balance('treasury') < (action.cost || 0) ? '#dc2626' : 'var(--forest)'};">${money(balance('treasury'))}</strong>
+            <p>${stateSnapshot()?.lots ?? S.lots} lotes públicos em carteira.</p>
+          </div>
+        `;
+      }
+
+      if (boxEl) {
+        boxEl.innerHTML = `
+          <button id="btnCancelAction" class="btn-primary" type="button" style="width:100%;max-width:240px;margin:0 auto;">Compreendido</button>
+        `;
+        const btnCancel = $("btnCancelAction");
+        if (btnCancel) btnCancel.onclick = () => this.closeConfirmation();
+      }
+
+      const closeBtn = $("btnCloseActionConfirm");
+      if (closeBtn) closeBtn.onclick = () => this.closeConfirmation();
+
+      modal.classList.remove("hidden");
+      return val;
+    }
+
+    if (titleEl) titleEl.textContent = `Confirmar: ${action.title}?`;
+    if (badgeEl) {
+      badgeEl.textContent = action.category || "CONFIRMAÇÃO DE DIRETRIZ MUNICIPAL";
+      badgeEl.style.color = "";
+    }
+    if (descEl) descEl.textContent = action.description || "Confirme a destinação de recursos e avalie os impactos esperados para o município.";
+
+    if (warnEl) {
+      warnEl.innerHTML = "";
+      warnEl.classList.add("hidden");
+    }
+
+    if (gridEl) {
+      gridEl.innerHTML = `
+        <div class="welcome-item">
+          <small>1. CUSTO & RECURSOS</small>
+          <strong>${action.costLabel || money(action.cost || 0)}</strong>
+          <p>Saldo atual do Tesouro: ${money(balance("treasury"))}</p>
+        </div>
+        <div class="welcome-item">
+          <small>2. CAPACIDADE & BENEFÍCIO</small>
+          <strong>${action.benefitLabel}</strong>
+          <p>Entrega prevista após autorização.</p>
+        </div>
+        <div class="welcome-item">
+          <small>3. IMPACTO ECONÔMICO</small>
+          <strong>Circulação Local</strong>
+          <p>${action.impactLabel}</p>
+        </div>
+        <div class="welcome-item">
+          <small>4. LOCALIZAÇÃO & PRAZO</small>
+          <strong>${action.locationLabel}</strong>
+          <p>Prazo: ${action.durationLabel}</p>
+        </div>
+      `;
+    }
+
+    if (boxEl) {
+      boxEl.innerHTML = `
+        <button id="btnCancelAction" class="btn-secondary" type="button">Cancelar</button>
+        <button id="btnProceedAction" class="btn-primary" type="button">Confirmar Ação →</button>
+      `;
+      const btnCancel = $("btnCancelAction");
+      if (btnCancel) btnCancel.onclick = () => this.closeConfirmation();
+      const btnProceed = $("btnProceedAction");
+      if (btnProceed) btnProceed.onclick = () => this.executeAction(actionId, options);
+    }
+
+    const closeBtn = $("btnCloseActionConfirm");
+    if (closeBtn) closeBtn.onclick = () => this.closeConfirmation();
+
+    modal.classList.remove("hidden");
+    return val;
+  },
+
+  closeConfirmation() {
+    const modal = $("actionConfirmModal");
+    if (modal) modal.classList.add("hidden");
+    this.pendingActionId = null;
+    this.pendingOptions = null;
+  },
+
+  executeAction(actionId, options = {}) {
+    const action = ACTION_CATALOG[actionId];
+    if (!action) {
+      console.warn("Ação não catalogada para execução:", actionId);
+      return null;
+    }
+
+    const val = typeof action.validate === "function" ? action.validate(S, options) : { canExecute: true };
+    if (!val.canExecute) {
+      return this.openConfirmation(actionId, options);
+    }
+
+    const observer = (typeof window !== "undefined" && window.__vilarejoDecisionObserver) ||
+                     (window.VilarejoDashboard && typeof window.VilarejoDashboard.getDecisionObserver === "function" ? window.VilarejoDashboard.getDecisionObserver() : null);
+    let token = null;
+    if (observer && typeof observer.begin === "function") {
+      try {
+        const runId = S.runId || ("run_" + S.seed);
+        token = observer.begin({
+          runId,
+          source: "action",
+          label: action.title,
+          context: action.impactLabel,
+          monthNumber: S.monthNumber,
+          day: S.day,
+          measures: {
+            treasuryCash: balance("treasury"),
+            population: population(),
+            lotCount: S.lots,
+            housingCapacity: S.housingCapacity,
+            costIndex: S.costOfLivingIndex
+          }
+        });
+      } catch (err) {
+        console.warn("Falha ao iniciar registro da decisão:", err);
+      }
+    }
+
+    const result = action.execute(S, options) || { summary: action.title + " executada.", changes: [] };
+
+    this.closeConfirmation();
+
+    if (token && observer && typeof observer.recordImmediate === "function") {
+      try {
+        observer.recordImmediate(token, {
+          treasuryCash: balance("treasury"),
+          population: population(),
+          lotCount: S.lots,
+          housingCapacity: S.housingCapacity,
+          costIndex: S.costOfLivingIndex
+        });
+      } catch (err) {
+        console.warn("Falha ao registrar delta imediato:", err);
+      }
+    }
+
+    render();
+    this.renderOngoingProjects();
+
+    this.showFeedbackToast(
+      action.title,
+      "AÇÃO EXECUTADA COM SUCESSO",
+      result.changes,
+      true
+    );
+
+    if (action.worldCoords && window.VilarejoDashboard && typeof window.VilarejoDashboard.focusMapOn === "function") {
+      window.VilarejoDashboard.focusMapOn(action.worldCoords.x, action.worldCoords.y, action.worldCoords.zoom);
+    }
+    if (window.VilarejoDashboard && typeof window.VilarejoDashboard.getWorldRenderer === "function") {
+      const wr = window.VilarejoDashboard.getWorldRenderer();
+      if (wr && typeof wr.refresh === "function") wr.refresh();
+    }
+
+    return result;
+  },
+
+  showFeedbackToast(title, badge, rows, isSuccess = true) {
+    const toast = $("decisionFeedbackToast");
+    if (!toast) return;
+
+    const rowsHtml = (rows || []).map(r => {
+      const valClass = r.type === "cost" ? "bad" : (r.type === "benefit" ? "good" : "");
+      return `<div class="feedback-row"><small>${r.label}:</small> <strong class="${valClass}">${r.delta || r.value}</strong></div>`;
+    }).join("");
+
+    toast.innerHTML = `
+      <div class="feedback-toast-inner">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <span class="feedback-toast-badge">${badge || "DECISÃO EXECUTADA"}</span>
+          <button type="button" onclick="document.getElementById('decisionFeedbackToast').classList.add('hidden')" style="background:none;border:none;color:#ecf1e9;cursor:pointer;font-size:0.9rem;padding:0;margin-left:8px;" aria-label="Fechar notificação">✕</button>
+        </div>
+        <h4 class="feedback-toast-title">${title}</h4>
+        <div class="feedback-toast-body">
+          ${rowsHtml}
+        </div>
+      </div>
+    `;
+    toast.classList.remove("hidden");
+    if (toast.__timer) clearTimeout(toast.__timer);
+    toast.__timer = setTimeout(() => {
+      toast.classList.add("hidden");
+    }, 6000);
+  },
+
+  renderOngoingProjects() {
+    const host = $("ongoingProjectsHost");
+    if (!host) return;
+    const list = S.buildings || [];
+    if (!list.length) {
+      host.innerHTML = "";
+      return;
+    }
+    const itemsHtml = list.map((b, idx) => {
+      const due = typeof b === "number" ? b : b.due;
+      const name = (typeof b === "object" && b.name) ? b.name : `Moradia Municipal #${idx + 1}`;
+      const startDay = (typeof b === "object" && b.startedAt) ? b.startedAt : (due - 30);
+      const totalDays = Math.max(1, due - startDay);
+      const elapsed = Math.max(0, S.day - startDay);
+      const pct = Math.max(0, Math.min(100, Math.round((elapsed / totalDays) * 100)));
+      const daysLeft = Math.max(0, due - S.day);
+
+      return `
+        <div class="ongoing-item">
+          <div class="ongoing-item-title">
+            <span>🏗️ ${name}</span>
+            <span>${daysLeft > 0 ? `Conclusão em ${daysLeft} dia(s)` : 'Fase de acabamento'}</span>
+          </div>
+          <div class="ongoing-item-desc">
+            <span>Início: Dia ${startDay} · Entrega prevista: Dia ${due} (Ano ${Math.floor(due/YEAR)+1})</span>
+          </div>
+          <div class="ongoing-progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+            <div class="ongoing-progress-fill" style="width: ${pct}%;"></div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    host.innerHTML = `
+      <div class="ongoing-card">
+        <div class="ongoing-header">
+          <span class="ongoing-badge">OBRAS E PROJETOS EM ANDAMENTO (${list.length})</span>
+          <small style="color:var(--muted);font-size:0.75rem;">Acompanhamento dia a dia</small>
+        </div>
+        <div class="ongoing-list">
+          ${itemsHtml}
+        </div>
+      </div>
+    `;
+  }
+};
+
 function actions(){
  if(!$("actions"))return;
  const fVal=calculateFirmValuation("farm");
@@ -4344,21 +5290,17 @@ function actions(){
  if($("stanceCapitalist"))$("stanceCapitalist").onclick=()=>applyGovernanceStance("capitalist");
  if($("stanceCommunal"))$("stanceCommunal").onclick=()=>applyGovernanceStance("communal");
 
- $("sellLot").onclick=()=>{if(S.lots<=0)return;S.lots--;log("external","treasury",8000,"Venda de terreno público");if(S.currentMonthTracking)S.currentMonthTracking.assetSales+=8000;feed("Lote público vendido por R$ 8.000.");render()};
- $("build").onclick=()=>{if(S.lots<=0){feed("Não há terrenos disponíveis para construir.");render();return}if(balance("treasury")<6000){feed("Tesouro sem recursos para iniciar a obra.");render();return}log("treasury","workshop",3000,"Obra pública: serviços e mão de obra locais");log("treasury","external",3000,"Obra pública: materiais importados");if(S.currentMonthTracking){S.currentMonthTracking.publicWorks+=6000;S.currentMonthTracking.importedCapitalGoods=(S.currentMonthTracking.importedCapitalGoods||0)+3000;S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+3000;}S.lots--;S.buildings.push(S.day+30);feed("Obra iniciada; metade do custo circula na oficina de serviços local. Conclusão no dia "+(S.day+30)+".");render()};
- $("investCredit").onclick=()=>{if(S.lots<=0){feed("Não há terrenos disponíveis para investimento.");render();return}const loan=issueLoan("landlord",14000,"aquisição de terreno e construção de moradia");if(loan<13999){feed("Crédito insuficiente: o banco preserva a reserva mínima dos depositantes.");render();return}log("landlord","treasury",8000,"Compra de terreno para empreendimento imobiliário");log("landlord","workshop",3000,"Obra privada: serviços e mão de obra locais");if(S.currentMonthTracking){S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+3000;S.currentMonthTracking.privateFixedInvestment=(S.currentMonthTracking.privateFixedInvestment||0)+6000;S.currentMonthTracking.importedCapitalGoods=(S.currentMonthTracking.importedCapitalGoods||0)+3000;}log("landlord","external",3000,"Obra privada: materiais importados");S.lots--;S.buildings.push(S.day+30);feed("Investimento imobiliário financiado; obra injeta serviços na oficina local.");render()};
- if($("investInfra"))$("investInfra").onclick=()=>investInInfrastructure();
- if($("projRuralRoad"))$("projRuralRoad").onclick=()=>executeInfrastructureProject("rural_road");
- if($("projSocialHousing"))$("projSocialHousing").onclick=()=>executeInfrastructureProject("social_housing");
- if($("projSanitation"))$("projSanitation").onclick=()=>executeInfrastructureProject("sanitation_health");
- if($("projGrainSilo"))$("projGrainSilo").onclick=()=>executeInfrastructureProject("grain_silo");
- if($("sell25Stake"))$("sell25Stake").onclick=()=>sellFarmStake(0.25);
- if($("privatizeValuation"))$("privatizeValuation").onclick=()=>sellFarmStake(S.farmOwnership.treasury);
- if($("toggleConcession"))$("toggleConcession").onclick=()=>{
-  S.concessionActive=!S.concessionActive;
-  feed(S.concessionActive?"Contrato de concessão firmado: concessionária assume a operação e recolhe outorga mensal ao Tesouro.":"Contrato de concessão encerrado.");
-  render();
- };
+ if($("sellLot"))$("sellLot").onclick=()=>window.VilarejoActionFlow.openConfirmation("sellLot");
+ if($("build"))$("build").onclick=()=>window.VilarejoActionFlow.openConfirmation("build");
+ if($("investCredit"))$("investCredit").onclick=()=>window.VilarejoActionFlow.openConfirmation("investCredit");
+ if($("investInfra"))$("investInfra").onclick=()=>window.VilarejoActionFlow.openConfirmation("investInfra");
+ if($("projRuralRoad"))$("projRuralRoad").onclick=()=>window.VilarejoActionFlow.openConfirmation("projRuralRoad");
+ if($("projSocialHousing"))$("projSocialHousing").onclick=()=>window.VilarejoActionFlow.openConfirmation("projSocialHousing");
+ if($("projSanitation"))$("projSanitation").onclick=()=>window.VilarejoActionFlow.openConfirmation("projSanitation");
+ if($("projGrainSilo"))$("projGrainSilo").onclick=()=>window.VilarejoActionFlow.openConfirmation("projGrainSilo");
+ if($("sell25Stake"))$("sell25Stake").onclick=()=>window.VilarejoActionFlow.openConfirmation("sell25Stake");
+ if($("privatizeValuation"))$("privatizeValuation").onclick=()=>window.VilarejoActionFlow.openConfirmation("privatizeValuation");
+ if($("toggleConcession"))$("toggleConcession").onclick=()=>window.VilarejoActionFlow.openConfirmation("toggleConcession");
 }
 function sparklineSVG(values,color="var(--gold)"){
  if(!values||values.length<2)return "";
@@ -4543,8 +5485,58 @@ function render(){syncPendingEventPrompt();auditCashConservation();const ls=getL
    return `<div class="event-option-card"><div class="event-opt-head"><span class="event-opt-title">${o.label}</span><span class="event-opt-cost ${costClass}">${costText}</span></div>${impactHtml}<button data-choice="${i}" class="btn-action" ${o.disabled?"disabled":""}>Confirmar esta decisão</button></div>`;
   }).join("");
  }else ev.classList.add("hidden");
- $("eventOptions").onclick=e=>{const b=e.target.closest("button");if(!b||!S.event)return;const weatherDecision=S.event.title==="Proteção contra geada"||S.event.title==="Proteção contra Geada na Safra";S.event.options[+b.dataset.choice].run();if(weatherDecision)continueDayOperations();else{syncPendingEventPrompt();render()}};if(S.gameOver){$("eventTitle").textContent="Fim de jogo";$("eventText").textContent=S.gameOver;ev.classList.remove("hidden");$("eventOptions").innerHTML="";pause()}renderPolicies();renderExtendedDashboard()}
-function continueDayOperations(){const doy=S.day%YEAR;buyInputsAndProduce();if(doy>=150&&doy<210&&!S.weatherProtection&&!S.weatherEventDone&&economicRand()<FROST_DAILY_RISK){S.weatherEventDone=true;S.weatherFactor=.65;feed("Geada atingiu a lavoura: produção restante reduzida em 35%.")}if(S.day%10===0)sellCoffee();S.buildings=S.buildings.filter(due=>{if(S.day>=due){S.housingCapacity+=2;feed("Moradia concluída: capacidade ampliada em duas pessoas.");return false}return true});if(S.day%MONTH===0)closeMonth();auditCashConservation();render()}
+ $("eventOptions").onclick=e=>{const b=e.target.closest("button");if(!b||!S.event)return;const weatherDecision=S.event.title==="Proteção contra geada"||S.event.title==="Proteção contra Geada na Safra";S.event.options[+b.dataset.choice].run();if(weatherDecision)continueDayOperations();else{syncPendingEventPrompt();render()}};  if(S.gameOver){$("eventTitle").textContent="Fim de jogo";$("eventText").textContent=S.gameOver;ev.classList.remove("hidden");$("eventOptions").innerHTML="";pause()}
+  renderPolicies();
+  renderExtendedDashboard();
+  if(window.VilarejoActionFlow&&typeof window.VilarejoActionFlow.renderOngoingProjects==="function"){
+    window.VilarejoActionFlow.renderOngoingProjects();
+  }
+}
+function continueDayOperations(){
+  const doy=S.day%YEAR;
+  buyInputsAndProduce();
+  if(doy>=150&&doy<210&&!S.weatherProtection&&!S.weatherEventDone&&economicRand()<FROST_DAILY_RISK){
+    S.weatherEventDone=true;
+    S.weatherFactor=.65;
+    feed("Geada atingiu a lavoura: produção restante reduzida em 35%.");
+  }
+  if(S.day%10===0)sellCoffee();
+  const finishedBuildings=[];
+  S.buildings=(S.buildings||[]).filter(due=>{
+    const d=typeof due==="number"?due:due.due;
+    if(S.day>=d){
+      finishedBuildings.push(due);
+      return false;
+    }
+    return true;
+  });
+  if(finishedBuildings.length>0){
+    for(const bld of finishedBuildings){
+      S.housingCapacity+=2;
+      feed(`🎉 CONSTRUÇÃO CONCLUÍDA: Moradia no Bairro Residencial pronta para habitação! Capacidade total ampliada para ${S.housingCapacity} vagas.`);
+    }
+    if(window.VilarejoActionFlow&&typeof window.VilarejoActionFlow.showFeedbackToast==="function"){
+      window.VilarejoActionFlow.showFeedbackToast(
+        "Construção Concluída no Bairro Residencial!",
+        "ENTREGA DE OBRA PÚBLICA",
+        [
+          { label: "Capacidade Habitacional", value: `+${finishedBuildings.length*2} vagas (${S.housingCapacity} total)`, type: "benefit" },
+          { label: "Localização", value: "Bairro Residencial", type: "neutral" },
+          { label: "Status", value: "Pronta para ocupação de novas famílias", type: "benefit" }
+        ],
+        true
+      );
+    }
+    if(window.VilarejoDashboard&&typeof window.VilarejoDashboard.getWorldRenderer==="function"){
+      const wr=window.VilarejoDashboard.getWorldRenderer();
+      if(wr&&wr.focusOn)wr.focusOn(320, 240, 1.25);
+      if(wr&&wr.refresh)wr.refresh();
+    }
+  }
+  if(S.day%MONTH===0)closeMonth();
+  auditCashConservation();
+  render();
+}
 function tick(){if(S.event||S.gameOver){pause();return}S.day++;syncCoreFromEconomy("day-advanced");const doy=S.day%YEAR;if(doy===0){S.weatherFactor=1;S.weatherEventDone=false;S.weatherDecisionDone=false;S.weatherProtection=false;S.productionThisSeason=0}if(doy===150&&!S.weatherDecisionDone){S.weatherDecisionDone=true;S.event={title:"Proteção contra Geada na Safra",situation:"A safra de café está começando e meteorologistas preveem risco de 20% de geada atingir as lavouras.",consequence:"Uma geada forte sem proteção destruirá 35% de toda a produção do ano, gerando grande prejuízo financeiro.",text:"A safra está começando. A geada tem risco aproximado de 20% ao longo da colheita e pode reduzir em 35% a produção restante. A proteção custa R$ 8.000.",options:[{label:"Contratar proteção agrícola",cost:8000,costLabel:"Custo: R$ 8.000",impact:"Garante blindagem total da colheita contra o frio e protege 100% da safra.",run:()=>{const paid=log(farmAccount(),"external",8000,"Seguro contra geada");if(paid>=8000){S.weatherProtection=true;S.monthFarmCosts+=paid;if(S.currentMonthTracking)S.currentMonthTracking.farmInsurance+=paid;feed("Proteção contra geada contratada: safra segura.")}else{S.weatherProtection=false;feed("Caixa insuficiente para contratar proteção.")}S.event=null;render() }},{label:"Assumir o risco do clima",cost:0,costLabel:"Gratuito (R$ 0)",impact:"Economiza R$ 8.000 no caixa agora, mas corre risco real de quebra de 35% na colheita.",run:()=>{S.weatherProtection=false;feed("Fazenda decidiu não contratar proteção contra geada.");S.event=null;render()}}]};render();pause();return}continueDayOperations()}
 function start(){if(timer||S.gameOver||S.event)return;timer=setInterval(tick,650/speed);if(CORE_RUNTIME)CORE_RUNTIME.session.setStatus("running");$("start").textContent="Continuar";$("pause").disabled=false}
 function pause(){const wasRunning=!!timer;clearInterval(timer);timer=null;if(wasRunning&&CORE_RUNTIME&&!S.gameOver)CORE_RUNTIME.session.setStatus("paused");$("pause").disabled=true}
@@ -4558,12 +5550,16 @@ function simulateMonths(n,continueOnGameOver=false){
    S.day++;const doy=S.day%YEAR;
    if(doy===0){S.weatherFactor=1;S.weatherEventDone=false;S.productionThisSeason=0}
    buyInputsAndProduce();if(S.day%10===0)sellCoffee();
-   S.buildings=S.buildings.filter(due=>{if(S.day>=due){S.housingCapacity+=2;return false}return true});
+   S.buildings=S.buildings.filter(due=>{
+     const d=typeof due==="number"?due:due.due;
+     if(S.day>=d){S.housingCapacity+=2;return false}
+     return true;
+   });
   }
   closeMonth();
   let guard=0;
   while((S.event?.engineEventId||S.event?.isCabinetDilemma)&&guard++<5){
-   const ev=S.event;const affordable=ev.options.find(o=>!o.disabled)||ev.options[0];
+   const ev=S.event;const affordable=ev.options.filter(o=>!o.disabled).sort((a,b)=>(a.cost||0)-(b.cost||0))[0]||ev.options[0];
    if(!affordable)break;
    affordable.run();
    S.event=null;
@@ -4913,5 +5909,5 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  }));
 
  return{passed:results.filter(r=>r.passed).length,total:results.length,results};}
-window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,executeInfrastructureProject,getInfrastructureProjects:()=>INFRASTRUCTURE_PROJECTS,getMigrationStats:()=>S.migrationStats,getSupplyChainStats:()=>({localFoodAutonomy:S.localFoodAutonomy||0,farmLocalFoodStock:S.farmLocalFoodStock||0}),issueMicrocredit,foundCooperative,distributeCooperativeSurplus,initAnnualBudget,getAnnualBudget,commitDepartmentBudget,liquidateAndPayDepartmentBudget,supplementDepartmentBudget,foundMill,foundBrickyard,startStructuredPublicWork,getActiveConstructions,getCompletedConstructions,advanceConstructionsMonthly,getStructuredPublicWorks:()=>STRUCTURED_PUBLIC_WORKS,enactLegislation,executeGovernanceAction,getCabinetDilemmas:()=>CABINET_DILEMMAS,triggerCabinetDilemma,resolveCabinetDilemma,getCouncilSupport:()=>S.councilSupport||65,getPoliticalCharactersCatalog,getPoliticalCharacterById,getActivePoliticalCharacters,getPoliticalActiveBonuses,getPoliticalConflicts,hirePoliticalCharacter,dismissPoliticalCharacter,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,updateMarketPrice,marketConsumption,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},calculateGovernanceSpectrum,applyGovernanceStance,simulateMonths,availableCredit,buildPublicFacility,hirePublicStaff,initPrivateSector,runPrivateSectorCycle,getPrivateEconomyStats,computePrivateSectorEnvironment,registerSectorInPrivateEconomy,getPrivateSectorCatalog:()=>PRIVATE_SECTOR_CATALOG,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0};
+window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,executeInfrastructureProject,getInfrastructureProjects:()=>INFRASTRUCTURE_PROJECTS,getMigrationStats:()=>S.migrationStats,getSupplyChainStats:()=>({localFoodAutonomy:S.localFoodAutonomy||0,farmLocalFoodStock:S.farmLocalFoodStock||0}),issueMicrocredit,foundCooperative,distributeCooperativeSurplus,initAnnualBudget,getAnnualBudget,commitDepartmentBudget,liquidateAndPayDepartmentBudget,supplementDepartmentBudget,foundMill,foundBrickyard,startStructuredPublicWork,getActiveConstructions,getCompletedConstructions,advanceConstructionsMonthly,getStructuredPublicWorks:()=>STRUCTURED_PUBLIC_WORKS,enactLegislation,executeGovernanceAction,getCabinetDilemmas:()=>CABINET_DILEMMAS,triggerCabinetDilemma,resolveCabinetDilemma,getCouncilSupport:()=>S.councilSupport||65,getPoliticalCharactersCatalog,getPoliticalCharacterById,getActivePoliticalCharacters,getPoliticalActiveBonuses,getPoliticalConflicts,hirePoliticalCharacter,dismissPoliticalCharacter,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,updateMarketPrice,marketConsumption,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},calculateGovernanceSpectrum,applyGovernanceStance,simulateMonths,availableCredit,buildPublicFacility,hirePublicStaff,initPrivateSector,runPrivateSectorCycle,getPrivateEconomyStats,computePrivateSectorEnvironment,registerSectorInPrivateEconomy,getPrivateSectorCatalog:()=>PRIVATE_SECTOR_CATALOG,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0,getActionFlow:()=>window.VilarejoActionFlow,getActionCatalog:()=>window.VilarejoActionFlow?.catalog};
 newGame();actions();
