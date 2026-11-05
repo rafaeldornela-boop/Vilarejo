@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const { createSimulationContext } = require("./simulation_context.js");
 
 console.log("\n========================================================");
-console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (EIXOS 1 A 20) ===");
+console.log("=== SUÍTE DE VALIDAÇÃO ECONÔMICA ESTRUTURAL (EIXOS 1 A 21) ===");
 console.log("========================================================\n");
 
 const ctx = createSimulationContext({ includeDomainModules: true });
@@ -793,6 +793,39 @@ test("19.1 Plano de Obras com Licitação: canteiro multitemporal, medições me
   assert(run("auditCashConservation().ok"), "Conservação estrita de caixa preservada durante e após a obra");
   const finalBS = api.generateBalanceSheets();
   assert(finalBS.audit.allPass, "Balanços setoriais reconciliados com capital público agregado");
+});
+
+// ---------------------------------------------------------------------------
+// 21. REDE OPERACIONAL DE SERVIÇOS PÚBLICOS (UBS, ESCOLAS, POSTO POLICIAL)
+// ---------------------------------------------------------------------------
+test("20.1 Rede Operacional de Serviços Públicos: construção, lotação, custeio mensal e impacto nos déficits essenciais", () => {
+  api.reset();
+  const S = getS();
+  run("log('external', 'treasury', 60000, 'Dotação para implantação da rede de serviços essenciais')");
+
+  // 1. Construção física da UBS (R$ 9.000) e da Escola Básica (R$ 12.000)
+  const ubsRes = api.buildPublicFacility("health_post", { workers: 4 });
+  assert.strictEqual(ubsRes.ok, true, "Construção da UBS deve ser aprovada");
+  assert.strictEqual(ubsRes.cost, 9000);
+  assert(run("auditCashConservation().ok"), "SFC preservada após construção da UBS");
+
+  const schoolRes = api.buildPublicFacility("school", { workers: 4 });
+  assert.strictEqual(schoolRes.ok, true, "Construção da Escola deve ser aprovada");
+  assert.strictEqual(schoolRes.cost, 12000);
+  assert(run("auditCashConservation().ok"), "SFC preservada após construção da Escola");
+
+  // 2. Fechamento mensal: apuração de custeio operacional (folha e manutenção)
+  const treasuryBefore = run("balance('treasury')");
+  run("closeMonth()");
+  const treasuryAfter = run("balance('treasury')");
+
+  // A UBS e Escola ativas consom manutenção e folha pública
+  assert.ok(treasuryAfter < treasuryBefore, "Custeio operacional deve debitar folha e manutenção do Tesouro");
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa após custeio operacional");
+
+  // 3. Auditoria patrimonial SFC e Teorema da Riqueza Real
+  const bs = api.generateBalanceSheets();
+  assert(bs.audit.allPass, "Balanço setorial SFC aprovado com rede pública física");
 });
 
 console.log(`\n========================================================`);
