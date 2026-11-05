@@ -8,7 +8,7 @@ const { createSimulationContext } = require("./simulation_context.js");
 
 const ROOT = path.join(__dirname, "../../");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-const loadedScripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
+const loadedScripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]).filter((src) => !src.startsWith("http://") && !src.startsWith("https://"));
 const failures = [];
 let passed = 0;
 

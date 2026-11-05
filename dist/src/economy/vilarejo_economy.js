@@ -2594,6 +2594,69 @@ function executeGovernanceAction(action) {
   return { success: true, action, cost: totalPaid };
 }
 
+function buildPublicFacility(type, options = {}) {
+  const engine = (window.VilarejoPublicServices || (window.VilarejoServices && window.VilarejoServices.getOperationalEngine ? window.VilarejoServices.getOperationalEngine() : null));
+  if (!engine) {
+    feed("Motor de serviços operacionais não carregado.");
+    return { ok: false, reason: "engine_missing" };
+  }
+  let spec;
+  try {
+    spec = engine.catalog(type);
+  } catch (err) {
+    feed("Instalação pública desconhecida: " + type);
+    return { ok: false, reason: "invalid_type" };
+  }
+  const cost = spec.constructionCost;
+  if (balance("treasury") < cost) {
+    feed(`Tesouro com saldo insuficiente para construir ${spec.name}. Custo: ${money(cost)}.`);
+    return { ok: false, reason: "insufficient_funds" };
+  }
+  const wsShare = Math.round(cost * 0.60);
+  const extShare = cost - wsShare;
+  const paidWs = log("treasury", "workshop", wsShare, `Construção pública (${spec.name}): mão de obra local`);
+  const paidExt = log("treasury", "external", extShare, `Construção pública (${spec.name}): materiais e equipamentos`);
+  const totalPaid = paidWs + paidExt;
+
+  if (S.currentMonthTracking) {
+    S.currentMonthTracking.publicWorks = round2((S.currentMonthTracking.publicWorks || 0) + totalPaid);
+    S.currentMonthTracking.workshopRevenue = round2((S.currentMonthTracking.workshopRevenue || 0) + paidWs);
+    S.currentMonthTracking.importedCapitalGoods = round2((S.currentMonthTracking.importedCapitalGoods || 0) + paidExt);
+  }
+
+  S.publicCapitalStock = round2((S.publicCapitalStock || 20000) + totalPaid);
+
+  if (!S.publicFacilities) S.publicFacilities = [];
+  const facilityRecord = {
+    id: `fac_${spec.id}_${(S.publicFacilities.length + 1)}`,
+    type: spec.id,
+    name: spec.name,
+    domain: spec.domain,
+    cost: totalPaid,
+    month: S.monthNumber,
+    day: S.day,
+    workers: options.workers || spec.minimumWorkers
+  };
+  S.publicFacilities.push(facilityRecord);
+
+  if (CORE_RUNTIME && CORE_RUNTIME.events) {
+    CORE_RUNTIME.publish("services:build-facility", { type, options }, "economia");
+  }
+
+  feed(`Construção concluída: ${spec.name} erguida e integrada à rede de serviços por ${money(totalPaid)}.`);
+  render();
+  return { ok: true, facility: facilityRecord, cost: totalPaid };
+}
+
+function hirePublicStaff(facilityId, count = 1) {
+  if (CORE_RUNTIME && CORE_RUNTIME.events) {
+    CORE_RUNTIME.publish("services:hire-facility", { facilityId, count }, "economia");
+  }
+  feed(`Lotação de servidores atualizada na unidade pública.`);
+  render();
+  return { ok: true };
+}
+
 function processHarrisTodaroMigration(){
  const p=S.policy;
  const effMigrationCost = Math.max(0, p.migrationCost - (Number(S.activeCharacterBonuses?.custoMigracao) || 0));
@@ -3381,6 +3444,42 @@ function closeMonth(){
  distributeCooperativeSurplus();
  settleConcessionOutorga();
  advanceConstructionsMonthly();
+
+  // 5. Custeio Operacional de Instalações Públicas (Folha de servidores e manutenção)
+  let publicPersonnelCost = 0;
+  let publicMaintenanceCost = 0;
+  const engine = (window.VilarejoPublicServices || (window.VilarejoServices && window.VilarejoServices.getOperationalEngine ? window.VilarejoServices.getOperationalEngine() : null));
+  const activeFacilities = (Array.isArray(S.publicFacilities) && S.publicFacilities.length > 0)
+    ? S.publicFacilities
+    : (CORE_RUNTIME && CORE_RUNTIME.modules && CORE_RUNTIME.modules.has("servicos")
+        ? (CORE_RUNTIME.modules.get("servicos")?.snapshot?.operational?.facilities || [])
+        : []);
+
+  if (engine && activeFacilities.length > 0) {
+    for (const fac of activeFacilities) {
+      let spec;
+      try { spec = engine.catalog(fac.type); } catch (e) { spec = null; }
+      if (spec) {
+        const wage = Number(spec.wage) || 1500;
+        const workers = Math.max(0, Number(fac.workers) || 0);
+        const payroll = wage * workers;
+        const maintenance = Number(spec.monthlyFixedCost) || 0;
+        if (payroll > 0) {
+          const paid = log("treasury", "external", payroll, `Folha salarial de servidores públicos: ${spec.name}`);
+          publicPersonnelCost = round2(publicPersonnelCost + paid);
+        }
+        if (maintenance > 0) {
+          const paidM = log("treasury", "workshop", maintenance, `Custeio de manutenção predial: ${spec.name}`);
+          publicMaintenanceCost = round2(publicMaintenanceCost + paidM);
+          if (S.currentMonthTracking) {
+            S.currentMonthTracking.workshopRevenue = round2((S.currentMonthTracking.workshopRevenue || 0) + paidM);
+            S.currentMonthTracking.publicWorks = round2((S.currentMonthTracking.publicWorks || 0) + paidM);
+          }
+        }
+      }
+    }
+  }
+
  updateApproval();
 
  const lsNow=getLaborStats();
@@ -3428,8 +3527,8 @@ function closeMonth(){
  const workshopRec=firmRecords.workshop||{};
  const bankRecord={accruedInterest:bankAccrued,interestIncome:bankInterestInc,interestReceivable:bankStats.interestArrears,depositInterestPaid:bankDepInt,creditLosses:bankLosses,netInterestSpread:round2(bankInterestInc-bankDepInt),netProfit:round2(bankInterestInc-bankDepInt-bankLosses),defaultRate:bankStats.defaultRate};
  const employerTaxPaid=round2(wage.employerCharge||0);
- const treasuryRecord={salaryTax:round2(tr.wageSalaryTax||0),employerTax:employerTaxPaid,profitTax:totalProfitTaxPaid,dividendsReceived:round2(tr.dividendsReceived||0),concessionOutorga:round2(tr.concessionOutorga||0),totalTaxRevenue:round2((tr.wageSalaryTax||0)+employerTaxPaid+totalProfitTaxPaid),assetSales:round2(tr.assetSales||0),socialHousing:round2(tr.socialHousing||0),publicWorks:round2(tr.publicWorks||0),stateFarmSupport:round2(tr.stateSupport||0),personnelExpenditure:0,interestReceived:0};
- treasuryRecord.primaryResult=round2(treasuryRecord.totalTaxRevenue+treasuryRecord.dividendsReceived+treasuryRecord.concessionOutorga-treasuryRecord.socialHousing-treasuryRecord.publicWorks-treasuryRecord.stateFarmSupport);
+ const treasuryRecord={salaryTax:round2(tr.wageSalaryTax||0),employerTax:employerTaxPaid,profitTax:totalProfitTaxPaid,dividendsReceived:round2(tr.dividendsReceived||0),concessionOutorga:round2(tr.concessionOutorga||0),totalTaxRevenue:round2((tr.wageSalaryTax||0)+employerTaxPaid+totalProfitTaxPaid),assetSales:round2(tr.assetSales||0),socialHousing:round2(tr.socialHousing||0),publicWorks:round2(tr.publicWorks||0),stateFarmSupport:round2(tr.stateSupport||0),personnelExpenditure:round2(publicPersonnelCost||0),interestReceived:0};
+ treasuryRecord.primaryResult=round2(treasuryRecord.totalTaxRevenue+treasuryRecord.dividendsReceived+treasuryRecord.concessionOutorga-treasuryRecord.socialHousing-treasuryRecord.publicWorks-treasuryRecord.stateFarmSupport-treasuryRecord.personnelExpenditure);
  S.lastDRE={
   farm:{...farmRec,inputs:round2(tr.farmInputs||0),wagesDue:Number(farmRec.payroll?.wagesDue)||0,employerTax:Number(farmRec.payroll?.employerTaxPaid)||0,housing:round2(tr.farmHousing||0),insurance:round2(tr.farmInsurance||0),dividendsPaid:S.lastDividends?.total||0,valuation:farmValObj.valuation},
   commerce:{...commerceRec,sales:commerceRec.revenue||0,importCosts:round2(tr.commerceImports||0),grossMargin:commerceRec.ebitda||0},
@@ -4235,5 +4334,5 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  }));
 
  return{passed:results.filter(r=>r.passed).length,total:results.length,results};}
-window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,executeInfrastructureProject,getInfrastructureProjects:()=>INFRASTRUCTURE_PROJECTS,getMigrationStats:()=>S.migrationStats,getSupplyChainStats:()=>({localFoodAutonomy:S.localFoodAutonomy||0,farmLocalFoodStock:S.farmLocalFoodStock||0}),issueMicrocredit,foundCooperative,distributeCooperativeSurplus,initAnnualBudget,getAnnualBudget,commitDepartmentBudget,liquidateAndPayDepartmentBudget,supplementDepartmentBudget,foundMill,foundBrickyard,startStructuredPublicWork,getActiveConstructions,getCompletedConstructions,advanceConstructionsMonthly,getStructuredPublicWorks:()=>STRUCTURED_PUBLIC_WORKS,enactLegislation,executeGovernanceAction,getCabinetDilemmas:()=>CABINET_DILEMMAS,triggerCabinetDilemma,resolveCabinetDilemma,getCouncilSupport:()=>S.councilSupport||65,getPoliticalCharactersCatalog,getPoliticalCharacterById,getActivePoliticalCharacters,getPoliticalActiveBonuses,getPoliticalConflicts,hirePoliticalCharacter,dismissPoliticalCharacter,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,updateMarketPrice,marketConsumption,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},calculateGovernanceSpectrum,applyGovernanceStance,simulateMonths,availableCredit,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0};
+window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,executeInfrastructureProject,getInfrastructureProjects:()=>INFRASTRUCTURE_PROJECTS,getMigrationStats:()=>S.migrationStats,getSupplyChainStats:()=>({localFoodAutonomy:S.localFoodAutonomy||0,farmLocalFoodStock:S.farmLocalFoodStock||0}),issueMicrocredit,foundCooperative,distributeCooperativeSurplus,initAnnualBudget,getAnnualBudget,commitDepartmentBudget,liquidateAndPayDepartmentBudget,supplementDepartmentBudget,foundMill,foundBrickyard,startStructuredPublicWork,getActiveConstructions,getCompletedConstructions,advanceConstructionsMonthly,getStructuredPublicWorks:()=>STRUCTURED_PUBLIC_WORKS,enactLegislation,executeGovernanceAction,getCabinetDilemmas:()=>CABINET_DILEMMAS,triggerCabinetDilemma,resolveCabinetDilemma,getCouncilSupport:()=>S.councilSupport||65,getPoliticalCharactersCatalog,getPoliticalCharacterById,getActivePoliticalCharacters,getPoliticalActiveBonuses,getPoliticalConflicts,hirePoliticalCharacter,dismissPoliticalCharacter,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,updateMarketPrice,marketConsumption,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},calculateGovernanceSpectrum,applyGovernanceStance,simulateMonths,availableCredit,buildPublicFacility,hirePublicStaff,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0};
 newGame();actions();

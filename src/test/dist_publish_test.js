@@ -59,7 +59,7 @@ test("index.html e style.css estão na raiz de dist/", () => {
 
 test("todos os scripts do index estão presentes em dist/ com caminhos relativos intactos", () => {
   const html = fs.readFileSync(path.join(DIST, "index.html"), "utf8");
-  const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].map((m) => m[1]);
+  const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].map((m) => m[1]).filter((src) => !src.startsWith("http://") && !src.startsWith("https://"));
   assert.deepEqual(scripts, REQUIRED_SCRIPTS);
   for (const src of scripts) {
     const absolute = path.join(DIST, src);

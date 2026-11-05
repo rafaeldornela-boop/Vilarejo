@@ -6,6 +6,18 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function createVilarejoServices(root) {
   "use strict";
 
+  let Engine = null;
+  if (typeof require === "function") {
+    try {
+      Engine = require("./public_services_engine.js");
+    } catch (e) {
+      // Browser fallback or path check
+    }
+  }
+  if (!Engine && root && root.VilarejoPublicServices) {
+    Engine = root.VilarejoPublicServices;
+  }
+
   const VERSION = "1.0.0";
   const clamp = (v, min = 0, max = 100) => Math.max(min, Math.min(max, Number(v) || 0));
   const finite = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
@@ -149,6 +161,7 @@
         minerals: { reserves: 60, extraction: 25, processing: 18, governance: 42, environmentalPressure: 22 }
       },
       publicCapacity: { fiscalSpace: null, workforce: 45, execution: 40 },
+      operationalServices: Engine ? Engine.createState(options.operationalServices || {}) : null,
       governance: {
         demands: {
           health: { demand: 13, capacity: 15, coverage: 100, deficit: 0, pressure: 0 },
@@ -396,6 +409,34 @@
       state.governance.activeSecurityIncident = null;
     }
 
+    // Integração com o motor operacional físico se houver instalações públicas ativas
+    if (Engine && state.operationalServices) {
+      const opData = Engine.aggregate(state.operationalServices, {
+        population: pop,
+        children,
+        elderly,
+        households
+      });
+      if (opData.health && opData.health.capacity > 0) {
+        healthCapacity = Math.max(healthCapacity, opData.health.capacity);
+        healthCoverage = clamp(round1((healthCapacity / healthDemand) * 100), 0, 100);
+        healthDeficit = Math.max(0, healthDemand - healthCapacity);
+        healthPressure = clamp(round1(Math.max(0, 100 - healthCoverage)), 0, 100);
+      }
+      if (opData.education && opData.education.capacity > 0) {
+        eduCapacity = Math.max(eduCapacity, opData.education.capacity);
+        eduCoverage = clamp(round1((eduCapacity / eduDemand) * 100), 0, 100);
+        eduDeficit = Math.max(0, eduDemand - eduCapacity);
+        eduPressure = clamp(round1(Math.max(0, 100 - eduCoverage)), 0, 100);
+      }
+      if (opData.security && opData.security.capacity > 0) {
+        const opSecCover = clamp(opData.security.coverage, 0, 100);
+        secRisk = clamp(round1(Math.min(secRisk, 100 - opSecCover)), 0, 100);
+        safetyIndex = clamp(round1(100 - secRisk), 0, 100);
+        secPressure = clamp(round1(secRisk * 0.9), 0, 100);
+      }
+    }
+
     // 5. Cidadania e Mobilização Social
     const civicPressure = clamp(round1(healthPressure * 0.3 + eduPressure * 0.25 + sanPressure * 0.25 + secPressure * 0.2), 0, 100);
     let civicStatus = "Estabilidade Cívica & Apoio Comunitário";
@@ -494,12 +535,20 @@
     }
     if (state.governance?.sanitaryReliefMonths > 0) state.governance.sanitaryReliefMonths -= 1;
     if (state.governance?.securityReliefMonths > 0) state.governance.securityReliefMonths -= 1;
+
+    let operationalReport = null;
+    if (Engine && state.operationalServices) {
+      operationalReport = Engine.advanceMonth(state.operationalServices, options.demographics || {});
+      Engine.integrateWithServices(state, state.operationalServices, options.demographics || {});
+    }
+
     updateDemandsAndGovernance(state, options.demographics || null);
     const summary = {
       month,
       crossEffects: clone(crossEffects),
       satisfaction: Object.fromEntries(DOMAIN_IDS.map((id) => [id, state.domains[id].satisfaction])),
-      governance: clone(state.governance)
+      governance: clone(state.governance),
+      operational: operationalReport
     };
     state.history.push(summary);
     if (state.history.length > 60) state.history.shift();
@@ -521,6 +570,7 @@
       resources: state.resources,
       publicCapacity: state.publicCapacity,
       governance: state.governance,
+      operational: Engine && state.operationalServices ? Engine.snapshot(state.operationalServices) : null,
       events: state.events.slice(-20),
       history: state.history.slice(-24),
       assumptions: state.assumptions
@@ -646,6 +696,26 @@
       }
     }));
 
+    unsubs.push(runtime.events.on("services:build-facility", (event) => {
+      const { type, options } = event?.payload || {};
+      if (Engine && state.operationalServices && type) {
+        const res = Engine.buildFacility(state.operationalServices, type, options);
+        updateDemandsAndGovernance(state, latestDemographics);
+        const snapshot = publishSnapshot("servicos.facility-built");
+        runtime.publish("services:facility-updated", { ...res, snapshot }, "servicos");
+      }
+    }));
+
+    unsubs.push(runtime.events.on("services:hire-facility", (event) => {
+      const { facilityId, count } = event?.payload || {};
+      if (Engine && state.operationalServices && facilityId) {
+        const res = Engine.hire(state.operationalServices, facilityId, count);
+        updateDemandsAndGovernance(state, latestDemographics);
+        const snapshot = publishSnapshot("servicos.facility-hired");
+        runtime.publish("services:facility-updated", { ...res, snapshot }, "servicos");
+      }
+    }));
+
     return {
       alreadyRegistered: false, state, getSnapshot: () => getSnapshot(state),
       setLever: (domainId, leverId, value) => { const result = setLever(state, domainId, leverId, value); publishSnapshot("servicos.lever-updated"); runtime.publish("services:policy-updated", { domainId, leverId, value: result }, "servicos"); return result; },
@@ -656,6 +726,23 @@
         runtime.publish("services:governance-updated", result, "servicos");
         return result;
       },
+      buildFacility: (type, options) => {
+        if (!Engine || !state.operationalServices) return { ok: false, reason: "engine_unavailable" };
+        const res = Engine.buildFacility(state.operationalServices, type, options);
+        updateDemandsAndGovernance(state, latestDemographics);
+        publishSnapshot("servicos.facility-built");
+        runtime.publish("services:facility-updated", { ...res, snapshot: getSnapshot(state) }, "servicos");
+        return res;
+      },
+      hireStaff: (facilityId, count) => {
+        if (!Engine || !state.operationalServices) return { ok: false, reason: "engine_unavailable" };
+        const res = Engine.hire(state.operationalServices, facilityId, count);
+        updateDemandsAndGovernance(state, latestDemographics);
+        publishSnapshot("servicos.facility-hired");
+        runtime.publish("services:facility-updated", { ...res, snapshot: getSnapshot(state) }, "servicos");
+        return res;
+      },
+      getOperationalSnapshot: () => Engine && state.operationalServices ? Engine.snapshot(state.operationalServices) : null,
       dispose() { unsubs.forEach((unsubscribe) => unsubscribe()); }
     };
   }
@@ -682,6 +769,7 @@
     advanceMonth,
     getSnapshot,
     renderDashboard,
-    registerWithRuntime
+    registerWithRuntime,
+    getOperationalEngine: () => Engine
   };
 });

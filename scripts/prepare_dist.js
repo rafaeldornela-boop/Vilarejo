@@ -14,7 +14,7 @@ const DIST = path.join(ROOT, "dist");
 
 const ROOT_FILES = ["index.html", "style.css"];
 
-/** Scripts externos (CDN). Não são copiados para dist/; só validados no index. */
+/** Scripts externos (CDN). Não são copiados para dist/; só validados se presentes no index. */
 const EXTERNAL_SCRIPTS = [
   "https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js"
 ];

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-04T23:56:46.711Z",
+  "generatedAt": "2026-11-05T00:48:46.805Z",
   "rootFiles": [
     "index.html",
     "style.css"
@@ -23,10 +23,12 @@
   "publicAssets": [
     "public/assets/audio/morning_light_on_cobblestone.mp3",
     "public/assets/interface/community-decision-illustration.jpg",
-    "public/assets/interface/favicon.svg"
+    "public/assets/interface/favicon.svg",
+    "public/vendor/PHASER_LICENSE.txt"
   ],
   "scriptCount": 14,
   "referencedByIndex": [
+    "https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js",
     "src/core/vilarejo_core.js",
     "src/shared/vilarejo_history_store.js",
     "src/events/eventos_v3.js",

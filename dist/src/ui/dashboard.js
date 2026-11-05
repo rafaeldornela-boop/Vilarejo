@@ -1761,6 +1761,51 @@
             </div>
           </article>
 
+          <!-- Rede Operacional de Instalações Públicas -->
+          <article class="content-card" style="margin-bottom:1.2rem;">
+            <div class="section-heading compact-heading">
+              <div>
+                <div class="eyebrow">EQUIPAMENTOS PÚBLICOS MUNICIPAIS</div>
+                <h3 style="margin:0.2rem 0;">Rede Física de Instalações e Servidores</h3>
+                <p style="margin:0;color:#64748b;font-size:0.85rem;">Construa unidades públicas permanentes e contrate servidores para zerar os déficits essenciais de saúde, educação e segurança.</p>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0.85rem;margin-top:0.75rem;">
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.85rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#0f766e;font-size:0.95rem;">✚ Unidade Básica de Saúde (UBS)</strong>
+                  <p style="font-size:0.8rem;color:#475569;margin:0.35rem 0;">Atenção primária contínua e ESF. Capacidade: 18 atendimentos por servidor. Equipe inicial: 2 a 8 trabalhadores.</p>
+                  <small style="color:#64748b;">Investimento: R$ 9.000 · Custeio: R$ 180 fixo + R$ 1.450/servidor</small>
+                </div>
+                <button onclick="window.VilarejoDashboard.buildFacility('health_post')" style="margin-top:0.6rem;padding:0.45rem 0.75rem;background:#0f766e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Erguer UBS (R$ 9.000)
+                </button>
+              </div>
+
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.85rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#0284c7;font-size:0.95rem;">▤ Escola Básica Municipal</strong>
+                  <p style="font-size:0.8rem;color:#475569;margin:0.35rem 0;">Acesso escolar universal e alfabetização. Capacidade: 14 vagas por educador. Equipe inicial: 3 a 16 profissionais.</p>
+                  <small style="color:#64748b;">Investimento: R$ 12.000 · Custeio: R$ 220 fixo + R$ 1.650/professor</small>
+                </div>
+                <button onclick="window.VilarejoDashboard.buildFacility('school')" style="margin-top:0.6rem;padding:0.45rem 0.75rem;background:#0284c7;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Erguer Escola Básica (R$ 12.000)
+                </button>
+              </div>
+
+              <div style="border:1px solid #cbd5e1;border-radius:6px;padding:0.85rem;background:#f8fafc;display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                  <strong style="color:#475569;font-size:0.95rem;">⬡ Posto de Polícia Comunitária</strong>
+                  <p style="font-size:0.8rem;color:#475569;margin:0.35rem 0;">Policiamento preventivo, patrulhas de bairro e ordem. Capacidade: 35 munícipes por operador. Equipe: 3 a 10 policiais.</p>
+                  <small style="color:#64748b;">Investimento: R$ 10.000 · Custeio: R$ 260 fixo + R$ 1.750/policial</small>
+                </div>
+                <button onclick="window.VilarejoDashboard.buildFacility('police_station')" style="margin-top:0.6rem;padding:0.45rem 0.75rem;background:#334155;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.82rem;">
+                  Erguer Posto Policial (R$ 10.000)
+                </button>
+              </div>
+            </div>
+          </article>
+
           <!-- Infraestrutura Urbana e Mercado Local (Consistência Original) -->
           <div class="services-details-grid">
             <article class="content-card">
@@ -2275,6 +2320,26 @@
           refresh();
         }
       },
+      buildFacility: (type, options) => {
+        if (typeof window !== "undefined") {
+          if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
+            window.VilarejoTest.buildPublicFacility(type, options);
+          } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
+            window.VilarejoServicesRuntime.buildFacility(type, options);
+          }
+          refresh();
+        }
+      },
+      hireStaff: (facilityId, count) => {
+        if (typeof window !== "undefined") {
+          if (window.VilarejoTest && window.VilarejoTest.hirePublicStaff) {
+            window.VilarejoTest.hirePublicStaff(facilityId, count);
+          } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.hireStaff) {
+            window.VilarejoServicesRuntime.hireStaff(facilityId, count);
+          }
+          refresh();
+        }
+      },
       hireCharacter: (charId) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.hirePoliticalCharacter) {
           window.VilarejoTest.hirePoliticalCharacter(charId);
@@ -2393,6 +2458,26 @@
             window.VilarejoTest.executeGovernanceAction(action);
           } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.executeGovernanceAction) {
             window.VilarejoServicesRuntime.executeGovernanceAction(actionId);
+          }
+          refresh();
+        }
+      },
+      buildFacility: (type, options) => {
+        if (typeof window !== "undefined") {
+          if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
+            window.VilarejoTest.buildPublicFacility(type, options);
+          } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
+            window.VilarejoServicesRuntime.buildFacility(type, options);
+          }
+          refresh();
+        }
+      },
+      hireStaff: (facilityId, count) => {
+        if (typeof window !== "undefined") {
+          if (window.VilarejoTest && window.VilarejoTest.hirePublicStaff) {
+            window.VilarejoTest.hirePublicStaff(facilityId, count);
+          } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.hireStaff) {
+            window.VilarejoServicesRuntime.hireStaff(facilityId, count);
           }
           refresh();
         }
