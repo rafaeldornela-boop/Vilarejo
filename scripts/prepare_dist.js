@@ -34,6 +34,7 @@ const RUNTIME_SCRIPTS = [
   "src/intelligence/vilarejo_intelligence.js",
   "src/intelligence/intelligence_view.js",
   "src/ui/decision_observer.js",
+  "src/ui/world_sprites_pixelart.js",
   "src/ui/world_renderer_phaser.js",
   "src/ui/dashboard.js"
 ];
