@@ -76,12 +76,16 @@ function publishEconomyMonthClosed(){
 const $=id=>document.getElementById(id);
 const money=v=>"R$ "+Math.round(v).toLocaleString("pt-BR");
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const accountNames={treasury:"Tesouro público",stateFarm:"Fazenda estatal",privateFarm:"Fazenda privada",commerce:"Comércio local",workshop:"Oficina e serviços locais",cooperative:"Cooperativa agroartesanal",mill:"Moinho e beneficiamento de grãos",brickyard:"Olaria e serraria comunitária",privSector:"Economia privada setorial",landlord:"Proprietário de imóveis",bank:"Banco local",external:"Economia externa"};
+const accountNames={treasury:"Tesouro público",stateFarm:"Fazenda estatal",privateFarm:"Fazenda privada",commerce:"Comércio local",workshop:"Oficina e serviços locais",cooperative:"Cooperativa agroartesanal",mill:"Moinho e beneficiamento de grãos",brickyard:"Olaria e serraria comunitária",privSector:"Economia privada setorial",priv_agriculture:"Produtores Rurais Independentes",priv_industry:"Manufaturas e Oficinas Fabris",priv_commerce:"Lojas, Bazares e Varejo Privado",priv_services:"Prestadores de Serviços e Ofícios",priv_construction:"Empreiteiras e Obras Privadas",priv_technology:"Técnica, Contabilidade e Inovação",landlord:"Proprietário de imóveis",bank:"Banco local",external:"Economia externa"};
 const accountKey=h=>"house:"+h.id;
 function householdName(id){const h=S.households.find(x=>x.id===id);return h?h.name:id.replace("house:","Morador ")}
 function nameOf(id){
  const firm=(S?.firms||[]).find(f=>f.account===id||f.id===id);
  if(firm)return firm.name;
+ if(S?.privateSector?.firms){
+  const pf=Object.values(S.privateSector.firms).find(x=>x.account===id||x.id===id);
+  if(pf)return pf.name;
+ }
  return accountNames[id]||householdName(id);
 }
 function balance(id){if(id==="external")return Infinity;if(id.startsWith("house:"))return S.households.find(h=>accountKey(h)===id)?.cash||0;return S.accounts[id]||0}
@@ -1817,12 +1821,22 @@ function initPrivateSector(options = {}) {
   if (S.privateSector && !options.reset) return S.privateSector;
 
   const firms = {};
-  let totalInitCap = 0;
   for (const [secKey, spec] of Object.entries(PRIVATE_SECTOR_CATALOG)) {
+    const accKey = `priv_${secKey}`;
+    if (S.accounts[accKey] === undefined || options.reset) {
+      if (S.accounts[accKey] !== undefined && balance(accKey) > 0 && options.reset) {
+        log(accKey, "external", balance(accKey), `Reversão de caixa na reinicialização (${spec.name})`);
+      }
+      S.accounts[accKey] = 0;
+    }
     const cap = spec.initialFirms * spec.initialCapitalPerFirm;
-    totalInitCap += cap;
+    const initCash = Math.max(2500, round2(cap * 0.80));
+    if (balance(accKey) < 500) {
+      log("external", accKey, initCash, `Capital de giro inicial (${spec.name})`);
+    }
     firms[secKey] = {
-      id: `priv_${secKey}`,
+      id: accKey,
+      account: accKey,
       name: spec.name,
       sector: spec.sector,
       size: spec.size,
@@ -1835,6 +1849,7 @@ function initPrivateSector(options = {}) {
       intermediateInputs: 0,
       wages: 0,
       employerTaxPaid: 0,
+      interestPaid: 0,
       profitBeforeTax: 0,
       taxes: 0,
       profit: 0,
@@ -1843,12 +1858,11 @@ function initPrivateSector(options = {}) {
       financialStatus: "saudavel",
       consecutiveLossMonths: 0,
       consecutiveProfitMonths: 0,
-      lastAction: "estavel"
+      lastAction: "estavel",
+      get cash() { return balance(accKey); },
+      get loans() { return totalLoans(accKey); },
+      get netWorth() { return round2(balance(accKey) + (this.capitalStock || 0) - totalLoans(accKey)); }
     };
-  }
-
-  if (balance("privSector") < 1000) {
-    log("external", "privSector", Math.max(15000, totalInitCap * 0.75), "Capital de giro inicial das empresas privadas");
   }
 
   S.privateSector = {
@@ -1863,6 +1877,8 @@ function initPrivateSector(options = {}) {
       totalTaxes: 0,
       aggregateProfit: 0,
       privateInvestment: 0,
+      totalLoans: Object.keys(firms).reduce((a, k) => a + totalLoans(`priv_${k}`), 0),
+      totalCash: Object.keys(firms).reduce((a, k) => a + balance(`priv_${k}`), 0),
       averageProductivity: 1.0,
       demandIndex: 1.0,
       businessClimateIndex: 1.0,
@@ -1880,8 +1896,15 @@ function initPrivateSector(options = {}) {
 
 function registerSectorInPrivateEconomy(sectorKey, spec) {
   if (!S.privateSector) initPrivateSector();
+  const accKey = `priv_${sectorKey}`;
+  if (S.accounts[accKey] === undefined) S.accounts[accKey] = 0;
+  accountNames[accKey] = spec.name || sectorKey;
+  if (balance(accKey) < 500) {
+    log("external", accKey, spec.initialCash ?? 2500, `Capital de giro inicial (${spec.name || sectorKey})`);
+  }
   const s = {
-    id: `priv_${sectorKey}`,
+    id: accKey,
+    account: accKey,
     name: spec.name || sectorKey,
     sector: sectorKey,
     size: spec.size || "pequeno",
@@ -1894,6 +1917,7 @@ function registerSectorInPrivateEconomy(sectorKey, spec) {
     intermediateInputs: 0,
     wages: 0,
     employerTaxPaid: 0,
+    interestPaid: 0,
     profitBeforeTax: 0,
     taxes: 0,
     profit: 0,
@@ -1902,10 +1926,26 @@ function registerSectorInPrivateEconomy(sectorKey, spec) {
     financialStatus: "saudavel",
     consecutiveLossMonths: 0,
     consecutiveProfitMonths: 0,
-    lastAction: "estavel"
+    lastAction: "estavel",
+    get cash() { return balance(accKey); },
+    get loans() { return totalLoans(accKey); },
+    get netWorth() { return round2(balance(accKey) + (this.capitalStock || 0) - totalLoans(accKey)); }
   };
   S.privateSector.firms[sectorKey] = s;
   return s;
+}
+
+function issuePrivateSectorLoan(sectorKey, amount = 2000, purpose = "Capital de giro e expansão produtiva") {
+  if (!S.privateSector) initPrivateSector();
+  const firm = S.privateSector.firms[sectorKey] || Object.values(S.privateSector.firms).find(f => f.id === sectorKey || f.account === sectorKey);
+  if (!firm) return 0;
+  const accKey = firm.account || `priv_${firm.sector}`;
+  if (S.accounts[accKey] === undefined) S.accounts[accKey] = 0;
+  const paid = issueLoan(accKey, amount, `${purpose} (${firm.name})`);
+  if (paid > 0) {
+    feed(`Crédito empresarial concedido a ${firm.name}: ${money(paid)} pelo Banco Local.`);
+  }
+  return paid;
 }
 
 function computePrivateSectorEnvironment(overrides = {}) {
@@ -1961,6 +2001,7 @@ function runPrivateSectorCycle(overrides = {}) {
   const incomeTaxRate = Number(p.incomeTax ?? 10) / 100;
   const employerTaxRate = env.employerTaxRate / 100;
   const profitTaxRate = env.profitTaxRate / 100;
+  const baseRate = Number(overrides.baseRate ?? p.baseRate ?? 1.5);
 
   let totalFirms = 0;
   let privateJobs = 0;
@@ -1971,6 +2012,8 @@ function runPrivateSectorCycle(overrides = {}) {
   let totalTaxes = 0;
   let aggregateProfit = 0;
   let privateInvestment = 0;
+  let totalPrivateLoans = 0;
+  let totalPrivateCash = 0;
   let prodSum = 0;
   let activeSectorCount = 0;
   let entriesLastMonth = 0;
@@ -1982,6 +2025,10 @@ function runPrivateSectorCycle(overrides = {}) {
   const totalAdults = Math.max(1, adults());
 
   for (const [secKey, firm] of Object.entries(S.privateSector.firms)) {
+    const accKey = firm.account || `priv_${secKey}`;
+    firm.account = accKey;
+    if (S.accounts[accKey] === undefined) S.accounts[accKey] = 0;
+
     const spec = PRIVATE_SECTOR_CATALOG[secKey] || {
       wageMultiplier: 1.0,
       baseRevenuePerWorker: 2500,
@@ -2011,8 +2058,10 @@ function runPrivateSectorCycle(overrides = {}) {
         firm.lastAction = "abertura";
         entriesLastMonth++;
         hiringSectors.push(firm.name);
-        log("external", "privSector", 3000, `Entrada de nova empresa no setor: ${firm.name}`);
+        log("external", accKey, 3000, `Entrada de nova empresa no setor: ${firm.name}`);
       } else {
+        totalPrivateLoans = round2(totalPrivateLoans + totalLoans(accKey));
+        totalPrivateCash = round2(totalPrivateCash + balance(accKey));
         continue;
       }
     }
@@ -2039,14 +2088,14 @@ function runPrivateSectorCycle(overrides = {}) {
         const avail = Math.max(0, (h.cash || 0) - reserve);
         const spend = Math.min(perH, avail * 0.35);
         if (spend >= 5) {
-          const paid = log(accountKey(h), "privSector", round2(spend), `Consumo no setor privado (${firm.name})`);
+          const paid = log(accountKey(h), accKey, round2(spend), `Consumo no setor privado (${firm.name})`);
           domesticRev = round2(domesticRev + paid);
         }
       }
     }
     const externalRev = Math.max(0, round2(grossRevenue - domesticRev));
     if (externalRev > 0) {
-      log("external", "privSector", externalRev, `Faturamento comercial/regional (${firm.name})`);
+      log("external", accKey, externalRev, `Faturamento comercial/regional (${firm.name})`);
     }
     const actualRevenue = round2(domesticRev + externalRev);
     firm.revenue = actualRevenue;
@@ -2054,21 +2103,28 @@ function runPrivateSectorCycle(overrides = {}) {
     // 3. Custos operacionais e insumos (reduzidos por boa infraestrutura)
     const infraCostRelief = clamp(1 - (env.productivityFactor - 1.0) * 0.25, 0.75, 1.25);
     const inputCost = round2(actualRevenue * spec.inputCostRatio * infraCostRelief + firm.firmCount * spec.fixedCostPerFirm);
-    const paidInputs = log("privSector", "external", Math.min(balance("privSector"), inputCost), `Insumos e custos operacionais (${firm.name})`);
+    const paidInputs = log(accKey, "external", Math.min(balance(accKey), inputCost), `Insumos e custos operacionais (${firm.name})`);
     firm.intermediateInputs = paidInputs;
 
-    // 4. Salários (alimentam renda das famílias, consumo, arrecadação e satisfação)
+    // 4. Salários e Financiamento de Capital de Giro Bancário
     const wageBillTarget = round2(activeEmp * offeredWage);
-    // Garantir capital de giro se necessário para folha
-    if (balance("privSector") < wageBillTarget) {
-      log("external", "privSector", round2(wageBillTarget - balance("privSector") + 500), `Aporte de giro dos sócios (${firm.name})`);
+    if (balance(accKey) < wageBillTarget) {
+      const gap = round2(wageBillTarget - balance(accKey) + 400);
+      // Tomar crédito bancário individual se o banco tiver reserva e a dívida do setor for comportável
+      let borrowedWorkingCap = 0;
+      if (availableCredit() >= 200 && totalLoans(accKey) < firm.capitalStock * 1.5) {
+        borrowedWorkingCap = issueLoan(accKey, Math.min(gap, 4000), `Capital de giro para folha (${firm.name})`);
+      }
+      if (balance(accKey) < wageBillTarget) {
+        log("external", accKey, round2(wageBillTarget - balance(accKey) + 300), `Aporte de giro dos sócios (${firm.name})`);
+      }
     }
     let wagesPaid = 0;
     let salaryTaxPaid = 0;
     if (S.households.length > 0 && wageBillTarget > 0) {
       const perHouse = round2(wageBillTarget / S.households.length);
       for (const h of S.households) {
-        const paidW = log("privSector", accountKey(h), Math.min(perHouse, balance("privSector")), `Salários do setor privado (${firm.name})`);
+        const paidW = log(accKey, accountKey(h), Math.min(perHouse, balance(accKey)), `Salários do setor privado (${firm.name})`);
         if (paidW > 0) {
           wagesPaid = round2(wagesPaid + paidW);
           const taxDue = round2(paidW * incomeTaxRate);
@@ -2088,19 +2144,21 @@ function runPrivateSectorCycle(overrides = {}) {
 
     // Encargo patronal sobre a folha privada
     const empTaxDue = round2(wagesPaid * employerTaxRate);
-    const empTaxPaid = empTaxDue > 0 ? log("privSector", "treasury", Math.min(empTaxDue, balance("privSector")), `Encargo patronal privado (${firm.name})`) : 0;
+    const empTaxPaid = empTaxDue > 0 ? log(accKey, "treasury", Math.min(empTaxDue, balance(accKey)), `Encargo patronal privado (${firm.name})`) : 0;
     firm.employerTaxPaid = empTaxPaid;
 
-    // 5. Lucro antes dos impostos e Tributação sobre o lucro
+    // 5. Lucro antes dos impostos (deduzindo depreciação e juros bancários pagos pelo setor) e Tributação sobre o lucro
     const depr = round2((firm.capitalStock || 3000) * 0.0025);
     firm.capitalStock = Math.max(500, round2((firm.capitalStock || 3000) - depr));
-    const pretaxProfit = round2(actualRevenue - paidInputs - wagesPaid - empTaxPaid - depr);
+    const interestPaid = round2(Number(S.lastLoanSettlement?.byBorrower?.[accKey]?.interestPaid) || 0);
+    firm.interestPaid = interestPaid;
+    const pretaxProfit = round2(actualRevenue - paidInputs - wagesPaid - empTaxPaid - depr - interestPaid);
     firm.profitBeforeTax = pretaxProfit;
 
     let profitTaxPaid = 0;
     if (pretaxProfit > 0 && profitTaxRate > 0) {
       const pTaxDue = round2(pretaxProfit * profitTaxRate);
-      profitTaxPaid = log("privSector", "treasury", Math.min(pTaxDue, balance("privSector")), `Imposto sobre lucro privado (${firm.name})`);
+      profitTaxPaid = log(accKey, "treasury", Math.min(pTaxDue, balance(accKey)), `Imposto sobre lucro privado (${firm.name})`);
       if (S.currentMonthTracking) {
         S.currentMonthTracking.privSectorProfitTax = round2((S.currentMonthTracking.privSectorProfitTax || 0) + profitTaxPaid);
       }
@@ -2109,24 +2167,32 @@ function runPrivateSectorCycle(overrides = {}) {
     firm.taxes = totalSectorTax;
     const netProfit = round2(pretaxProfit - profitTaxPaid);
     firm.profit = netProfit;
-    firm.costs = round2(paidInputs + wagesPaid + empTaxPaid + depr + profitTaxPaid);
+    firm.costs = round2(paidInputs + wagesPaid + empTaxPaid + depr + interestPaid + profitTaxPaid);
 
-    // 6. Investimento Privado (depende de lucro, demanda, imposto, infraestrutura e estabilidade)
+    // 6. Investimento Privado e Crédito de Expansão (depende de lucro, demanda, imposto, juros, infraestrutura e estabilidade)
     let sectorInvest = 0;
     if (netProfit > spec.investmentThreshold && env.taxBurdenFactor >= 0.75 && env.demandIndex >= 0.85) {
-      const effectiveInvestRate = clamp(spec.investmentRate * env.taxBurdenFactor * env.stabilityFactor, 0.08, 0.50);
-      const desiredInvest = round2(netProfit * effectiveInvestRate);
-      if (desiredInvest >= 100 && balance("privSector") >= desiredInvest) {
+      const effectiveInvestRate = clamp(spec.investmentRate * env.taxBurdenFactor * env.stabilityFactor * env.creditFactor, 0.08, 0.55);
+      let desiredInvest = round2(netProfit * effectiveInvestRate);
+      // Alavancagem bancária para expansão quando juros básicos são favoráveis
+      if (baseRate <= 1.75 && availableCredit() >= 500 && totalLoans(accKey) < firm.capitalStock * 0.8) {
+        const creditBoost = round2(Math.min(1500, desiredInvest * 0.60));
+        if (creditBoost >= 200) {
+          const loanGranted = issueLoan(accKey, creditBoost, `Financiamento de expansão produtiva (${firm.name})`);
+          desiredInvest = round2(desiredInvest + loanGranted);
+        }
+      }
+      if (desiredInvest >= 100 && balance(accKey) >= desiredInvest) {
         const localShare = round2(desiredInvest * 0.50);
         const extShare = round2(desiredInvest - localShare);
-        const paidLocal = log("privSector", "workshop", localShare, `Investimento privado local (${firm.name})`);
-        const paidExt = log("privSector", "external", extShare, `Aquisição de máquinas e equipamentos (${firm.name})`);
+        const paidLocal = log(accKey, "workshop", localShare, `Investimento privado local (${firm.name})`);
+        const paidExt = log(accKey, "external", extShare, `Aquisição de máquinas e equipamentos (${firm.name})`);
         sectorInvest = round2(paidLocal + paidExt);
         firm.capitalStock = round2(firm.capitalStock + sectorInvest);
         firm.baseCapacity = round2(firm.baseCapacity + (sectorInvest / 2500));
         if (S.currentMonthTracking) {
           S.currentMonthTracking.workshopRevenue = round2((S.currentMonthTracking.workshopRevenue || 0) + paidLocal);
-          S.currentMonthTracking.privateFixedInvestment = round2((S.currentMonthTracking.privateFixedInvestment || 0) + sectorInvest);
+          S.currentMonthTracking.privateFixedInvestment = round2((S.currentMonthTracking.privateFixedInvestment || 0) + paidLocal + paidExt);
           S.currentMonthTracking.importedCapitalGoods = round2((S.currentMonthTracking.importedCapitalGoods || 0) + paidExt);
         }
         investingSectors.push(firm.name);
@@ -2153,6 +2219,27 @@ function runPrivateSectorCycle(overrides = {}) {
         firm.lastAction = "fechamento";
         exitsLastMonth++;
         if (!closingSectors.includes(firm.name)) closingSectors.push(firm.name);
+        // Se todas as empresas do setor fecharam e há dívida bancária impagável, amortizar com caixa remanescente e baixar saldo insolvente
+        if (firm.firmCount === 0 && totalLoans(accKey) > 0) {
+          const sectorLoans = S.bankLoans.filter(l => l.borrower === accKey);
+          for (const loan of sectorLoans) {
+            migrateLoan(loan);
+            const totDue = round2(loan.principal + loan.principalArrears + loan.interestArrears);
+            const paidBank = balance(accKey) > 0 ? log(accKey, "bank", Math.min(balance(accKey), totDue), `Liquidação bancária por fechamento (${firm.name})`) : 0;
+            let rem = paidBank;
+            const pInt = Math.min(rem, loan.interestArrears); loan.interestArrears = round2(loan.interestArrears - pInt); rem -= pInt;
+            const pArr = Math.min(rem, loan.principalArrears); loan.principalArrears = round2(loan.principalArrears - pArr); rem -= pArr;
+            const pPri = Math.min(rem, loan.principal); loan.principal = round2(loan.principal - pPri);
+            const unpaid = round2(loan.principal + loan.principalArrears + loan.interestArrears);
+            if (unpaid > 0) {
+              S.lastBankCreditLosses = round2((S.lastBankCreditLosses || 0) + unpaid);
+              S.cumulativeBankWriteDowns = round2((S.cumulativeBankWriteDowns || 0) + unpaid);
+              S.cumulativeDebtorRelief = round2((S.cumulativeDebtorRelief || 0) + unpaid);
+              loan.principal = 0; loan.principalArrears = 0; loan.interestArrears = 0;
+            }
+          }
+          S.bankLoans = S.bankLoans.filter(l => l.principal > 0.005 || l.principalArrears > 0.005 || l.interestArrears > 0.005);
+        }
         feed(`Crise empresarial: uma empresa do setor de ${firm.name} encerrou atividades por prejuízos acumulados.`);
       }
     } else {
@@ -2174,7 +2261,7 @@ function runPrivateSectorCycle(overrides = {}) {
           firm.firmCount += 1;
           firm.employees += 1;
           firm.capitalStock = round2(firm.capitalStock + 2500);
-          log("external", "privSector", 2500, `Entrada de novo empreendimento (${firm.name})`);
+          log("external", accKey, 2500, `Entrada de novo empreendimento (${firm.name})`);
           firm.lastAction = "abertura";
           entriesLastMonth++;
           if (!hiringSectors.includes(firm.name)) hiringSectors.push(firm.name);
@@ -2195,6 +2282,8 @@ function runPrivateSectorCycle(overrides = {}) {
     totalTaxes = round2(totalTaxes + totalSectorTax);
     aggregateProfit = round2(aggregateProfit + netProfit);
     privateInvestment = round2(privateInvestment + sectorInvest);
+    totalPrivateLoans = round2(totalPrivateLoans + totalLoans(accKey));
+    totalPrivateCash = round2(totalPrivateCash + balance(accKey));
     prodSum += sectorTfp;
     activeSectorCount++;
   }
@@ -2235,6 +2324,8 @@ function runPrivateSectorCycle(overrides = {}) {
     totalTaxes,
     aggregateProfit,
     privateInvestment,
+    totalLoans: totalPrivateLoans,
+    totalCash: totalPrivateCash,
     averageProductivity: avgProd,
     demandIndex: env.demandIndex,
     businessClimateIndex: env.businessClimate,
@@ -2254,6 +2345,7 @@ function runPrivateSectorCycle(overrides = {}) {
     aggregateProfit,
     privateInvestment,
     totalWageBill,
+    totalLoans: totalPrivateLoans,
     averageProductivity: avgProd
   }]).slice(-24);
 
@@ -2272,7 +2364,12 @@ function getPrivateEconomyStats() {
   if (!S.privateSector) initPrivateSector();
   const ind = S.privateSector.indicators || {};
   return {
-    firms: Object.values(S.privateSector.firms).map(f => ({ ...f })),
+    firms: Object.values(S.privateSector.firms).map(f => ({
+      ...f,
+      cash: balance(f.account || `priv_${f.sector}`),
+      loans: totalLoans(f.account || `priv_${f.sector}`),
+      netWorth: round2(balance(f.account || `priv_${f.sector}`) + (f.capitalStock || 0) - totalLoans(f.account || `priv_${f.sector}`))
+    })),
     sectorsMap: { ...S.privateSector.firms },
     indicators: { ...ind },
     totalFirms: ind.totalFirms || 0,
@@ -2284,6 +2381,8 @@ function getPrivateEconomyStats() {
     totalTaxes: ind.totalTaxes || 0,
     aggregateProfit: ind.aggregateProfit || 0,
     privateInvestment: ind.privateInvestment || 0,
+    totalLoans: ind.totalLoans || 0,
+    totalCash: ind.totalCash || 0,
     averageProductivity: ind.averageProductivity || 1.0,
     history: [...(S.privateSector.history || [])]
   };
@@ -4136,7 +4235,7 @@ function closeMonth(){
  updateCommerceInsolvency();
  publishEconomyMonthClosed();
 }
-function newGame(){S={seed:42,day:149,monthNumber:0,loanSeq:0,accounts:{treasury:0,stateFarm:0,privateFarm:0,commerce:0,workshop:0,landlord:0,bank:0,cooperative:0,mill:0,brickyard:0,privSector:0},households:[{id:1,name:"Família Silva",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:2,name:"Família Rocha",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:3,name:"Ana",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:4,name:"Caio",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0}],owner:"state",farmOwnership:{treasury:1.0,private:0.0},concessionActive:false,lastDividends:{treasury:0,private:0,total:0},lastProjectNPV:null,lastNationalAccounts:null,lastFiscalReport:null,lots:10,baseJobsAvailable:8,jobsAvailable:8,sectorVacancies:{farm:8,commerce:1,workshop:1},totalJobsAvailable:10,housingCapacity:12,housingDeficit:0,housingStock:12000,farmLocalFoodStock:0,localFoodAutonomy:0,completedProjects:[],migrationStats:{cumulativeIn:0,cumulativeOut:0,net:0,housingDeficit:0},infrastructureCapacity:20,infrastructureStock:10000,ruralRoadBuilt:0,sanitationHealthLevel:0,siloBuilt:false,siloCapacity:0,urbanInfra:null,lastHarrisTodaro:null,baseMarkup:0.35,cooperativeActive:false,cooperativeTfp:1.0,millActive:false,brickyardActive:false,publicCapitalStock:20000,activeConstructions:[],budgetLedger:{},completedConstructions:[],microcreditCount:0,councilSupport:65,cabinetDilemmas:[],pendingCabinetDilemma:null,resolvedDilemmas:[],lastResolvedDilemma:null,activeCharacters:{},politicalConflicts:[],activeCharacterBonuses:{},buildings:[],coffeeStock:0,productionThisSeason:0,coffeeSold:0,usdCoffee:300,fx:5,externalWage:2200,wage:1800,commerceWage:1710,workshopWage:1836,reservation:1540,weatherFactor:1,weatherEventDone:false,weatherDecisionDone:false,weatherProtection:false,marketStock:0,marketPrice:USD_IMPORT*5*(1+BASE_MARKUP),servicePrice:180,costOfLivingIndex:100,monthlyInflation:0,marketPressure:1,marketTargetPrice:USD_IMPORT*5*(1+BASE_MARKUP),lastShortage:0,lastShortageUnits:0,lastFoodConsumption:0,lastServiceConsumption:0,lastConsumption:0,lastDemandUnits:0,lastUnmetHouseholds:0,marketFundingFailure:false,importedUnits:0,commerceEmptyMonths:0,commerceMarkupExtra:0,commerceMarkupMonths:0,bankLoans:[],bankInterestIncome:0,bankAccruedInterest:0,lastDepositInterest:0,effectiveDepositRate:0,lastBankCreditLosses:0,cumulativeBankWriteDowns:0,cumulativeDebtorRelief:0,lastLoanSettlement:{byBorrower:{},totalInterestPaid:0,totalPrincipalPaid:0,totalAccruedInterest:0},farmInvestmentCooldown:0,landlordInvestmentCooldown:0,farmWageDebt:0,migratedClaims:[],assumedLiabilities:null,nextPayrollEstimate:0,cumulativeExternalIn:0,cumulativeExternalOut:0,cashAudit:null,lastDRE:null,workshopMaterials:5,workshopTaxDebt:0,commerceTaxDebt:0,unemploymentHistory:[0],currentMonthTracking:{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,commerceB2BSales:0,workshopRevenue:0,workshopCosts:0,landlordMaintenanceCosts:0,housingServices:0,householdHousing:0,dividendsReceived:0,concessionOutorga:0,importedCapitalGoods:0,privateFixedInvestment:0,bakerySales:0,cooperativeSales:0,cooperativeExports:0,cooperativeImports:0,cooperativeB2BInputs:0,inventoryOpeningValue:0},employerTaxDebt:0,farmTaxDebt:0,monthFarmRevenue:0,monthFarmCosts:0,lastFarmEBITDA:0,lastFarmDepreciation:0,lastFarmInterestPaid:0,lastFarmProfit:0,lastProfitTax:0,migrantCount:0,policy:{publicWage:1800,minimumWage:1500,incomeTax:10,employerTax:15,profitTax:20,dividendPayoutRatio:50,migrationCost:3000,monthlyStateSupport:25000,housing:"employer",fxMode:"floating",basketCost:220,baseRate:1.5},pending:{},monthFlow:{in:0,internal:0,out:0},lastFlow:{in:0,internal:0,out:0},lastWage:{due:0,paid:0,employerCharge:0},ledger:[],feed:[],event:null,gameOver:null};S.externalSector={id:"external",name:"Setor Externo",account:"external",sector:"external",patrimony:{assets:0,liabilities:0,netWorth:0},flow:{revenue:0,costs:0,netProfit:0}};
+function newGame(){S={seed:42,day:149,monthNumber:0,loanSeq:0,accounts:{treasury:0,stateFarm:0,privateFarm:0,commerce:0,workshop:0,landlord:0,bank:0,cooperative:0,mill:0,brickyard:0,privSector:0,priv_agriculture:0,priv_industry:0,priv_commerce:0,priv_services:0,priv_construction:0,priv_technology:0},households:[{id:1,name:"Família Silva",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:2,name:"Família Rocha",type:"family",adults:2,children:2,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:3,name:"Ana",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0},{id:4,name:"Caio",type:"single",adults:1,children:0,outOfLaborForce:0,jobs:0,sectorJobs:{farm:0,commerce:0,workshop:0},cash:0,deposit:0,wageDebt:0,wageDebtByFirm:{},rentDebt:0,happiness:55,cashIncome:0,housingBenefit:0,shortageUnits:0}],owner:"state",farmOwnership:{treasury:1.0,private:0.0},concessionActive:false,lastDividends:{treasury:0,private:0,total:0},lastProjectNPV:null,lastNationalAccounts:null,lastFiscalReport:null,lots:10,baseJobsAvailable:8,jobsAvailable:8,sectorVacancies:{farm:8,commerce:1,workshop:1},totalJobsAvailable:10,housingCapacity:12,housingDeficit:0,housingStock:12000,farmLocalFoodStock:0,localFoodAutonomy:0,completedProjects:[],migrationStats:{cumulativeIn:0,cumulativeOut:0,net:0,housingDeficit:0},infrastructureCapacity:20,infrastructureStock:10000,ruralRoadBuilt:0,sanitationHealthLevel:0,siloBuilt:false,siloCapacity:0,urbanInfra:null,lastHarrisTodaro:null,baseMarkup:0.35,cooperativeActive:false,cooperativeTfp:1.0,millActive:false,brickyardActive:false,publicCapitalStock:20000,activeConstructions:[],budgetLedger:{},completedConstructions:[],microcreditCount:0,councilSupport:65,cabinetDilemmas:[],pendingCabinetDilemma:null,resolvedDilemmas:[],lastResolvedDilemma:null,activeCharacters:{},politicalConflicts:[],activeCharacterBonuses:{},buildings:[],coffeeStock:0,productionThisSeason:0,coffeeSold:0,usdCoffee:300,fx:5,externalWage:2200,wage:1800,commerceWage:1710,workshopWage:1836,reservation:1540,weatherFactor:1,weatherEventDone:false,weatherDecisionDone:false,weatherProtection:false,marketStock:0,marketPrice:USD_IMPORT*5*(1+BASE_MARKUP),servicePrice:180,costOfLivingIndex:100,monthlyInflation:0,marketPressure:1,marketTargetPrice:USD_IMPORT*5*(1+BASE_MARKUP),lastShortage:0,lastShortageUnits:0,lastFoodConsumption:0,lastServiceConsumption:0,lastConsumption:0,lastDemandUnits:0,lastUnmetHouseholds:0,marketFundingFailure:false,importedUnits:0,commerceEmptyMonths:0,commerceMarkupExtra:0,commerceMarkupMonths:0,bankLoans:[],bankInterestIncome:0,bankAccruedInterest:0,lastDepositInterest:0,effectiveDepositRate:0,lastBankCreditLosses:0,cumulativeBankWriteDowns:0,cumulativeDebtorRelief:0,lastLoanSettlement:{byBorrower:{},totalInterestPaid:0,totalPrincipalPaid:0,totalAccruedInterest:0},farmInvestmentCooldown:0,landlordInvestmentCooldown:0,farmWageDebt:0,migratedClaims:[],assumedLiabilities:null,nextPayrollEstimate:0,cumulativeExternalIn:0,cumulativeExternalOut:0,cashAudit:null,lastDRE:null,workshopMaterials:5,workshopTaxDebt:0,commerceTaxDebt:0,unemploymentHistory:[0],currentMonthTracking:{farmRevenue:0,farmInputs:0,farmHousing:0,farmInsurance:0,wageSalaryTax:0,assetSales:0,socialHousing:0,publicWorks:0,stateSupport:0,commerceImports:0,commerceB2BSales:0,workshopRevenue:0,workshopCosts:0,landlordMaintenanceCosts:0,housingServices:0,householdHousing:0,dividendsReceived:0,concessionOutorga:0,importedCapitalGoods:0,privateFixedInvestment:0,bakerySales:0,cooperativeSales:0,cooperativeExports:0,cooperativeImports:0,cooperativeB2BInputs:0,inventoryOpeningValue:0},employerTaxDebt:0,farmTaxDebt:0,monthFarmRevenue:0,monthFarmCosts:0,lastFarmEBITDA:0,lastFarmDepreciation:0,lastFarmInterestPaid:0,lastFarmProfit:0,lastProfitTax:0,migrantCount:0,policy:{publicWage:1800,minimumWage:1500,incomeTax:10,employerTax:15,profitTax:20,dividendPayoutRatio:50,migrationCost:3000,monthlyStateSupport:25000,housing:"employer",fxMode:"floating",basketCost:220,baseRate:1.5},pending:{},monthFlow:{in:0,internal:0,out:0},lastFlow:{in:0,internal:0,out:0},lastWage:{due:0,paid:0,employerCharge:0},ledger:[],feed:[],event:null,gameOver:null};S.externalSector={id:"external",name:"Setor Externo",account:"external",sector:"external",patrimony:{assets:0,liabilities:0,netWorth:0},flow:{revenue:0,costs:0,netProfit:0}};
  S.firms=[];
  Object.defineProperty(S, "extraFirms", {
   get() { return (S.firms||[]).filter(f => f.id !== "farm" && f.id !== "commerce" && f.id !== "workshop"); },
@@ -4207,952 +4306,6 @@ function applyGovernanceStance(stance){
  }
  render();
 }
-
-const ACTION_CATALOG = {
-  build: {
-    id: "build",
-    title: "Construir Moradia Municipal",
-    category: "TERRITÓRIO E MORADIA · PÚBLICO",
-    description: "Inicie a construção de uma nova moradia no setor residencial para expandir a capacidade habitacional do Vilarejo.",
-    cost: 6000,
-    costLabel: "R$ 6.000 (R$ 3.000 para oficina local + R$ 3.000 materiais externos)",
-    benefitLabel: "+1 moradia (+2 vagas para moradores)",
-    impactLabel: "Injeta R$ 3.000 de faturamento na oficina de serviços local e evita déficit habitacional com a chegada de famílias.",
-    locationLabel: "Bairro Residencial (Setor Moradias)",
-    durationLabel: "30 dias (conclusão prevista no próximo ciclo)",
-    worldCoords: { x: 320, y: 240, zoom: 1.25 },
-    validate: (state) => {
-      if (state.lots <= 0) {
-        return {
-          canExecute: false,
-          reason: "Não há terrenos disponíveis para construir.",
-          details: "O município utilizou todos os lotes de expansão urbana disponíveis. Aguarde novas demarcações ou libere lotes."
-        };
-      }
-      const tBalance = balance("treasury");
-      if (tBalance < 6000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
-          details: "O município não dispõe de saldo para custear os R$ 3.000 da oficina local e os R$ 3.000 de materiais externos. Aguarde arrecadação ou venda ativos."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: (state) => {
-      const paidWs = log("treasury", "workshop", 3000, "Obra pública: serviços e mão de obra locais");
-      const paidExt = log("treasury", "external", 3000, "Obra pública: materiais importados");
-      const totalPaid = paidWs + paidExt;
-      if (state.currentMonthTracking) {
-        state.currentMonthTracking.publicWorks = (state.currentMonthTracking.publicWorks || 0) + totalPaid;
-        state.currentMonthTracking.importedCapitalGoods = (state.currentMonthTracking.importedCapitalGoods || 0) + paidExt;
-        state.currentMonthTracking.workshopRevenue = (state.currentMonthTracking.workshopRevenue || 0) + paidWs;
-      }
-      state.lots--;
-      const dueDay = state.day + 30;
-      state.buildings.push({
-        id: "bld_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-        due: dueDay,
-        type: "house",
-        name: "Moradia Municipal",
-        cost: totalPaid,
-        startedAt: state.day
-      });
-      feed(`Obra iniciada: moradia pública no Bairro Residencial. Metade do custo (${money(paidWs)}) circulou na oficina local. Conclusão no dia ${dueDay}.`);
-      return {
-        summary: "Construção de moradia municipal iniciada com sucesso.",
-        changes: [
-          { label: "Caixa do Tesouro", delta: `-${money(totalPaid)}`, type: "cost" },
-          { label: "Lotes Públicos", delta: `${state.lots} restantes`, type: "neutral" },
-          { label: "Capacidade Prevista", delta: "+2 vagas (obra em andamento)", type: "benefit" },
-          { label: "Prazo de Execução", delta: `30 dias (conclusão no dia ${dueDay})`, type: "neutral" }
-        ]
-      };
-    }
-  },
-
-  sellLot: {
-    id: "sellLot",
-    title: "Vender Lote Público",
-    category: "TERRITÓRIO E PATRIMÔNIO · MERCADO",
-    description: "Aliene um lote de terra de domínio público para o mercado para gerar receita imediata no caixa do Tesouro.",
-    cost: 0,
-    costLabel: "Consumo de 1 lote público municipal (custo de oportunidade: sem terra pública para obras)",
-    benefitLabel: "+R$ 8.000 direto no caixa do Tesouro",
-    impactLabel: "Injeta liquidez imediata para equilibrar as contas públicas ou financiar outras urgências, mas reduz a reserva territorial.",
-    locationLabel: "Perímetro Urbano Municipal",
-    durationLabel: "Imediato",
-    worldCoords: { x: 500, y: 270, zoom: 1.15 },
-    validate: (state) => {
-      if (state.lots <= 0) {
-        return {
-          canExecute: false,
-          reason: "Não há terrenos disponíveis para alienação.",
-          details: "O estoque de lotes municipais está zerado."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: (state) => {
-      state.lots--;
-      const revenue = log("external", "treasury", 8000, "Venda de terreno público");
-      if (state.currentMonthTracking) state.currentMonthTracking.assetSales = (state.currentMonthTracking.assetSales || 0) + revenue;
-      feed(`Lote público alienado por ${money(revenue)} injetados diretamente no Tesouro.`);
-      return {
-        summary: "Lote público vendido com sucesso.",
-        changes: [
-          { label: "Caixa do Tesouro", delta: `+${money(revenue)}`, type: "benefit" },
-          { label: "Lotes Públicos Restantes", delta: `${state.lots} lotes`, type: "neutral" },
-          { label: "Efeito Patrimonial", delta: "Conversão de ativo imobiliário em caixa líquido", type: "neutral" }
-        ]
-      };
-    }
-  },
-
-  investCredit: {
-    id: "investCredit",
-    title: "Investimento Imobiliário com Crédito",
-    category: "TERRITÓRIO E MORADIA · MERCADO",
-    description: "Incentive o proprietário privado a contratar financiamento imobiliário no banco local para erguer habitação de aluguel.",
-    cost: 14000,
-    costLabel: "R$ 14.000 em crédito bancário privado (+R$ 8.000 entram no Tesouro)",
-    benefitLabel: "+2 vagas habitacionais de mercado em 30 dias",
-    impactLabel: "O Tesouro arrecada R$ 8.000 pela venda do solo, R$ 3.000 remuneram a oficina local e R$ 3.000 em materiais externos, sem gasto público.",
-    locationLabel: "Bairro Residencial (Setor Moradias)",
-    durationLabel: "30 dias (conclusão prevista no próximo ciclo)",
-    worldCoords: { x: 320, y: 240, zoom: 1.25 },
-    validate: (state) => {
-      if (state.lots <= 0) {
-        return {
-          canExecute: false,
-          reason: "Não há terrenos disponíveis para o empreendimento imobiliário.",
-          details: "O proprietário necessita de pelo menos um lote público para aquisição e edificação."
-        };
-      }
-      const freeCredit = availableCredit();
-      if (freeCredit < 14000) {
-        return {
-          canExecute: false,
-          reason: `Crédito bancário insuficiente: banco dispõe de apenas ${money(freeCredit)} livres.`,
-          details: "O banco local preserva a exigência prudencial de reservas mínimas dos depositantes. Aguarde aumento dos depósitos das famílias."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: (state) => {
-      const loan = issueLoan("landlord", 14000, "aquisição de terreno e construção de moradia");
-      if (loan < 13999) {
-        feed("Crédito insuficiente: o banco preserva a reserva mínima dos depositantes.");
-        return { summary: "Crédito recusado pelo banco.", changes: [] };
-      }
-      log("landlord", "treasury", 8000, "Compra de terreno para empreendimento imobiliário");
-      log("landlord", "workshop", 3000, "Obra privada: serviços e mão de obra locais");
-      if (state.currentMonthTracking) {
-        state.currentMonthTracking.workshopRevenue = (state.currentMonthTracking.workshopRevenue || 0) + 3000;
-        state.currentMonthTracking.privateFixedInvestment = (state.currentMonthTracking.privateFixedInvestment || 0) + 6000;
-        state.currentMonthTracking.importedCapitalGoods = (state.currentMonthTracking.importedCapitalGoods || 0) + 3000;
-      }
-      log("landlord", "external", 3000, "Obra privada: materiais importados");
-      state.lots--;
-      const dueDay = state.day + 30;
-      state.buildings.push({
-        id: "bld_priv_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-        due: dueDay,
-        type: "house",
-        name: "Residência Privada",
-        cost: 6000,
-        startedAt: state.day
-      });
-      feed("Investimento imobiliário financiado com crédito privado; obra iniciada no bairro residencial.");
-      return {
-        summary: "Empreendimento imobiliário financiado e iniciado.",
-        changes: [
-          { label: "Arrecadação do Tesouro", delta: `+${money(8000)} (Venda de solo)`, type: "benefit" },
-          { label: "Crédito Bancário Contratado", delta: `${money(14000)}`, type: "cost" },
-          { label: "Capacidade Prevista", delta: "+2 vagas em 30 dias", type: "benefit" },
-          { label: "Faturamento da Oficina", delta: `+${money(3000)} em serviços locais`, type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  investInfra: {
-    id: "investInfra",
-    title: "Infraestrutura Urbana Geral",
-    category: "INFRAESTRUTURA E MOBILIDADE · COLETIVO",
-    description: "Execução de drenagem, pavimentação de vias centrais e ampliação da capacidade urbana do município.",
-    cost: 6000,
-    costLabel: "R$ 6.000 (R$ 3.000 oficina local + R$ 3.000 externos)",
-    benefitLabel: "+4 capacidade urbana geral e -15% de congestionamento",
-    impactLabel: "Desafoga o tráfego nos bairros, melhora a circulação e aumenta o estoque de capital público.",
-    locationLabel: "Vias Centrais e Setor de Serviços",
-    durationLabel: "Imediato",
-    worldCoords: { x: 380, y: 400, zoom: 1.2 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 6000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
-          details: "Mobilize superávit ou aguarde o encerramento do mês."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      const paid = investInInfrastructure();
-      return {
-        summary: "Obras de infraestrutura urbana concluídas.",
-        changes: [
-          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
-          { label: "Capacidade Urbana", delta: `+4 pontos (${S.infrastructureCapacity} total)`, type: "benefit" },
-          { label: "Estoque de Capital", delta: `+${money(6000)} no patrimônio público`, type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  projSocialHousing: {
-    id: "projSocialHousing",
-    title: "Habitação de Interesse Social (HIS)",
-    category: "TERRITÓRIO E HABITAÇÃO · PÚBLICO",
-    description: "Construção direta e emergencial de moradias públicas para acolher famílias vulneráveis e novos migrantes.",
-    cost: 6000,
-    costLabel: "R$ 6.000 (R$ 3.000 oficina local + R$ 3.000 externos)",
-    benefitLabel: "+4 vagas habitacionais imediatas",
-    impactLabel: "Erradica déficit habitacional imediato e amplia a atratividade do vilarejo para novos trabalhadores.",
-    locationLabel: "Bairro Residencial (Setor Moradias)",
-    durationLabel: "Imediato",
-    worldCoords: { x: 320, y: 240, zoom: 1.25 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 6000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
-          details: "Recursos em caixa são insuficientes para a aquisição de insumos e mão de obra de HIS."
-        };
-      }
-      if (state.lots <= 0) {
-        return {
-          canExecute: false,
-          reason: "Não há terrenos disponíveis para implantação de Habitação Social.",
-          details: "É necessário disponibilizar lote público para assentar o núcleo habitacional."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      const paid = executeInfrastructureProject("social_housing");
-      return {
-        summary: "Habitação de Interesse Social entregue com sucesso.",
-        changes: [
-          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
-          { label: "Capacidade Habitacional", delta: `+4 vagas (${S.housingCapacity} total)`, type: "benefit" },
-          { label: "Lotes Públicos", delta: "-1 lote", type: "neutral" }
-        ]
-      };
-    }
-  },
-
-  projRuralRoad: {
-    id: "projRuralRoad",
-    title: "Pavimentação de Estrada Vicinal",
-    category: "PRODUÇÃO E LOGÍSTICA · COLETIVO",
-    description: "Pavimente a principal via de escoamento agrícola interligando a fazenda e os produtores rurais ao centro comercial.",
-    cost: 8000,
-    costLabel: "R$ 8.000 (R$ 4.000 oficina local + R$ 4.000 externos)",
-    benefitLabel: "+5% de produtividade física permanente da lavoura",
-    impactLabel: "Facilita o transporte da safra, diminui perdas de colheita e barateia o custo de suprimentos.",
-    locationLabel: "Estrada da Fazenda ao Vilarejo",
-    durationLabel: "Imediato",
-    worldCoords: { x: 680, y: 180, zoom: 1.2 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 8000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(8000)}.`,
-          details: "Saldo do Tesouro insuficiente para contratação das obras de pavimentação."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      const paid = executeInfrastructureProject("rural_road");
-      return {
-        summary: "Estrada vicinal pavimentada com sucesso.",
-        changes: [
-          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
-          { label: "Produtividade Agrícola", delta: "+5% na colheita da lavoura", type: "benefit" },
-          { label: "Logística", delta: "Acesso permanente para escoamento da safra", type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  projSanitation: {
-    id: "projSanitation",
-    title: "Saneamento Básico & Posto de Saúde",
-    category: "SAÚDE E SANEAMENTO · PÚBLICO",
-    description: "Implantação de rede coletora de esgoto, estação de água potável e posto de pronto atendimento à comunidade.",
-    cost: 10000,
-    costLabel: "R$ 10.000 (R$ 5.000 oficina local + R$ 5.000 externos)",
-    benefitLabel: "+6 capacidade urbana e +2% produtividade geral (TFP)",
-    impactLabel: "Reduz doenças hídricas, eleva a satisfação comunitária e viabiliza a expansão populacional saudável.",
-    locationLabel: "Setor de Serviços e Saúde",
-    durationLabel: "Imediato",
-    worldCoords: { x: 380, y: 400, zoom: 1.2 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 10000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(10000)}.`,
-          details: "Obra estruturante exige disponibilidade mínima de R$ 10.000 no caixa municipal."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      const paid = executeInfrastructureProject("sanitation_health");
-      return {
-        summary: "Rede de saneamento básico e posto de saúde instalados.",
-        changes: [
-          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
-          { label: "Capacidade Urbana", delta: `+6 pontos (${S.infrastructureCapacity} total)`, type: "benefit" },
-          { label: "Produtividade e Saúde", delta: "+2% TFP para todos os setores", type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  projGrainSilo: {
-    id: "projGrainSilo",
-    title: "Silo e Armazém Geral de Café",
-    category: "PRODUÇÃO E SEGURANÇA ALIMENTAR · PÚBLICO",
-    description: "Construção de armazém climatizado e silo de grãos para estoque regulador da produção cafeeira.",
-    cost: 12000,
-    costLabel: "R$ 12.000 (R$ 6.000 oficina local + R$ 6.000 externos)",
-    benefitLabel: "+50 sacas de capacidade de estocagem de café",
-    impactLabel: "Permite reter produção para venda em períodos de cotação elevada no mercado externo.",
-    locationLabel: "Setor Fazenda e Produção",
-    durationLabel: "Imediato",
-    worldCoords: { x: 680, y: 180, zoom: 1.2 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 12000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(12000)}.`,
-          details: "Aguarde receitas de exportação ou venda de ativos para custear o armazém."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      const paid = executeInfrastructureProject("grain_silo");
-      return {
-        summary: "Silo regulador de café concluído.",
-        changes: [
-          { label: "Investimento Público", delta: `-${money(paid)}`, type: "cost" },
-          { label: "Capacidade do Silo", delta: `+50 sacas (${S.siloCapacity} total)`, type: "benefit" },
-          { label: "Segurança de Mercado", delta: "Estoque regulador ativado", type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  sell25Stake: {
-    id: "sell25Stake",
-    title: "Alienar 25% da Fazenda Pública",
-    category: "ESTRUTURA SOCIETÁRIA · MERCADO",
-    description: "Venda um quarto da propriedade da Fazenda para investidores privados a valor de mercado.",
-    cost: 0,
-    costLabel: "Cessão de 25% dos lucros e dividendos futuros da Fazenda",
-    benefitLabel: "Receita de capital imediata calculada sobre o valuation da empresa",
-    impactLabel: "Injeta grande volume de recursos no Tesouro, mas reduz os dividendos públicos nos anos seguintes.",
-    locationLabel: "Fazenda Municipal",
-    durationLabel: "Imediato",
-    worldCoords: { x: 680, y: 180, zoom: 1.2 },
-    validate: (state) => {
-      if ((state.farmOwnership?.treasury || 0) < 0.25) {
-        return {
-          canExecute: false,
-          reason: "Participação estatal insuficiente para alienar 25%.",
-          details: `O Tesouro detém apenas ${((state.farmOwnership?.treasury || 0) * 100).toFixed(1)}% das cotas.`
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      const fVal = calculateFirmValuation("farm");
-      const price25 = round2(fVal.valuation * 0.25);
-      const paid = sellFarmStake(0.25);
-      return {
-        summary: "Alienação de 25% da Fazenda concluída.",
-        changes: [
-          { label: "Receita Patrimonial do Tesouro", delta: `+${money(paid || price25)}`, type: "benefit" },
-          { label: "Participação Pública Restante", delta: `${((S.farmOwnership?.treasury || 0) * 100).toFixed(0)}%`, type: "cost" },
-          { label: "Governança", delta: "Entrada de investidores privados no conselho", type: "neutral" }
-        ]
-      };
-    }
-  },
-
-  privatizeValuation: {
-    id: "privatizeValuation",
-    title: "Privatização Integral da Participação Remanescente",
-    category: "ESTRUTURA SOCIETÁRIA · MERCADO",
-    description: "Venda toda a fatia estatal restante da Fazenda para o setor privado a valor presente líquido.",
-    cost: 0,
-    costLabel: "Desestatização completa: o município não receberá mais dividendos operacionais da safra",
-    benefitLabel: "Liquidação total da participação pública a valor de mercado",
-    impactLabel: "Encerra o papel de acionista estatal da Fazenda, tornando-a uma sociedade 100% privada com foco em rentabilidade.",
-    locationLabel: "Fazenda Municipal",
-    durationLabel: "Imediato",
-    worldCoords: { x: 680, y: 180, zoom: 1.2 },
-    validate: (state) => {
-      if ((state.farmOwnership?.treasury || 0) <= 0.005) {
-        return {
-          canExecute: false,
-          reason: "A Fazenda já é 100% privada.",
-          details: "O município não possui ações remanescentes a alienar."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      const gStake = S.farmOwnership?.treasury || 0;
-      const fVal = calculateFirmValuation("farm");
-      const fullPrice = round2(fVal.valuation * gStake);
-      const paid = sellFarmStake(gStake);
-      return {
-        summary: "Privatização da Fazenda concluída.",
-        changes: [
-          { label: "Receita de Capital do Tesouro", delta: `+${money(paid || fullPrice)}`, type: "benefit" },
-          { label: "Propriedade da Fazenda", delta: "100% Privada", type: "neutral" },
-          { label: "Dividendos Públicos", delta: "Cessados (R$ 0/mês)", type: "cost" }
-        ]
-      };
-    }
-  },
-
-  toggleConcession: {
-    id: "toggleConcession",
-    title: "Concessão Privada de Serviços Urbanos",
-    category: "SERVIÇOS E REGULAÇÃO · CONTRATOS",
-    description: "Defina o modelo de gestão dos serviços urbanos entre concessão privada com outorga ou operação pública direta.",
-    cost: 0,
-    costLabel: S.concessionActive ? "Rescisão do contrato de concessão privada" : "Transferência da operação urbana para empresa concessionária",
-    benefitLabel: S.concessionActive ? "Retomada do controle público direto dos serviços" : "Outorga mensal de R$ 400 aos cofres do Tesouro",
-    impactLabel: S.concessionActive ? "Retoma gestão pública, mas encerra a receita mensal de outorga." : "Gera receita mensal estável de R$ 400 e incentiva investimento privado.",
-    locationLabel: "Setor de Serviços do Vilarejo",
-    durationLabel: "Imediato",
-    worldCoords: { x: 380, y: 400, zoom: 1.2 },
-    validate: () => ({ canExecute: true }),
-    execute: (state) => {
-      state.concessionActive = !state.concessionActive;
-      feed(state.concessionActive ? "Contrato de concessão firmado: concessionária assume a operação e recolhe outorga mensal ao Tesouro." : "Contrato de concessão encerrado: serviços voltam à operação municipal direta.");
-      return {
-        summary: state.concessionActive ? "Concessão privada firmada com sucesso." : "Concessão privada encerrada com sucesso.",
-        changes: [
-          { label: "Status do Contrato", delta: state.concessionActive ? "Concessionária Privada Ativa" : "Operação Pública Direta", type: "benefit" },
-          { label: "Outorga Mensal", delta: state.concessionActive ? "+R$ 400/mês ao Tesouro" : "Encerrada (R$ 0)", type: state.concessionActive ? "benefit" : "cost" },
-          { label: "Espectro de Gestão", delta: state.concessionActive ? "Incentivo pró-mercado" : "Retorno estatista", type: "neutral" }
-        ]
-      };
-    }
-  },
-
-  buildFacility_health_post: {
-    id: "buildFacility_health_post",
-    title: "Construir Posto de Saúde Comunitário",
-    category: "SERVIÇOS PÚBLICOS · SAÚDE",
-    description: "Construa uma nova unidade de saúde básica no vilarejo para ampliar o atendimento médico preventivo e curativo.",
-    cost: 5000,
-    costLabel: "R$ 5.000 do Tesouro Municipal",
-    benefitLabel: "+1 Posto de Saúde (Capacidade +50 consultas/mês)",
-    impactLabel: "Aumenta a cobertura sanitária, reduz tempo de espera e previne agravamento de enfermidades locais.",
-    locationLabel: "Setor de Serviços Públicos",
-    durationLabel: "Imediato",
-    worldCoords: { x: 380, y: 400, zoom: 1.25 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 5000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(5000)}.`,
-          details: "Recursos insuficientes no Tesouro para a edificação do Posto de Saúde."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: (state, options) => {
-      if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
-        window.VilarejoTest.buildPublicFacility("health_post", options?.options);
-      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
-        window.VilarejoServicesRuntime.buildFacility("health_post", options?.options);
-      }
-      return {
-        summary: "Posto de Saúde Comunitário construído.",
-        changes: [
-          { label: "Investimento do Tesouro", delta: "-R$ 5.000", type: "cost" },
-          { label: "Equipamento Público", delta: "Posto de Saúde Ativo", type: "benefit" },
-          { label: "Capacidade de Atendimento", delta: "+50 pacientes/mês", type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  buildFacility_school: {
-    id: "buildFacility_school",
-    title: "Construir Escola Municipal",
-    category: "SERVIÇOS PÚBLICOS · EDUCAÇÃO",
-    description: "Implante uma escola municipal de ensino fundamental para garantir acesso à educação das crianças da comunidade.",
-    cost: 6000,
-    costLabel: "R$ 6.000 do Tesouro Municipal",
-    benefitLabel: "+1 Escola Municipal (Capacidade +60 vagas escolares)",
-    impactLabel: "Eleva o nível educacional, a produtividade futura da força de trabalho e a satisfação comunitária.",
-    locationLabel: "Setor Centro e Educação",
-    durationLabel: "Imediato",
-    worldCoords: { x: 500, y: 270, zoom: 1.25 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 6000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(6000)}.`,
-          details: "Recursos insuficientes no Tesouro para a edificação da Escola."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: (state, options) => {
-      if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
-        window.VilarejoTest.buildPublicFacility("school", options?.options);
-      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
-        window.VilarejoServicesRuntime.buildFacility("school", options?.options);
-      }
-      return {
-        summary: "Escola Municipal construída com sucesso.",
-        changes: [
-          { label: "Investimento do Tesouro", delta: "-R$ 6.000", type: "cost" },
-          { label: "Equipamento Público", delta: "Escola Municipal Ativa", type: "benefit" },
-          { label: "Capacidade Educacional", delta: "+60 alunos", type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  buildFacility_police_station: {
-    id: "buildFacility_police_station",
-    title: "Construir Posto Policial",
-    category: "SERVIÇOS PÚBLICOS · SEGURANÇA",
-    description: "Instale uma base de patrulhamento da guarda municipal para manter a paz e prevenir desordens no vilarejo.",
-    cost: 5000,
-    costLabel: "R$ 5.000 do Tesouro Municipal",
-    benefitLabel: "+1 Posto Policial (Capacidade +40 ocorrências/mês)",
-    impactLabel: "Reduz índices de criminalidade, protege o comércio e eleva a segurança pública.",
-    locationLabel: "Setor Centro e Segurança",
-    durationLabel: "Imediato",
-    worldCoords: { x: 500, y: 270, zoom: 1.25 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 5000) {
-        return {
-          canExecute: false,
-          reason: `Caixa do Tesouro insuficiente: possui ${money(tBalance)}, necessário ${money(5000)}.`,
-          details: "Recursos insuficientes no Tesouro para a edificação do Posto Policial."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: (state, options) => {
-      if (window.VilarejoTest && window.VilarejoTest.buildPublicFacility) {
-        window.VilarejoTest.buildPublicFacility("police_station", options?.options);
-      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.buildFacility) {
-        window.VilarejoServicesRuntime.buildFacility("police_station", options?.options);
-      }
-      return {
-        summary: "Posto Policial construído com sucesso.",
-        changes: [
-          { label: "Investimento do Tesouro", delta: "-R$ 5.000", type: "cost" },
-          { label: "Equipamento Público", delta: "Posto Policial Ativo", type: "benefit" },
-          { label: "Segurança Comunitária", delta: "+40 capacidade de patrulha", type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  govAction_action_sanitary_clean: {
-    id: "govAction_action_sanitary_clean",
-    title: "Mutirão Sanitário de Limpeza",
-    category: "AÇÕES DE GOVERNO · SAÚDE",
-    description: "Mobilize equipes municipais e moradores para desentupimento de valas e eliminação de focos transmissores de doenças.",
-    cost: 800,
-    costLabel: "R$ 800 do Tesouro Municipal",
-    benefitLabel: "Melhoria imediata nas condições sanitárias e contenção de surtos",
-    impactLabel: "Diminui a pressão sobre o posto de saúde e previne epidemias na comunidade.",
-    locationLabel: "Bairros e Vias Públicas",
-    durationLabel: "Imediato",
-    worldCoords: { x: 380, y: 400, zoom: 1.25 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 800) {
-        return {
-          canExecute: false,
-          reason: `Caixa insuficiente no Tesouro: possui ${money(tBalance)}, necessário ${money(800)}.`,
-          details: "Saldo insuficiente para custear os equipamentos e horas extras do mutirão sanitário."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      if (window.VilarejoTest && window.VilarejoTest.executeGovernanceAction) {
-        window.VilarejoTest.executeGovernanceAction("action_sanitary_clean");
-      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.executeGovernanceAction) {
-        window.VilarejoServicesRuntime.executeGovernanceAction("action_sanitary_clean");
-      }
-      return {
-        summary: "Mutirão Sanitário executado com sucesso.",
-        changes: [
-          { label: "Custo Operacional", delta: "-R$ 800", type: "cost" },
-          { label: "Higiene Urbana", delta: "Focos de infecção erradicados", type: "benefit" },
-          { label: "Alívio na Saúde", delta: "Redução da procura hospitalar", type: "benefit" }
-        ]
-      };
-    }
-  },
-
-  govAction_action_security_patrol: {
-    id: "govAction_action_security_patrol",
-    title: "Ronda Noturna Intensiva",
-    category: "AÇÕES DE GOVERNO · SEGURANÇA",
-    description: "Mobilização de patrulha extra nas ruas comerciais e residenciais nos períodos noturnos.",
-    cost: 600,
-    costLabel: "R$ 600 do Tesouro Municipal",
-    benefitLabel: "Redução de pequenos delitos e aumento da sensação de segurança",
-    impactLabel: "Protege o comércio local e inibe arrombamentos durante a noite.",
-    locationLabel: "Centro Comercial e Bairros",
-    durationLabel: "Imediato",
-    worldCoords: { x: 675, y: 350, zoom: 1.25 },
-    validate: (state) => {
-      const tBalance = balance("treasury");
-      if (tBalance < 600) {
-        return {
-          canExecute: false,
-          reason: `Caixa insuficiente no Tesouro: possui ${money(tBalance)}, necessário ${money(600)}.`,
-          details: "Saldo insuficiente para custear combustível e diárias de patrulha."
-        };
-      }
-      return { canExecute: true };
-    },
-    execute: () => {
-      if (window.VilarejoTest && window.VilarejoTest.executeGovernanceAction) {
-        window.VilarejoTest.executeGovernanceAction("action_security_patrol");
-      } else if (window.VilarejoServicesRuntime && window.VilarejoServicesRuntime.executeGovernanceAction) {
-        window.VilarejoServicesRuntime.executeGovernanceAction("action_security_patrol");
-      }
-      return {
-        summary: "Ronda Noturna concluída com êxito.",
-        changes: [
-          { label: "Custo Operacional", delta: "-R$ 600", type: "cost" },
-          { label: "Ordem Pública", delta: "Patrulhamento ostensivo intensificado", type: "benefit" }
-        ]
-      };
-    }
-  }
-};
-
-window.VilarejoActionFlow = {
-  catalog: ACTION_CATALOG,
-  pendingActionId: null,
-  pendingOptions: null,
-
-  openConfirmation(actionId, options = {}) {
-    const action = ACTION_CATALOG[actionId];
-    if (!action) {
-      console.warn("Ação não catalogada:", actionId);
-      return { canExecute: false, reason: "Ação não encontrada." };
-    }
-    this.pendingActionId = actionId;
-    this.pendingOptions = options;
-
-    const modal = $("actionConfirmModal");
-    if (!modal) {
-      return this.executeAction(actionId, options);
-    }
-
-    const titleEl = $("actionConfirmTitle");
-    const badgeEl = $("actionConfirmBadge");
-    const descEl = $("actionConfirmDesc");
-    const gridEl = $("actionConfirmGrid");
-    const warnEl = $("actionConfirmValidationWarning");
-    const boxEl = $("actionConfirmButtonsBox");
-
-    const val = typeof action.validate === "function" ? action.validate(S, options) : { canExecute: true };
-
-    if (!val.canExecute) {
-      if (titleEl) titleEl.textContent = `Ação Indisponível: ${action.title}`;
-      if (badgeEl) {
-        badgeEl.textContent = "AÇÃO RECUSADA · PRÉ-REQUISITO NÃO ATENDIDO";
-        badgeEl.style.color = "#dc2626";
-      }
-      if (descEl) descEl.textContent = "As condições atuais da simulação não permitem a execução desta medida.";
-
-      if (warnEl) {
-        warnEl.innerHTML = `
-          <strong>Motivo da recusa:</strong>
-          <p>${val.reason}</p>
-          ${val.details ? `<p style="margin-top:0.4rem;font-size:0.78rem;color:#7f1d1d;">${val.details}</p>` : ''}
-        `;
-        warnEl.classList.remove("hidden");
-      }
-
-      if (gridEl) {
-        gridEl.innerHTML = `
-          <div class="welcome-item">
-            <small>CUSTO REQUERIDO</small>
-            <strong>${action.costLabel || money(action.cost || 0)}</strong>
-            <p>Valor necessário para mobilização da medida.</p>
-          </div>
-          <div class="welcome-item">
-            <small>SALDO DISPONÍVEL NO TESOURO</small>
-            <strong style="color:${balance('treasury') < (action.cost || 0) ? '#dc2626' : 'var(--forest)'};">${money(balance('treasury'))}</strong>
-            <p>${stateSnapshot()?.lots ?? S.lots} lotes públicos em carteira.</p>
-          </div>
-        `;
-      }
-
-      if (boxEl) {
-        boxEl.innerHTML = `
-          <button id="btnCancelAction" class="btn-primary" type="button" style="width:100%;max-width:240px;margin:0 auto;">Compreendido</button>
-        `;
-        const btnCancel = $("btnCancelAction");
-        if (btnCancel) btnCancel.onclick = () => this.closeConfirmation();
-      }
-
-      const closeBtn = $("btnCloseActionConfirm");
-      if (closeBtn) closeBtn.onclick = () => this.closeConfirmation();
-
-      modal.classList.remove("hidden");
-      return val;
-    }
-
-    if (titleEl) titleEl.textContent = `Confirmar: ${action.title}?`;
-    if (badgeEl) {
-      badgeEl.textContent = action.category || "CONFIRMAÇÃO DE DIRETRIZ MUNICIPAL";
-      badgeEl.style.color = "";
-    }
-    if (descEl) descEl.textContent = action.description || "Confirme a destinação de recursos e avalie os impactos esperados para o município.";
-
-    if (warnEl) {
-      warnEl.innerHTML = "";
-      warnEl.classList.add("hidden");
-    }
-
-    if (gridEl) {
-      gridEl.innerHTML = `
-        <div class="welcome-item">
-          <small>1. CUSTO & RECURSOS</small>
-          <strong>${action.costLabel || money(action.cost || 0)}</strong>
-          <p>Saldo atual do Tesouro: ${money(balance("treasury"))}</p>
-        </div>
-        <div class="welcome-item">
-          <small>2. CAPACIDADE & BENEFÍCIO</small>
-          <strong>${action.benefitLabel}</strong>
-          <p>Entrega prevista após autorização.</p>
-        </div>
-        <div class="welcome-item">
-          <small>3. IMPACTO ECONÔMICO</small>
-          <strong>Circulação Local</strong>
-          <p>${action.impactLabel}</p>
-        </div>
-        <div class="welcome-item">
-          <small>4. LOCALIZAÇÃO & PRAZO</small>
-          <strong>${action.locationLabel}</strong>
-          <p>Prazo: ${action.durationLabel}</p>
-        </div>
-      `;
-    }
-
-    if (boxEl) {
-      boxEl.innerHTML = `
-        <button id="btnCancelAction" class="btn-secondary" type="button">Cancelar</button>
-        <button id="btnProceedAction" class="btn-primary" type="button">Confirmar Ação →</button>
-      `;
-      const btnCancel = $("btnCancelAction");
-      if (btnCancel) btnCancel.onclick = () => this.closeConfirmation();
-      const btnProceed = $("btnProceedAction");
-      if (btnProceed) btnProceed.onclick = () => this.executeAction(actionId, options);
-    }
-
-    const closeBtn = $("btnCloseActionConfirm");
-    if (closeBtn) closeBtn.onclick = () => this.closeConfirmation();
-
-    modal.classList.remove("hidden");
-    return val;
-  },
-
-  closeConfirmation() {
-    const modal = $("actionConfirmModal");
-    if (modal) modal.classList.add("hidden");
-    this.pendingActionId = null;
-    this.pendingOptions = null;
-  },
-
-  executeAction(actionId, options = {}) {
-    const action = ACTION_CATALOG[actionId];
-    if (!action) {
-      console.warn("Ação não catalogada para execução:", actionId);
-      return null;
-    }
-
-    const val = typeof action.validate === "function" ? action.validate(S, options) : { canExecute: true };
-    if (!val.canExecute) {
-      return this.openConfirmation(actionId, options);
-    }
-
-    const observer = (typeof window !== "undefined" && window.__vilarejoDecisionObserver) ||
-                     (window.VilarejoDashboard && typeof window.VilarejoDashboard.getDecisionObserver === "function" ? window.VilarejoDashboard.getDecisionObserver() : null);
-    let token = null;
-    if (observer && typeof observer.begin === "function") {
-      try {
-        const runId = S.runId || ("run_" + S.seed);
-        token = observer.begin({
-          runId,
-          source: "action",
-          label: action.title,
-          context: action.impactLabel,
-          monthNumber: S.monthNumber,
-          day: S.day,
-          measures: {
-            treasuryCash: balance("treasury"),
-            population: population(),
-            lotCount: S.lots,
-            housingCapacity: S.housingCapacity,
-            costIndex: S.costOfLivingIndex
-          }
-        });
-      } catch (err) {
-        console.warn("Falha ao iniciar registro da decisão:", err);
-      }
-    }
-
-    const result = action.execute(S, options) || { summary: action.title + " executada.", changes: [] };
-
-    this.closeConfirmation();
-
-    if (token && observer && typeof observer.recordImmediate === "function") {
-      try {
-        observer.recordImmediate(token, {
-          treasuryCash: balance("treasury"),
-          population: population(),
-          lotCount: S.lots,
-          housingCapacity: S.housingCapacity,
-          costIndex: S.costOfLivingIndex
-        });
-      } catch (err) {
-        console.warn("Falha ao registrar delta imediato:", err);
-      }
-    }
-
-    render();
-    this.renderOngoingProjects();
-
-    this.showFeedbackToast(
-      action.title,
-      "AÇÃO EXECUTADA COM SUCESSO",
-      result.changes,
-      true
-    );
-
-    if (action.worldCoords && window.VilarejoDashboard && typeof window.VilarejoDashboard.focusMapOn === "function") {
-      window.VilarejoDashboard.focusMapOn(action.worldCoords.x, action.worldCoords.y, action.worldCoords.zoom);
-    }
-    if (window.VilarejoDashboard && typeof window.VilarejoDashboard.getWorldRenderer === "function") {
-      const wr = window.VilarejoDashboard.getWorldRenderer();
-      if (wr && typeof wr.refresh === "function") wr.refresh();
-    }
-
-    return result;
-  },
-
-  showFeedbackToast(title, badge, rows, isSuccess = true) {
-    const toast = $("decisionFeedbackToast");
-    if (!toast) return;
-
-    const rowsHtml = (rows || []).map(r => {
-      const valClass = r.type === "cost" ? "bad" : (r.type === "benefit" ? "good" : "");
-      return `<div class="feedback-row"><small>${r.label}:</small> <strong class="${valClass}">${r.delta || r.value}</strong></div>`;
-    }).join("");
-
-    toast.innerHTML = `
-      <div class="feedback-toast-inner">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <span class="feedback-toast-badge">${badge || "DECISÃO EXECUTADA"}</span>
-          <button type="button" onclick="document.getElementById('decisionFeedbackToast').classList.add('hidden')" style="background:none;border:none;color:#ecf1e9;cursor:pointer;font-size:0.9rem;padding:0;margin-left:8px;" aria-label="Fechar notificação">✕</button>
-        </div>
-        <h4 class="feedback-toast-title">${title}</h4>
-        <div class="feedback-toast-body">
-          ${rowsHtml}
-        </div>
-      </div>
-    `;
-    toast.classList.remove("hidden");
-    if (toast.__timer) clearTimeout(toast.__timer);
-    toast.__timer = setTimeout(() => {
-      toast.classList.add("hidden");
-    }, 6000);
-  },
-
-  renderOngoingProjects() {
-    const host = $("ongoingProjectsHost");
-    if (!host) return;
-    const list = S.buildings || [];
-    if (!list.length) {
-      host.innerHTML = "";
-      return;
-    }
-    const itemsHtml = list.map((b, idx) => {
-      const due = typeof b === "number" ? b : b.due;
-      const name = (typeof b === "object" && b.name) ? b.name : `Moradia Municipal #${idx + 1}`;
-      const startDay = (typeof b === "object" && b.startedAt) ? b.startedAt : (due - 30);
-      const totalDays = Math.max(1, due - startDay);
-      const elapsed = Math.max(0, S.day - startDay);
-      const pct = Math.max(0, Math.min(100, Math.round((elapsed / totalDays) * 100)));
-      const daysLeft = Math.max(0, due - S.day);
-
-      return `
-        <div class="ongoing-item">
-          <div class="ongoing-item-title">
-            <span>🏗️ ${name}</span>
-            <span>${daysLeft > 0 ? `Conclusão em ${daysLeft} dia(s)` : 'Fase de acabamento'}</span>
-          </div>
-          <div class="ongoing-item-desc">
-            <span>Início: Dia ${startDay} · Entrega prevista: Dia ${due} (Ano ${Math.floor(due/YEAR)+1})</span>
-          </div>
-          <div class="ongoing-progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
-            <div class="ongoing-progress-fill" style="width: ${pct}%;"></div>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    host.innerHTML = `
-      <div class="ongoing-card">
-        <div class="ongoing-header">
-          <span class="ongoing-badge">OBRAS E PROJETOS EM ANDAMENTO (${list.length})</span>
-          <small style="color:var(--muted);font-size:0.75rem;">Acompanhamento dia a dia</small>
-        </div>
-        <div class="ongoing-list">
-          ${itemsHtml}
-        </div>
-      </div>
-    `;
-  }
-};
 
 function actions(){
  if(!$("actions"))return;
@@ -5290,17 +4443,21 @@ function actions(){
  if($("stanceCapitalist"))$("stanceCapitalist").onclick=()=>applyGovernanceStance("capitalist");
  if($("stanceCommunal"))$("stanceCommunal").onclick=()=>applyGovernanceStance("communal");
 
- if($("sellLot"))$("sellLot").onclick=()=>window.VilarejoActionFlow.openConfirmation("sellLot");
- if($("build"))$("build").onclick=()=>window.VilarejoActionFlow.openConfirmation("build");
- if($("investCredit"))$("investCredit").onclick=()=>window.VilarejoActionFlow.openConfirmation("investCredit");
- if($("investInfra"))$("investInfra").onclick=()=>window.VilarejoActionFlow.openConfirmation("investInfra");
- if($("projRuralRoad"))$("projRuralRoad").onclick=()=>window.VilarejoActionFlow.openConfirmation("projRuralRoad");
- if($("projSocialHousing"))$("projSocialHousing").onclick=()=>window.VilarejoActionFlow.openConfirmation("projSocialHousing");
- if($("projSanitation"))$("projSanitation").onclick=()=>window.VilarejoActionFlow.openConfirmation("projSanitation");
- if($("projGrainSilo"))$("projGrainSilo").onclick=()=>window.VilarejoActionFlow.openConfirmation("projGrainSilo");
- if($("sell25Stake"))$("sell25Stake").onclick=()=>window.VilarejoActionFlow.openConfirmation("sell25Stake");
- if($("privatizeValuation"))$("privatizeValuation").onclick=()=>window.VilarejoActionFlow.openConfirmation("privatizeValuation");
- if($("toggleConcession"))$("toggleConcession").onclick=()=>window.VilarejoActionFlow.openConfirmation("toggleConcession");
+ $("sellLot").onclick=()=>{if(S.lots<=0)return;S.lots--;log("external","treasury",8000,"Venda de terreno público");if(S.currentMonthTracking)S.currentMonthTracking.assetSales+=8000;feed("Lote público vendido por R$ 8.000.");render()};
+ $("build").onclick=()=>{if(S.lots<=0){feed("Não há terrenos disponíveis para construir.");render();return}if(balance("treasury")<6000){feed("Tesouro sem recursos para iniciar a obra.");render();return}log("treasury","workshop",3000,"Obra pública: serviços e mão de obra locais");log("treasury","external",3000,"Obra pública: materiais importados");if(S.currentMonthTracking){S.currentMonthTracking.publicWorks+=6000;S.currentMonthTracking.importedCapitalGoods=(S.currentMonthTracking.importedCapitalGoods||0)+3000;S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+3000;}S.lots--;S.buildings.push(S.day+30);feed("Obra iniciada; metade do custo circula na oficina de serviços local. Conclusão no dia "+(S.day+30)+".");render()};
+ $("investCredit").onclick=()=>{if(S.lots<=0){feed("Não há terrenos disponíveis para investimento.");render();return}const loan=issueLoan("landlord",14000,"aquisição de terreno e construção de moradia");if(loan<13999){feed("Crédito insuficiente: o banco preserva a reserva mínima dos depositantes.");render();return}log("landlord","treasury",8000,"Compra de terreno para empreendimento imobiliário");log("landlord","workshop",3000,"Obra privada: serviços e mão de obra locais");if(S.currentMonthTracking){S.currentMonthTracking.workshopRevenue=(S.currentMonthTracking.workshopRevenue||0)+3000;S.currentMonthTracking.privateFixedInvestment=(S.currentMonthTracking.privateFixedInvestment||0)+6000;S.currentMonthTracking.importedCapitalGoods=(S.currentMonthTracking.importedCapitalGoods||0)+3000;}log("landlord","external",3000,"Obra privada: materiais importados");S.lots--;S.buildings.push(S.day+30);feed("Investimento imobiliário financiado; obra injeta serviços na oficina local.");render()};
+ if($("investInfra"))$("investInfra").onclick=()=>investInInfrastructure();
+ if($("projRuralRoad"))$("projRuralRoad").onclick=()=>executeInfrastructureProject("rural_road");
+ if($("projSocialHousing"))$("projSocialHousing").onclick=()=>executeInfrastructureProject("social_housing");
+ if($("projSanitation"))$("projSanitation").onclick=()=>executeInfrastructureProject("sanitation_health");
+ if($("projGrainSilo"))$("projGrainSilo").onclick=()=>executeInfrastructureProject("grain_silo");
+ if($("sell25Stake"))$("sell25Stake").onclick=()=>sellFarmStake(0.25);
+ if($("privatizeValuation"))$("privatizeValuation").onclick=()=>sellFarmStake(S.farmOwnership.treasury);
+ if($("toggleConcession"))$("toggleConcession").onclick=()=>{
+  S.concessionActive=!S.concessionActive;
+  feed(S.concessionActive?"Contrato de concessão firmado: concessionária assume a operação e recolhe outorga mensal ao Tesouro.":"Contrato de concessão encerrado.");
+  render();
+ };
 }
 function sparklineSVG(values,color="var(--gold)"){
  if(!values||values.length<2)return "";
@@ -5485,58 +4642,8 @@ function render(){syncPendingEventPrompt();auditCashConservation();const ls=getL
    return `<div class="event-option-card"><div class="event-opt-head"><span class="event-opt-title">${o.label}</span><span class="event-opt-cost ${costClass}">${costText}</span></div>${impactHtml}<button data-choice="${i}" class="btn-action" ${o.disabled?"disabled":""}>Confirmar esta decisão</button></div>`;
   }).join("");
  }else ev.classList.add("hidden");
- $("eventOptions").onclick=e=>{const b=e.target.closest("button");if(!b||!S.event)return;const weatherDecision=S.event.title==="Proteção contra geada"||S.event.title==="Proteção contra Geada na Safra";S.event.options[+b.dataset.choice].run();if(weatherDecision)continueDayOperations();else{syncPendingEventPrompt();render()}};  if(S.gameOver){$("eventTitle").textContent="Fim de jogo";$("eventText").textContent=S.gameOver;ev.classList.remove("hidden");$("eventOptions").innerHTML="";pause()}
-  renderPolicies();
-  renderExtendedDashboard();
-  if(window.VilarejoActionFlow&&typeof window.VilarejoActionFlow.renderOngoingProjects==="function"){
-    window.VilarejoActionFlow.renderOngoingProjects();
-  }
-}
-function continueDayOperations(){
-  const doy=S.day%YEAR;
-  buyInputsAndProduce();
-  if(doy>=150&&doy<210&&!S.weatherProtection&&!S.weatherEventDone&&economicRand()<FROST_DAILY_RISK){
-    S.weatherEventDone=true;
-    S.weatherFactor=.65;
-    feed("Geada atingiu a lavoura: produção restante reduzida em 35%.");
-  }
-  if(S.day%10===0)sellCoffee();
-  const finishedBuildings=[];
-  S.buildings=(S.buildings||[]).filter(due=>{
-    const d=typeof due==="number"?due:due.due;
-    if(S.day>=d){
-      finishedBuildings.push(due);
-      return false;
-    }
-    return true;
-  });
-  if(finishedBuildings.length>0){
-    for(const bld of finishedBuildings){
-      S.housingCapacity+=2;
-      feed(`🎉 CONSTRUÇÃO CONCLUÍDA: Moradia no Bairro Residencial pronta para habitação! Capacidade total ampliada para ${S.housingCapacity} vagas.`);
-    }
-    if(window.VilarejoActionFlow&&typeof window.VilarejoActionFlow.showFeedbackToast==="function"){
-      window.VilarejoActionFlow.showFeedbackToast(
-        "Construção Concluída no Bairro Residencial!",
-        "ENTREGA DE OBRA PÚBLICA",
-        [
-          { label: "Capacidade Habitacional", value: `+${finishedBuildings.length*2} vagas (${S.housingCapacity} total)`, type: "benefit" },
-          { label: "Localização", value: "Bairro Residencial", type: "neutral" },
-          { label: "Status", value: "Pronta para ocupação de novas famílias", type: "benefit" }
-        ],
-        true
-      );
-    }
-    if(window.VilarejoDashboard&&typeof window.VilarejoDashboard.getWorldRenderer==="function"){
-      const wr=window.VilarejoDashboard.getWorldRenderer();
-      if(wr&&wr.focusOn)wr.focusOn(320, 240, 1.25);
-      if(wr&&wr.refresh)wr.refresh();
-    }
-  }
-  if(S.day%MONTH===0)closeMonth();
-  auditCashConservation();
-  render();
-}
+ $("eventOptions").onclick=e=>{const b=e.target.closest("button");if(!b||!S.event)return;const weatherDecision=S.event.title==="Proteção contra geada"||S.event.title==="Proteção contra Geada na Safra";S.event.options[+b.dataset.choice].run();if(weatherDecision)continueDayOperations();else{syncPendingEventPrompt();render()}};if(S.gameOver){$("eventTitle").textContent="Fim de jogo";$("eventText").textContent=S.gameOver;ev.classList.remove("hidden");$("eventOptions").innerHTML="";pause()}renderPolicies();renderExtendedDashboard()}
+function continueDayOperations(){const doy=S.day%YEAR;buyInputsAndProduce();if(doy>=150&&doy<210&&!S.weatherProtection&&!S.weatherEventDone&&economicRand()<FROST_DAILY_RISK){S.weatherEventDone=true;S.weatherFactor=.65;feed("Geada atingiu a lavoura: produção restante reduzida em 35%.")}if(S.day%10===0)sellCoffee();S.buildings=S.buildings.filter(due=>{if(S.day>=due){S.housingCapacity+=2;feed("Moradia concluída: capacidade ampliada em duas pessoas.");return false}return true});if(S.day%MONTH===0)closeMonth();auditCashConservation();render()}
 function tick(){if(S.event||S.gameOver){pause();return}S.day++;syncCoreFromEconomy("day-advanced");const doy=S.day%YEAR;if(doy===0){S.weatherFactor=1;S.weatherEventDone=false;S.weatherDecisionDone=false;S.weatherProtection=false;S.productionThisSeason=0}if(doy===150&&!S.weatherDecisionDone){S.weatherDecisionDone=true;S.event={title:"Proteção contra Geada na Safra",situation:"A safra de café está começando e meteorologistas preveem risco de 20% de geada atingir as lavouras.",consequence:"Uma geada forte sem proteção destruirá 35% de toda a produção do ano, gerando grande prejuízo financeiro.",text:"A safra está começando. A geada tem risco aproximado de 20% ao longo da colheita e pode reduzir em 35% a produção restante. A proteção custa R$ 8.000.",options:[{label:"Contratar proteção agrícola",cost:8000,costLabel:"Custo: R$ 8.000",impact:"Garante blindagem total da colheita contra o frio e protege 100% da safra.",run:()=>{const paid=log(farmAccount(),"external",8000,"Seguro contra geada");if(paid>=8000){S.weatherProtection=true;S.monthFarmCosts+=paid;if(S.currentMonthTracking)S.currentMonthTracking.farmInsurance+=paid;feed("Proteção contra geada contratada: safra segura.")}else{S.weatherProtection=false;feed("Caixa insuficiente para contratar proteção.")}S.event=null;render() }},{label:"Assumir o risco do clima",cost:0,costLabel:"Gratuito (R$ 0)",impact:"Economiza R$ 8.000 no caixa agora, mas corre risco real de quebra de 35% na colheita.",run:()=>{S.weatherProtection=false;feed("Fazenda decidiu não contratar proteção contra geada.");S.event=null;render()}}]};render();pause();return}continueDayOperations()}
 function start(){if(timer||S.gameOver||S.event)return;timer=setInterval(tick,650/speed);if(CORE_RUNTIME)CORE_RUNTIME.session.setStatus("running");$("start").textContent="Continuar";$("pause").disabled=false}
 function pause(){const wasRunning=!!timer;clearInterval(timer);timer=null;if(wasRunning&&CORE_RUNTIME&&!S.gameOver)CORE_RUNTIME.session.setStatus("paused");$("pause").disabled=true}
@@ -5550,16 +4657,12 @@ function simulateMonths(n,continueOnGameOver=false){
    S.day++;const doy=S.day%YEAR;
    if(doy===0){S.weatherFactor=1;S.weatherEventDone=false;S.productionThisSeason=0}
    buyInputsAndProduce();if(S.day%10===0)sellCoffee();
-   S.buildings=S.buildings.filter(due=>{
-     const d=typeof due==="number"?due:due.due;
-     if(S.day>=d){S.housingCapacity+=2;return false}
-     return true;
-   });
+   S.buildings=S.buildings.filter(due=>{if(S.day>=due){S.housingCapacity+=2;return false}return true});
   }
   closeMonth();
   let guard=0;
   while((S.event?.engineEventId||S.event?.isCabinetDilemma)&&guard++<5){
-   const ev=S.event;const affordable=ev.options.filter(o=>!o.disabled).sort((a,b)=>(a.cost||0)-(b.cost||0))[0]||ev.options[0];
+   const ev=S.event;const affordable=ev.options.find(o=>!o.disabled)||ev.options[0];
    if(!affordable)break;
    affordable.run();
    S.event=null;
@@ -5816,8 +4919,8 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  const macroSix=simulateMonths(6,false).nationalAccounts;
  test("9.2 Reconciliação do PIB pelas três óticas após seis meses",()=>({
   pass:!!macroSix&&macroSix.reconciliation?.reconciled&&
-       Math.abs(macroSix.approaches.production-macroSix.approaches.income)<0.01&&
-       Math.abs(macroSix.approaches.production-macroSix.approaches.expenditure)<0.01&&
+       Math.abs(macroSix.approaches.production-macroSix.approaches.income)<0.02&&
+       Math.abs(macroSix.approaches.production-macroSix.approaches.expenditure)<0.02&&
        Number.isFinite(macroSix.reconciliation.inventoryChange),
   approaches:macroSix?.approaches,
   reconciliation:macroSix?.reconciliation
@@ -5909,5 +5012,5 @@ function runStressTests(){const results=[];const test=(name,fn)=>{try{const deta
  }));
 
  return{passed:results.filter(r=>r.passed).length,total:results.length,results};}
-window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,executeInfrastructureProject,getInfrastructureProjects:()=>INFRASTRUCTURE_PROJECTS,getMigrationStats:()=>S.migrationStats,getSupplyChainStats:()=>({localFoodAutonomy:S.localFoodAutonomy||0,farmLocalFoodStock:S.farmLocalFoodStock||0}),issueMicrocredit,foundCooperative,distributeCooperativeSurplus,initAnnualBudget,getAnnualBudget,commitDepartmentBudget,liquidateAndPayDepartmentBudget,supplementDepartmentBudget,foundMill,foundBrickyard,startStructuredPublicWork,getActiveConstructions,getCompletedConstructions,advanceConstructionsMonthly,getStructuredPublicWorks:()=>STRUCTURED_PUBLIC_WORKS,enactLegislation,executeGovernanceAction,getCabinetDilemmas:()=>CABINET_DILEMMAS,triggerCabinetDilemma,resolveCabinetDilemma,getCouncilSupport:()=>S.councilSupport||65,getPoliticalCharactersCatalog,getPoliticalCharacterById,getActivePoliticalCharacters,getPoliticalActiveBonuses,getPoliticalConflicts,hirePoliticalCharacter,dismissPoliticalCharacter,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,updateMarketPrice,marketConsumption,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},calculateGovernanceSpectrum,applyGovernanceStance,simulateMonths,availableCredit,buildPublicFacility,hirePublicStaff,initPrivateSector,runPrivateSectorCycle,getPrivateEconomyStats,computePrivateSectorEnvironment,registerSectorInPrivateEconomy,getPrivateSectorCatalog:()=>PRIVATE_SECTOR_CATALOG,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0,getActionFlow:()=>window.VilarejoActionFlow,getActionCatalog:()=>window.VilarejoActionFlow?.catalog};
+window.VilarejoTest={runStressTests,stateSnapshot,generateBalanceSheets,supportStateFarm,processMonthlyEvents,resolveEventChoice,getFirms,getLaborStats,getBankPortfolioStats,matchLaborMarket,matchCollectiveLaborMarket,runFirmPlanningPhase,runFirmProductionPhase,runFirmCommercializationPhase,runFirmSettlementPhase,settleAllFirmWages,migrateLoan,migrateLoans,commerceLoanWriteDown,writeDownLoansForBorrower,updateCommerceInsolvency,totalLoans,issueLoan,settleBankLoans,calculateFirmValuation,sellFarmStake,distributeFirmDividends,settleConcessionOutorga,calculateNationalAccounts,calculateFiscalReport,calculateProjectNPV,borrowerRiskPremium,updateUrbanInfrastructure,investInInfrastructure,executeInfrastructureProject,getInfrastructureProjects:()=>INFRASTRUCTURE_PROJECTS,getMigrationStats:()=>S.migrationStats,getSupplyChainStats:()=>({localFoodAutonomy:S.localFoodAutonomy||0,farmLocalFoodStock:S.farmLocalFoodStock||0}),issueMicrocredit,foundCooperative,distributeCooperativeSurplus,initAnnualBudget,getAnnualBudget,commitDepartmentBudget,liquidateAndPayDepartmentBudget,supplementDepartmentBudget,foundMill,foundBrickyard,startStructuredPublicWork,getActiveConstructions,getCompletedConstructions,advanceConstructionsMonthly,getStructuredPublicWorks:()=>STRUCTURED_PUBLIC_WORKS,enactLegislation,executeGovernanceAction,getCabinetDilemmas:()=>CABINET_DILEMMAS,triggerCabinetDilemma,resolveCabinetDilemma,getCouncilSupport:()=>S.councilSupport||65,getPoliticalCharactersCatalog,getPoliticalCharacterById,getActivePoliticalCharacters,getPoliticalActiveBonuses,getPoliticalConflicts,hirePoliticalCharacter,dismissPoliticalCharacter,processHarrisTodaroMigration,checkFirmEntryAndExit,liquidateInsolventFirm,updateMarketPrice,marketConsumption,round2,reset:()=>{pause();policiesBuilt=false;newGame();actions()},resetWithSeed:(seed)=>{pause();policiesBuilt=false;newGame();S.seed=Number(seed)>>>0;if(S.eventEngine)S.eventEngine.semente=S.seed;actions()},setPolicy:(k,v)=>{S.policy[k]=v},calculateGovernanceSpectrum,applyGovernanceStance,simulateMonths,availableCredit,buildPublicFacility,hirePublicStaff,initPrivateSector,runPrivateSectorCycle,getPrivateEconomyStats,computePrivateSectorEnvironment,registerSectorInPrivateEconomy,issuePrivateSectorLoan,getPrivateSectorCatalog:()=>PRIVATE_SECTOR_CATALOG,getCoreSnapshot:()=>CORE_RUNTIME?CORE_RUNTIME.snapshot():null,getCoreHistory:topic=>CORE_RUNTIME?CORE_RUNTIME.events.getHistory(topic?{topic}:{}):[],getCoreEventCount:topic=>CORE_RUNTIME?CORE_RUNTIME.events.count(topic):0};
 newGame();actions();

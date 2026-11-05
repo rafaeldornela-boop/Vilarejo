@@ -949,11 +949,23 @@ test("21.1 Economia Privada Setorial: 6 setores, ciclo mensal e 8 relações cau
   assert.ok(totalInv > 0, "Ambiente favorável com lucro deve gerar investimento privado positivo");
   assert.ok(capAfterInvest > capBeforeInvest && stockAfterInvest > stockBeforeInvest, "Investimento deve expandir a capacidade produtiva futura");
 
-  // Verificação de conservação monetária e SFC após ciclo completo no closeMonth()
+  // Verificação de contas individuais por setor e contratos bancários em S.bankLoans
   api.reset();
   S = getS();
+  api.initPrivateSector({ reset: true });
+  for (const sec of expectedSectors) {
+    const f = S.privateSector.firms[sec];
+    assert.strictEqual(f.account, `priv_${sec}`, `Setor ${sec} deve ter conta contábil dedicada priv_${sec}`);
+    assert.ok(f.cash > 0, `Conta individual priv_${sec} deve ter caixa próprio inicializado`);
+  }
+  run("log('external', 'bank', 20000, 'Capital bancário para crédito setorial privado')");
+  const loanTech = api.issuePrivateSectorLoan("technology", 1500, "Expansão de software e serviços");
+  assert.strictEqual(loanTech, 1500, "Empréstimo individual concedido a priv_technology deve ser registrado integralmente");
+  assert.strictEqual(api.totalLoans("priv_technology"), 1500, "S.bankLoans deve rastrear a dívida individual de priv_technology");
+  api.settleBankLoans();
+  assert.ok(api.totalLoans("priv_technology") < 1500, "settleBankLoans deve amortizar automaticamente o contrato de priv_technology");
   run("closeMonth()");
-  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa mantida com economia privada integrada");
+  assert(run("auditCashConservation().ok"), "Conservação estrita de caixa mantida com contas e empréstimos individuais por setor");
   assert(api.generateBalanceSheets().audit.allPass, "Balanços patrimoniais SFC 100% íntegros após fechamento mensal");
 });
 

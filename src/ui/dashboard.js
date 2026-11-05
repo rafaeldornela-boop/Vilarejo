@@ -671,9 +671,14 @@
               ${act}
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.35rem;font-size:0.7rem;background:#f8fafc;padding:0.35rem;border-radius:4px;">
-              <div><span style="color:#64748b;display:block;">Receita</span><b>${money(f.revenue)}</b></div>
-              <div><span style="color:#64748b;display:block;">Salários</span><b>${money(f.wages)}</b></div>
+              <div><span style="color:#64748b;display:block;">Caixa</span><b>${money(f.cash || 0)}</b></div>
+              <div><span style="color:#64748b;display:block;">Dívida Banc.</span><b style="color:${(f.loans || 0) > 0 ? '#b45309' : '#334155'};">${money(f.loans || 0)}</b></div>
               <div><span style="color:#64748b;display:block;">Lucro Líq.</span><b style="color:${f.profit >= 0 ? '#15803d' : '#b91c1c'};">${money(f.profit)}</b></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:#64748b;">
+              <span>Receita: <b>${money(f.revenue)}</b></span>
+              <span>Salários: <b>${money(f.wages)}</b></span>
+              <span>Invest.: <b>${money(f.investment || 0)}</b></span>
             </div>
           </div>
         `;
@@ -2057,7 +2062,6 @@
     if (!decisionObserver || !event?.target?.closest) return;
     const button = event.target.closest("#actions button, #eventOptions button[data-choice]");
     if (!button || button.disabled) return;
-    if (button.closest("#actions") && window.VilarejoActionFlow) return;
     const data = snapshot();
     const monthNumber = finiteValue(data?.monthNumber);
     if (!data?.runId || monthNumber === null) return;
@@ -2150,7 +2154,6 @@
   function initDecisionTracking() {
     if (typeof document === "undefined" || !window.VilarejoDecisionObserver?.createDecisionObserver) return;
     decisionObserver = window.VilarejoDecisionObserver.createDecisionObserver();
-    window.__vilarejoDecisionObserver = decisionObserver;
     document.addEventListener("click", captureDecisionClick, true);
   }
 
