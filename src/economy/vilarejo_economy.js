@@ -2897,13 +2897,13 @@ function writeDownLoansForBorrower(borrower,fraction){
 function commerceLoanWriteDown(fraction){return writeDownLoansForBorrower("commerce",fraction)}
 
 function resolveCommerceFailure(choice){if(choice==="state"){const paid=log("treasury","commerce",10000,"Socorro estatal para recomposição do capital de giro");if(paid<9999){feed("Tesouro sem recursos suficientes para o socorro integral.");return false}feed("Tesouro recapitalizou o comércio em R$ 10.000.")}else{log("external","commerce",10000,"Entrada de novo comerciante e capitalização");commerceLoanWriteDown(0.5);S.commerceMarkupExtra=0.10;S.commerceMarkupMonths=6;feed("Novo comerciante assumiu o ponto, recebeu deságio de 50% na dívida bancária e elevou o markup em 10 p.p. por seis meses.")}S.commerceEmptyMonths=0;S.marketFundingFailure=false;S.event=null;render();return true}
-const EVENT_CHOICE_LABELS={absorver:"Absorver o impacto",irrigar:"Investir em irrigação",proteger_lavoura:"Proteger a lavoura",controle_biologico:"Adotar controle biológico",estocar:"Formar estoque",recusar:"Recusar proposta",aceitar:"Aceitar proposta",renegociar:"Renegociar",aumentar_salario:"Aumentar salários",deixar_ir:"Deixar seguir",contraoferta:"Fazer contraoferta",igualar_salario:"Igualar a oferta salarial",tratar:"Tratar os trabalhadores",reparar:"Reparar a estrada",pagar:"Pagar a taxa",contestar:"Contestar a taxa",protocolos_sanitarios:"Adotar protocolos sanitários",fornecer_ao_governo:"Fornecer ao governo",renegociar_dividas:"Renegociar dívidas",neutralidade:"Manter neutralidade",apoiar_novo_governo:"Apoiar o novo governo",drenagem_emergencial:"Executar drenagem emergencial",contratar_diaristas:"Contratar diaristas",renegociar_fornecedores:"Renegociar com fornecedores",aceitar_contrato:"Aceitar contrato",entrar:"Entrar na cooperativa",ignorar:"Não patrocinar",patrocinar:"Patrocinar a festa",deixar_por_conta:"Não intervir",acolher:"Acolher migrantes",acordo_amigavel:"Buscar acordo amigável",ir_a_justica:"Levar à Justiça",contratar_vigia:"Contratar vigilância",pagar_multa:"Pagar a multa",regularizar_salarios:"Regularizar salários",aderir:"Aderir ao programa"};
-const EVENT_CATEGORY_LABELS={clima:"clima",mercado:"mercado",social:"social",infra:"infraestrutura",governo:"governo",global:"cenário internacional"};
+const EVENT_CHOICE_LABELS={absorver:"Absorver o impacto",irrigar:"Investir em irrigação",proteger_lavoura:"Proteger a lavoura",controle_biologico:"Adotar controle biológico",estocar:"Formar estoque",recusar:"Recusar proposta",aceitar:"Aceitar proposta",renegociar:"Renegociar",aumentar_salario:"Aumentar salários",deixar_ir:"Deixar seguir",contraoferta:"Fazer contraoferta",igualar_salario:"Igualar a oferta salarial",tratar:"Tratar os trabalhadores",reparar:"Reparar a estrada",pagar:"Pagar a taxa",contestar:"Contestar a taxa",protocolos_sanitarios:"Adotar protocolos sanitários",fornecer_ao_governo:"Fornecer ao governo",renegociar_dividas:"Renegociar dívidas",neutralidade:"Manter neutralidade",apoiar_novo_governo:"Apoiar o novo governo",drenagem_emergencial:"Executar drenagem emergencial",contratar_diaristas:"Contratar diaristas",renegociar_fornecedores:"Renegociar com fornecedores",aceitar_contrato:"Aceitar contrato",entrar:"Entrar na cooperativa",ignorar:"Não patrocinar",patrocinar:"Patrocinar a festa",deixar_por_conta:"Não intervir",acolher:"Acolher migrantes",acordo_amigavel:"Buscar acordo amigável",ir_a_justica:"Levar à Justiça",contratar_vigia:"Contratar vigilância",pagar_multa:"Pagar a multa",regularizar_salarios:"Regularizar salários",aderir:"Aderir ao programa",frente_trabalho:"Frente de Trabalho Municipal",subsidio_empresas:"Estímulo às Contratações",aguardar_mercado:"Aguardar Ajuste do Mercado",subsidio_alimentar:"Subsídio Alimentar",compras_locais:"Aquisição Direta dos Produtores",deixar_precos:"Livre Formação de Preços",contingenciamento:"Contingenciamento de Gastos",cobranca_ativa:"Cobrança Fiscal Ativa",usar_reserva:"Consumir Reserva",vale_compras:"Vale-Alimentação Comunitário",feira_livre:"Feira Promocional",incentivo_infra:"Conceder Apoio e Lote",contrapartidas:"Exigir Formação Local",recusar_incentivo:"Recusar Apoio Público",mutirao_saude:"Plantão Médico Extra",reorganizar_atendimento:"Otimizar Triagem",obra_habitacional:"Construir Módulos Residenciais",cooperativa_habitacao:"Mutirão Comunitário",reforco_patrulha:"Guarda Municipal Noturna",iluminacao_praca:"Iluminação Noturna",abono_social:"Amparo Social",capacitacao_oficinas:"Cursos de Ofício",pacote_obras:"Pacote de Obras",audiencia_publica:"Conferência Popular",recapeamento_vicinais:"Manutenção de Estradas Rurais",desconto_taxa_rural:"Alívio de Tarifa Rural",manter_firme:"Manter Cobrança",reajuste_piso:"Reajuste Salarial",cesta_auxilio:"Cesta de Alimentos",resistir:"Não Ceder",emendas_vereadores:"Emendas nos Bairros",acordo_republicano:"Acordo de Metas",confronto:"Denunciar Corporativismo",atender_pauta:"Assinar Termo de Compromisso",discurso_conciliador:"Diálogo Aberto",repressao:"Dispersar Concentração",fundo_soberano:"Criar Fundo de Reserva",antecipar_obras:"Antecipar Obras Públicas",alivio_tributario:"Alívio Tributário",bonificacao_trabalhadores:"Bônus de Produtividade",expandir_armazenagem:"Modernizar Silo",capitalizar:"Reter em Caixa",capacitacao_avancada:"Incentivo a Escolas Técnicas",festa_trabalhador:"Festa Cívica do Trabalho",aproveitar_momento:"Acompanhar o Ciclo",intercambio_regional:"Liderar Consórcio",ampliar_bolsas:"Expandir Material e Bolsas",apenas_comemorar:"Registrar Marco",acolhimento_cidadao:"Apoio à Fixação",deixar_instalacao:"Instalação Particular"};
+const EVENT_CATEGORY_LABELS={clima:"clima",mercado:"mercado",social:"social",infra:"infraestrutura",governo:"governo",global:"cenário internacional",economico:"economia",politico:"política",positivo:"conquista e oportunidade"};
 const EVENT_SEVERITY_LABELS={leve:"leve",media:"moderada",grave:"grave"};
 function syncEventEngine(){
  const engine=window.EventosV3;
  if(!engine||!S.eventEngine)return null;
- return engine.sincronizarComVilarejo(S,S.eventEngine,{balance,approval,employed,log});
+ return engine.sincronizarComVilarejo(S,S.eventEngine,{balance,approval,employed,log,getLaborStats,population});
 }
 function resolveEventChoice(eventId,choiceId){
  const engine=window.EventosV3,state=S.eventEngine;
@@ -2914,7 +2914,17 @@ function resolveEventChoice(eventId,choiceId){
  engine.aplicarNoVilarejo(S,state);
  const def=engine.EVENTOS.find(item=>item.id===eventId);
  const choice=def?.escolhas?.find(item=>item.id===choiceId);
- feed(`Decisão: ${EVENT_CHOICE_LABELS[choiceId]||choiceId} · ${def?.caixa||eventId}${choice?.custo?` · custo ${money(choice.custo)}`:""}.`);
+ const costVal=Number(choice?.custo)||0;
+ const costOrigin=choice?.origemCaixa==="treasury"?"Tesouro":"Fazenda";
+ const costPart=costVal>0?` · custo ${costOrigin} ${money(costVal)}`:"";
+ feed(`Decisão: ${choice?.titulo||EVENT_CHOICE_LABELS[choiceId]||choiceId} · ${def?.titulo||def?.caixa||eventId}${costPart}.`);
+ if(window.VilarejoDashboard&&typeof window.VilarejoDashboard.showDecisionFeedback==="function"){
+  window.VilarejoDashboard.showDecisionFeedback({
+   title:def?.titulo||def?.caixa||"Decisão Municipal",
+   cost:costVal,
+   consequence:choice?.descricao||choice?.impact||"Medida adotada pela administração pública."
+  });
+ }
  S.event=null;
  return true;
 }
@@ -2971,29 +2981,37 @@ function syncPendingEventPrompt(){
  const choices=Array.isArray(def.escolhas)?def.escolhas:[];
  if(!choices.length){
   active.respondido=true;
-  feed(`Acontecimento: ${def.caixa}. Impacto aplicado na comunidade por ${active.mesesRestantes} mês(es).`);
+  feed(`Acontecimento: ${def.titulo||def.caixa}. Impacto aplicado na comunidade por ${active.mesesRestantes} mês(es).`);
   return syncPendingEventPrompt();
  }
  const category=EVENT_CATEGORY_LABELS[def.categoria]||def.categoria||"geral";
  const severity=EVENT_SEVERITY_LABELS[active.sev]||active.sev||"moderada";
  const rich=EVENT_RICH_INFO[active.id]||{};
  syncEventEngine();
+ const eventTitle=def.titulo||def.caixa||"Acontecimento no Município";
+ const eventSituation=def.descricao||rich.situation||`Acontecimento de ${category} (intensidade ${severity}) afetando a comunidade local.`;
+ const eventConsequence=def.causa?`Causa apurada: ${def.causa}. ${rich.consequence||"Escolha a diretriz pública mais adequada."}`:(rich.consequence||`Os impactos socioeconômicos já estão ativos no município. Escolha a resposta mais adequada.`);
  S.event={
   engineEventId:active.id,
-  title:def.caixa,
-  situation:rich.situation||`Acontecimento de ${category} (intensidade ${severity}) afetando a comunidade local.`,
-  consequence:rich.consequence||`Os impactos econômicos e produtivos já estão ativos no município. Escolha a resposta mais adequada.`,
-  text:`${rich.situation||def.caixa} ${rich.consequence||""}`,
+  title:eventTitle,
+  situation:eventSituation,
+  consequence:eventConsequence,
+  text:`${eventSituation} ${eventConsequence}`,
   options:choices.map(choice=>{
    const choiceRich=rich.choices?.[choice.id]||{};
    const costVal=Number(choice.custo)||0;
-   const titleText=choiceRich.title||EVENT_CHOICE_LABELS[choice.id]||choice.id;
+   const isTreasury=choice.origemCaixa==="treasury";
+   const availableCash=isTreasury?balance("treasury"):balance(farmAccount());
+   const titleText=choice.titulo||choiceRich.title||EVENT_CHOICE_LABELS[choice.id]||choice.id;
+   const accountLabel=isTreasury?"Tesouro Municipal":"Fazenda";
+   const costLabel=costVal>0?`Custo (${accountLabel}): ${money(costVal)}`:"Sem custo direto (R$ 0)";
+   const impactText=choice.descricao||choiceRich.impact||(costVal>0?`Investimento de ${money(costVal)} para atenuar o impacto deste evento.`:"Sem custo direto imediato ao caixa.");
    return{
     label:titleText,
     cost:costVal,
-    costLabel:costVal>0?`Custo: ${money(costVal)}`:"Gratuito (R$ 0)",
-    impact:choiceRich.impact||(costVal>0?`Investimento de ${money(costVal)} para atenuar o impacto deste evento.`:"Sem custo direto imediato ao caixa do município."),
-    disabled:costVal>balance(farmAccount()),
+    costLabel:costLabel,
+    impact:impactText,
+    disabled:costVal>availableCash,
     run:()=>resolveEventChoice(active.id,choice.id)
    };
   })
@@ -3984,7 +4002,7 @@ function simulateMonths(n,continueOnGameOver=false){
   closeMonth();
   let guard=0;
   while((S.event?.engineEventId||S.event?.isCabinetDilemma)&&guard++<5){
-   const ev=S.event;const affordable=ev.options.find(o=>!o.disabled)||ev.options[0];
+   const ev=S.event;const affordable=ev.options.filter(o=>!o.disabled).sort((a,b)=>(a.cost||0)-(b.cost||0))[0]||ev.options[0];
    if(!affordable)break;
    affordable.run();
    S.event=null;

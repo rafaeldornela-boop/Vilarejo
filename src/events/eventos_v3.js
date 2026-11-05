@@ -60,10 +60,21 @@ function garantirSinaisAtivos(s) {
   return s.sinaisAtivos;
 }
 
-function alterarCaixa(s, delta, motivo, categoria = "geral") {
+function alterarCaixa(s, delta, motivo, categoria = "geral", conta = null) {
   if (!delta) return;
-  s.caixa += delta;
-  if (typeof s.onTransacao === "function") s.onTransacao(delta, motivo, categoria);
+  if (conta === "treasury") {
+    s.caixaTesouro = (s.caixaTesouro || 0) + delta;
+  } else {
+    s.caixa += delta;
+  }
+  if (typeof s.onTransacao === "function") s.onTransacao(delta, motivo, categoria, conta);
+}
+
+function cancelarAgendado(s, id) {
+  if (!Array.isArray(s.agendados)) return false;
+  const antes = s.agendados.length;
+  s.agendados = s.agendados.filter((a) => a.id !== id);
+  return s.agendados.length < antes;
 }
 
 function perderTrabalhadores(s, qtd) {
@@ -331,13 +342,805 @@ const EVENTOS = [
       { id: "regularizar_salarios", custo: 500, aplica: (s) => { s.salarioRel = Math.max(s.salarioRel, 1.0); s.moral = limita(s.moral + 5, 0, 100); alterarCaixa(s, 400, "Desconto na multa por regularização salarial imediata", "governo"); } }],
     caixa: "Fiscalização trabalhista" },
 
- { id: "programa_governo", categoria: "governo", tipo: "sorteio", pBase: 0.03, pMax: 0.08, cooldown: 18, duracao: 1, crise: false,
+  { id: "programa_governo", categoria: "governo", tipo: "sorteio", pBase: 0.03, pMax: 0.08, cooldown: 18, duracao: 1, crise: false,
     condicoes: (s) => s.mes >= 6 && !s.obrigacaoPrograma,
     modificadores: [{ se: (s) => s.reputacao > 60, valor: 0.5 }],
     severidade: { media: 1 },
     escolhas: [{ id: "recusar", custo: 0 },
       { id: "aderir", custo: 200, aplica: (s) => { alterarCaixa(s, 1500, "Subvenção de programa governamental", "governo"); s.reputacao = limita(s.reputacao + 2, 0, 100); s.obrigacaoPrograma = true; s.mesesObrigacaoPrograma = 12; } }],
     caixa: "Programa de incentivo do governo" },
+
+  // --- EVENTOS NARRATIVOS EMERGENTES DO VILAREJO ---
+
+  // 1. ECONÔMICOS
+  {
+    id: "desemprego_elevado",
+    titulo: "Crise de Desemprego e Retração da Renda",
+    caixa: "Crise de Desemprego e Retração da Renda",
+    categoria: "economico",
+    tipo: "limiar",
+    gravidade: "grave",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "O número de trabalhadores desocupados cresceu no vilarejo. Comerciantes relatam queda sensível no movimento e famílias buscam amparo na assistência social.",
+    causa: "Taxa de desemprego superou 12%, reduzindo a renda familiar e o consumo na comunidade.",
+    condicoes: (s) => (s.desemprego ?? 0) > 12 && s.mes >= 2,
+    condicoesEncerramento: (s) => (s.desemprego ?? 0) <= 8,
+    efeito: (s) => { s.moral = limita(s.moral - 4, 0, 100); },
+    escolhas: [
+      {
+        id: "frente_trabalho",
+        titulo: "Frente de Trabalho Municipal",
+        custo: 2500,
+        origemCaixa: "treasury",
+        descricao: "Abre vagas temporárias de manutenção e limpeza urbana, garantindo renda às famílias.",
+        cancelaEncadeados: ["retracao_consumo"],
+        aplica: (s) => { s.moral = limita(s.moral + 8, 0, 100); s.desemprego = Math.max(2, (s.desemprego || 12) - 5); }
+      },
+      {
+        id: "subsidio_empresas",
+        titulo: "Crédito e Estímulo à Contratação",
+        custo: 1200,
+        origemCaixa: "treasury",
+        descricao: "Apoia oficinas e comércio para reter funcionários.",
+        cancelaEncadeados: ["retracao_consumo"],
+        aplica: (s) => { s.moral = limita(s.moral + 4, 0, 100); s.desemprego = Math.max(2, (s.desemprego || 12) - 3); }
+      },
+      {
+        id: "aguardar_mercado",
+        titulo: "Aguardar Ajuste do Mercado",
+        custo: 0,
+        descricao: "Preserva o caixa público, mas a renda permanecerá reprimida.",
+        encadeia: [{ id: "retracao_consumo", emMeses: 2 }]
+      }
+    ],
+    encadeia: [{ id: "retracao_consumo", emMeses: 2, severidade: ["grave", "media"] }]
+  },
+
+  {
+    id: "carestia_alimentos",
+    titulo: "Carestia da Cesta Básica",
+    caixa: "Carestia da Cesta Básica",
+    categoria: "economico",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "O custo dos alimentos essenciais subiu acentuadamente no comércio local, pesando no orçamento doméstico das famílias assalariadas.",
+    causa: "Preço da cesta básica aumentou devido a pressões de frete ou escassez relativa de suprimentos.",
+    condicoes: (s) => ((s.precoCesta ?? 25) > 32 || (s.escassezMercado ?? 0) > 0.5) && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.precoCesta ?? 25) <= 26 && (s.escassezMercado ?? 0) <= 0.1,
+    efeito: (s) => { s.moral = limita(s.moral - 4, 0, 100); },
+    escolhas: [
+      {
+        id: "subsidio_alimentar",
+        titulo: "Subsídio Alimentar Emergencial",
+        custo: 1500,
+        origemCaixa: "treasury",
+        descricao: "Compensa parte do preço dos alimentos no comércio para conter a inflação local.",
+        cancelaEncadeados: ["pressao_trabalhadores"],
+        aplica: (s) => { s.moral = limita(s.moral + 7, 0, 100); s.precoCesta = Math.max(22, (s.precoCesta || 32) - 6); }
+      },
+      {
+        id: "compras_locais",
+        titulo: "Aquisição Direta dos Produtores",
+        custo: 800,
+        origemCaixa: "treasury",
+        descricao: "Adquire alimentos direto dos sítios locais para abastecer a comunidade sem atravessadores.",
+        aplica: (s) => { s.moral = limita(s.moral + 4, 0, 100); }
+      },
+      {
+        id: "deixar_precos",
+        titulo: "Livre Formação de Preços",
+        custo: 0,
+        descricao: "Não gasta recursos do Tesouro, mas corre o risco de mobilização popular.",
+        encadeia: [{ id: "pressao_trabalhadores", emMeses: 2 }]
+      }
+    ],
+    encadeia: [{ id: "pressao_trabalhadores", emMeses: 2, severidade: ["media", "grave"] }]
+  },
+
+  {
+    id: "queda_arrecadacao",
+    titulo: "Queda na Arrecadação Tributária",
+    caixa: "Queda na Arrecadação Tributária",
+    categoria: "economico",
+    tipo: "limiar",
+    gravidade: "grave",
+    cooldown: 8,
+    duracao: 2,
+    descricao: "O Secretário da Fazenda adverte que o recolhimento de impostos caiu e o Tesouro opera com saldo restrito, ameaçando despesas programadas.",
+    causa: "Retração das transações locais gerou arrecadação abaixo do custeio administrativo e operacional.",
+    condicoes: (s) => (s.caixaTesouro ?? 10000) < 3000 && (s.resultadoFiscal ?? 0) < 0 && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.caixaTesouro ?? 10000) >= 5000 && (s.resultadoFiscal ?? 0) >= 0,
+    efeito: (s) => { s.reputacao = limita(s.reputacao - 5, 0, 100); },
+    escolhas: [
+      {
+        id: "contingenciamento",
+        titulo: "Contingenciamento de Gastos",
+        custo: 0,
+        descricao: "Congela despesas não essenciais para equilibrar as contas, com leve queixa dos servidores.",
+        cancelaEncadeados: ["impasse_camara"],
+        aplica: (s) => { s.reputacao = limita(s.reputacao + 3, 0, 100); alterarCaixa(s, 1000, "Economia por contingenciamento orçamentário", "governo", "treasury"); }
+      },
+      {
+        id: "cobranca_ativa",
+        titulo: "Força-Tarefa de Cobrança Fiscal",
+        custo: 400,
+        origemCaixa: "treasury",
+        descricao: "Notifica contribuintes em atraso e regulariza certidões pendentes.",
+        cancelaEncadeados: ["impasse_camara"],
+        aplica: (s) => { alterarCaixa(s, 1800, "Recuperação de créditos tributários", "governo", "treasury"); }
+      },
+      {
+        id: "usar_reserva",
+        titulo: "Consumir Fundo de Reserva",
+        custo: 0,
+        descricao: "Evita cortes imediatos, mas mantém as contas públicas vulneráveis.",
+        encadeia: [{ id: "impasse_camara", emMeses: 2 }]
+      }
+    ],
+    encadeia: [{ id: "impasse_camara", emMeses: 2, severidade: ["grave"] }]
+  },
+
+  {
+    id: "retracao_consumo",
+    titulo: "Retração nas Vendas do Comércio",
+    caixa: "Retração nas Vendas do Comércio",
+    categoria: "economico",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "Comerciantes locais relatam mercadorias encalhadas e prateleiras cheias. O faturamento caiu e os proprietários cogitam dispensar ajudantes.",
+    causa: "A baixa liquidez familiar e o desemprego contraíram o consumo interno de bens e serviços.",
+    condicoes: (s) => ((s.desemprego ?? 0) > 10 || (s.estoqueMercado ?? 30) > 60) && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.desemprego ?? 0) <= 6 && (s.estoqueMercado ?? 30) <= 40,
+    efeito: (s) => { s.moral = limita(s.moral - 3, 0, 100); },
+    escolhas: [
+      {
+        id: "vale_compras",
+        titulo: "Programa de Vale-Alimentação Local",
+        custo: 1600,
+        origemCaixa: "treasury",
+        descricao: "Injeta poder de compra direto nas famílias para gastar exclusivamente no comércio da cidade.",
+        aplica: (s) => { s.moral = limita(s.moral + 6, 0, 100); }
+      },
+      {
+        id: "feira_livre",
+        titulo: "Organizar Feira Promocional na Praça",
+        custo: 300,
+        origemCaixa: "treasury",
+        descricao: "Apoia divulgação e estandes para que os comerciantes desovem os estoques.",
+        aplica: (s) => { s.moral = limita(s.moral + 3, 0, 100); }
+      },
+      {
+        id: "absorver",
+        titulo: "Deixar o Comércio Liquidar",
+        custo: 0,
+        descricao: "O comércio terá de baixar suas margens por conta própria."
+      }
+    ]
+  },
+
+  {
+    id: "investidor_industrial",
+    titulo: "Proposta de Investimento Industrial",
+    caixa: "Proposta de Investimento Industrial",
+    categoria: "economico",
+    tipo: "sorteio",
+    pBase: 0.05,
+    pMax: 0.15,
+    cooldown: 12,
+    duracao: 2,
+    crise: false,
+    descricao: "Um grupo de empresários de café torrado e beneficiamento visitou o vilarejo com plano de erguer uma unidade fabril e contratar trabalhadores locais.",
+    causa: "A estabilidade macroeconômica e a capacidade produtiva da cidade chamaram atenção de capitais externos.",
+    condicoes: (s) => (s.pib ?? 50000) > 40000 && (s.caixaTesouro ?? 10000) > 6000 && s.mes >= 4,
+    severidade: { media: 1 },
+    escolhas: [
+      {
+        id: "incentivo_infra",
+        titulo: "Conceder Apoio e Lote Industrial",
+        custo: 2800,
+        origemCaixa: "treasury",
+        descricao: "Prepara terraplanagem e acesso viário. Gera novos empregos e dinamismo em cadeia.",
+        encadeia: [{ id: "chegada_novas_familias", emMeses: 2 }],
+        aplica: (s) => { s.reputacao = limita(s.reputacao + 8, 0, 100); s.moral = limita(s.moral + 6, 0, 100); }
+      },
+      {
+        id: "contrapartidas",
+        titulo: "Exigir Formação de Mão de Obra Local",
+        custo: 800,
+        origemCaixa: "treasury",
+        descricao: "Apoia o projeto mediante garantia de capacitação e contratação prioritária de moradores locais.",
+        aplica: (s) => { s.reputacao = limita(s.reputacao + 5, 0, 100); s.moral = limita(s.moral + 8, 0, 100); }
+      },
+      {
+        id: "recusar_incentivo",
+        titulo: "Recusar Incentivo Público",
+        custo: 0,
+        descricao: "Preserva o caixa do Tesouro integralmente; o investidor avaliará outras regiões."
+      }
+    ]
+  },
+
+  // 2. SOCIAIS
+  {
+    id: "sobrecarga_saude",
+    titulo: "Fila e Sobrecarga no Posto de Saúde",
+    caixa: "Fila e Sobrecarga no Posto de Saúde",
+    categoria: "social",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "Moradores relatam demora nos agendamentos e falta de insumos básicos na unidade médica do vilarejo após aumento nos atendimentos clínicos.",
+    causa: "O crescimento da população e a demanda por atendimento superaram a capacidade da equipe de saúde.",
+    condicoes: (s) => ((s.qualidadeSaude ?? 60) < 50 || (s.populacao ?? 20) > 30) && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.qualidadeSaude ?? 60) >= 65,
+    efeito: (s) => { s.moral = limita(s.moral - 4, 0, 100); },
+    escolhas: [
+      {
+        id: "mutirao_saude",
+        titulo: "Contratar Plantão Médico Extra",
+        custo: 1800,
+        origemCaixa: "treasury",
+        descricao: "Reforça o atendimento com profissionais temporários e medicamentos essenciais.",
+        cancelaEncadeados: ["pressao_popular"],
+        aplica: (s) => { s.moral = limita(s.moral + 8, 0, 100); s.qualidadeSaude = limita((s.qualidadeSaude || 50) + 12, 0, 100); }
+      },
+      {
+        id: "reorganizar_atendimento",
+        titulo: "Otimizar Triagem e Prevenção",
+        custo: 400,
+        origemCaixa: "treasury",
+        descricao: "Agentes comunitários organizam visitas domiciliares para desafogar a unidade.",
+        aplica: (s) => { s.moral = limita(s.moral + 3, 0, 100); s.qualidadeSaude = limita((s.qualidadeSaude || 50) + 5, 0, 100); }
+      },
+      {
+        id: "absorver",
+        titulo: "Manter Estrutura Atual",
+        custo: 0,
+        descricao: "Não amplia despesas, mas a insatisfação popular com a saúde persistirá.",
+        encadeia: [{ id: "pressao_popular", emMeses: 2 }]
+      }
+    ],
+    encadeia: [{ id: "pressao_popular", emMeses: 2, severidade: ["media"] }]
+  },
+
+  {
+    id: "deficit_habitacional_critico",
+    titulo: "Déficit Habitacional e Aluguéis Pressionados",
+    caixa: "Déficit Habitacional e Aluguéis Pressionados",
+    categoria: "social",
+    tipo: "limiar",
+    gravidade: "grave",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "Com a chegada de novos moradores, a ocupação das moradias atingiu 100%. Famílias dividem quartos e os preços dos aluguéis subiram.",
+    causa: "A população total ultrapassou a capacidade habitacional formal instalada no município.",
+    condicoes: (s) => (s.populacao ?? 20) >= (s.capacidadeMoradia ?? 20) && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.populacao ?? 20) < (s.capacidadeMoradia ?? 20),
+    efeito: (s) => { s.moral = limita(s.moral - 5, 0, 100); },
+    escolhas: [
+      {
+        id: "obra_habitacional",
+        titulo: "Edificar Novas Unidades Populares",
+        custo: 3200,
+        origemCaixa: "treasury",
+        descricao: "Financia a construção de novos módulos residenciais pelo setor de obras públicas.",
+        cancelaEncadeados: ["protesto_popular"],
+        aplica: (s) => { s.capacidadeMoradia = (s.capacidadeMoradia || 20) + 4; s.moral = limita(s.moral + 10, 0, 100); }
+      },
+      {
+        id: "cooperativa_habitacao",
+        titulo: "Apoiar Mutirão Comunitário",
+        custo: 1400,
+        origemCaixa: "treasury",
+        descricao: "Fornece tijolos e madeiras para famílias ampliarem suas casas.",
+        aplica: (s) => { s.capacidadeMoradia = (s.capacidadeMoradia || 20) + 2; s.moral = limita(s.moral + 5, 0, 100); }
+      },
+      {
+        id: "absorver",
+        titulo: "Deixar Construção Particular",
+        custo: 0,
+        descricao: "Depende exclusivamente da iniciativa imobiliária privada.",
+        encadeia: [{ id: "protesto_popular", emMeses: 2 }]
+      }
+    ],
+    encadeia: [{ id: "protesto_popular", emMeses: 2, severidade: ["grave"] }]
+  },
+
+  {
+    id: "alerta_seguranca",
+    titulo: "Insegurança e Desordem Noturna",
+    caixa: "Insegurança e Desordem Noturna",
+    categoria: "social",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "Comerciantes e moradores da praça reclamam de pequenos furtos e falta de patrulhamento durante a noite nos pontos ermos da cidade.",
+    causa: "Indicador de segurança em queda por falta de vigilância e expansão das vias urbanas sem iluminação.",
+    condicoes: (s) => (s.qualidadeSeguranca ?? 60) < 50 && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.qualidadeSeguranca ?? 60) >= 65,
+    efeito: (s) => { s.reputacao = limita(s.reputacao - 4, 0, 100); },
+    escolhas: [
+      {
+        id: "reforco_patrulha",
+        titulo: "Instituir Guarda Municipal Noturna",
+        custo: 1500,
+        origemCaixa: "treasury",
+        descricao: "Contrata agentes municipais e instala iluminação nas esquinas escuras.",
+        aplica: (s) => { s.qualidadeSeguranca = limita((s.qualidadeSeguranca || 50) + 15, 0, 100); s.moral = limita(s.moral + 6, 0, 100); }
+      },
+      {
+        id: "iluminacao_praca",
+        titulo: "Instalar Postes de Luz na Praça",
+        custo: 600,
+        origemCaixa: "treasury",
+        descricao: "Melhora a visibilidade e inibe ocorrências nos pontos centrais.",
+        aplica: (s) => { s.qualidadeSeguranca = limita((s.qualidadeSeguranca || 50) + 6, 0, 100); s.moral = limita(s.moral + 3, 0, 100); }
+      },
+      {
+        id: "absorver",
+        titulo: "Orientar Cuidado aos Moradores",
+        custo: 0,
+        descricao: "Sem custo financeiro, mas o receio público permanece."
+      }
+    ]
+  },
+
+  {
+    id: "desigualdade_social",
+    titulo: "Tensão por Disparidade Social",
+    caixa: "Tensão por Disparidade Social",
+    categoria: "social",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "Enquanto donos de fazendas e estabelecimentos celebram lucros, trabalhadores comissionados expressam frustração com o contraste de renda.",
+    causa: "Concentração do crescimento econômico nas margens de lucro sem repasse correspondente aos salários.",
+    condicoes: (s) => (s.indiceGini ?? 35) > 45 && s.mes >= 4,
+    condicoesEncerramento: (s) => (s.indiceGini ?? 35) <= 38,
+    efeito: (s) => { s.moral = limita(s.moral - 4, 0, 100); },
+    escolhas: [
+      {
+        id: "abono_social",
+        titulo: "Criar Programa de Amparo Comunitário",
+        custo: 1800,
+        origemCaixa: "treasury",
+        descricao: "Aporte financeiro direto para famílias de menor renda do vilarejo.",
+        aplica: (s) => { s.moral = limita(s.moral + 9, 0, 100); s.indiceGini = Math.max(25, (s.indiceGini || 45) - 6); }
+      },
+      {
+        id: "capacitacao_oficinas",
+        titulo: "Cursos de Ofícios e Artesanato",
+        custo: 700,
+        origemCaixa: "treasury",
+        descricao: "Capacita jovens para ocupações mais produtivas e de maior remuneração.",
+        aplica: (s) => { s.moral = limita(s.moral + 4, 0, 100); }
+      },
+      {
+        id: "absorver",
+        titulo: "Manter Mercado Vigente",
+        custo: 0,
+        descricao: "Não interfere na distribuição natural de renda da economia."
+      }
+    ]
+  },
+
+  // 3. POLÍTICOS
+  {
+    id: "baixa_popularidade",
+    titulo: "Crise de Popularidade do Governo",
+    caixa: "Crise de Popularidade do Governo",
+    categoria: "politico",
+    tipo: "limiar",
+    gravidade: "grave",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "A aprovação do governo municipal caiu a níveis críticos. Conversas na praça e artigos no jornal apontam insatisfação generalizada.",
+    causa: "A aprovação média da população caiu abaixo de 40% devido à soma de queixas e carências acumuladas.",
+    condicoes: (s) => (s.moral ?? 50) < 40 && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.moral ?? 50) >= 55,
+    efeito: (s) => { s.reputacao = limita(s.reputacao - 6, 0, 100); },
+    escolhas: [
+      {
+        id: "pacote_obras",
+        titulo: "Anunciar Pacote Emergencial de Ações",
+        custo: 2400,
+        origemCaixa: "treasury",
+        descricao: "Investe visivelmente em reformas urbanas, praça e melhorias rápidas no vilarejo.",
+        cancelaEncadeados: ["protesto_popular"],
+        aplica: (s) => { s.moral = limita(s.moral + 12, 0, 100); s.reputacao = limita(s.reputacao + 8, 0, 100); }
+      },
+      {
+        id: "audiencia_publica",
+        titulo: "Convocar Conferência com a População",
+        custo: 400,
+        origemCaixa: "treasury",
+        descricao: "Abre o gabinete para ouvir os moradores e priorizar reivindicações urgentes.",
+        aplica: (s) => { s.moral = limita(s.moral + 5, 0, 100); s.reputacao = limita(s.reputacao + 4, 0, 100); }
+      },
+      {
+        id: "ignorar",
+        titulo: "Manter Rumos Administrativos",
+        custo: 0,
+        descricao: "Ignora o clamor das ruas, arriscando protestos e paralisia política.",
+        encadeia: [{ id: "protesto_popular", emMeses: 2 }]
+      }
+    ],
+    encadeia: [{ id: "protesto_popular", emMeses: 2, severidade: ["grave"] }]
+  },
+
+  {
+    id: "pressao_produtores",
+    titulo: "Pressão dos Produtores Rurais",
+    caixa: "Pressão dos Produtores Rurais",
+    categoria: "politico",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 2,
+    descricao: "Sitiantes e cafeicultores reuniram-se na Cooperativa para protestar contra as más condições das estradas vicinais e as taxas municipais.",
+    causa: "Produtores agrícolas alegam que os custos de frete e tributos estão reduzindo a rentabilidade do campo.",
+    condicoes: (s) => (s.mesesSemManutencao >= 6 || (s.apoioCamara ?? 65) < 50) && s.mes >= 4,
+    condicoesEncerramento: (s) => s.mesesSemManutencao === 0 && (s.apoioCamara ?? 65) >= 60,
+    efeito: (s) => { s.reputacao = limita(s.reputacao - 4, 0, 100); },
+    escolhas: [
+      {
+        id: "recapeamento_vicinais",
+        titulo: "Manutenção Emergencial de Estradas Rurais",
+        custo: 1800,
+        origemCaixa: "treasury",
+        descricao: "Desloca maquinário para recuperar estradas e facilitar o escoamento da safra.",
+        aplica: (s) => { s.mesesSemManutencao = 0; s.reputacao = limita(s.reputacao + 6, 0, 100); s.apoioCamara = limita((s.apoioCamara || 65) + 8, 0, 100); }
+      },
+      {
+        id: "desconto_taxa_rural",
+        titulo: "Alívio Temporário de Taxa Rural",
+        custo: 600,
+        origemCaixa: "treasury",
+        descricao: "Concede moratória de 60 dias nas tarifas públicas do campo.",
+        aplica: (s) => { s.apoioCamara = limita((s.apoioCamara || 65) + 4, 0, 100); }
+      },
+      {
+        id: "manter_firme",
+        titulo: "Manter Cronograma Vigente",
+        custo: 0,
+        descricao: "Exige cumprimento das obrigações fiscais sem concessões imediatas."
+      }
+    ]
+  },
+
+  {
+    id: "pressao_trabalhadores",
+    titulo: "Mobilização Trabalhista por Reajuste",
+    caixa: "Mobilização Trabalhista por Reajuste",
+    categoria: "politico",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 2,
+    descricao: "Trabalhadores rurais e urbanos realizaram assembleia cobrando recomposição salarial frente à alta dos alimentos e moradia.",
+    causa: "Relação do salário com a economia externa ou custo de vida caiu significativamente.",
+    condicoes: (s) => ((s.salarioRel ?? 0.9) < 0.85 || s.mesesMoralBaixa >= 1) && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.salarioRel ?? 0.9) >= 1.0,
+    efeito: (s) => { s.moral = limita(s.moral - 5, 0, 100); },
+    escolhas: [
+      {
+        id: "reajuste_piso",
+        titulo: "Aprovar Reposição do Piso Salarial",
+        custo: 1200,
+        origemCaixa: "treasury",
+        descricao: "Reajusta o padrão salarial municipal, elevando o moral da mão de obra.",
+        cancelaEncadeados: ["protesto_popular"],
+        aplica: (s) => { s.salarioRel = Math.max(s.salarioRel || 0.9, 1.0); s.moral = limita(s.moral + 10, 0, 100); }
+      },
+      {
+        id: "cesta_auxilio",
+        titulo: "Distribuir Cesta de Alimentos",
+        custo: 700,
+        origemCaixa: "treasury",
+        descricao: "Fornece complemento alimentar direto sem onerar a folha salarial permanente.",
+        aplica: (s) => { s.moral = limita(s.moral + 5, 0, 100); }
+      },
+      {
+        id: "resistir",
+        titulo: "Negar Reivindicações",
+        custo: 0,
+        descricao: "Contém gastos imediatos, mas acirra o descontentamento coletivo.",
+        encadeia: [{ id: "protesto_popular", emMeses: 2 }]
+      }
+    ],
+    encadeia: [{ id: "protesto_popular", emMeses: 2, severidade: ["grave"] }]
+  },
+
+  {
+    id: "impasse_camara",
+    titulo: "Impasse Político na Câmara Municipal",
+    caixa: "Impasse Político na Câmara Municipal",
+    categoria: "politico",
+    tipo: "limiar",
+    gravidade: "grave",
+    cooldown: 8,
+    duracao: 3,
+    descricao: "Vereadores da oposição articulam um bloco majoritário e ameaçam rejeitar os projetos de lei orçamentários do Executivo.",
+    causa: "Apoio da base legislativa caiu abaixo de 45%, fragilizando a governabilidade.",
+    condicoes: (s) => (s.apoioCamara ?? 65) < 45 && s.mes >= 4,
+    condicoesEncerramento: (s) => (s.apoioCamara ?? 65) >= 55,
+    efeito: (s) => { s.reputacao = limita(s.reputacao - 5, 0, 100); },
+    escolhas: [
+      {
+        id: "emendas_vereadores",
+        titulo: "Negociar Emendas e Obras nos Bairros",
+        custo: 2000,
+        origemCaixa: "treasury",
+        descricao: "Atende demandas dos vereadores com recursos para obras comunitárias, recompondo a base.",
+        cancelaEncadeados: ["protesto_popular"],
+        aplica: (s) => { s.apoioCamara = limita((s.apoioCamara || 40) + 20, 0, 100); s.reputacao = limita(s.reputacao + 5, 0, 100); }
+      },
+      {
+        id: "acordo_republicano",
+        titulo: "Firmar Acordo de Metas Públicas",
+        custo: 0,
+        descricao: "Apresenta plano transparente aos líderes partidários para aprovar pautas prioritárias.",
+        aplica: (s) => { s.apoioCamara = limita((s.apoioCamara || 40) + 8, 0, 100); }
+      },
+      {
+        id: "confronto",
+        titulo: "Denunciar Corporativismo Parlamentar",
+        custo: 0,
+        descricao: "Apela à opinião pública contra as exigências dos edis, aumentando a polarização.",
+        aplica: (s) => { s.apoioCamara = Math.max(10, (s.apoioCamara || 40) - 10); s.moral = limita(s.moral + 3, 0, 100); }
+      }
+    ]
+  },
+
+  {
+    id: "protesto_popular",
+    titulo: "Manifestação Popular na Praça Central",
+    caixa: "Manifestação Popular na Praça Central",
+    categoria: "politico",
+    tipo: "limiar",
+    gravidade: "grave",
+    cooldown: 10,
+    duracao: 2,
+    descricao: "Moradores e trabalhadores se reuniram com faixas e apitos em frente à sede da Prefeitura exigindo soluções imediatas para a cidade.",
+    causa: "Acúmulo de queixas sem resposta (saúde precária, carestia, desemprego ou baixa popularidade).",
+    condicoes: (s) => (s.moral ?? 50) < 32 && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.moral ?? 50) >= 50,
+    efeito: (s) => { s.moral = limita(s.moral - 8, 0, 100); s.reputacao = limita(s.reputacao - 8, 0, 100); },
+    escolhas: [
+      {
+        id: "atender_pauta",
+        titulo: "Assinar Termo de Compromisso e Aporte",
+        custo: 2500,
+        origemCaixa: "treasury",
+        descricao: "Recebe a comissão comunitária e destina recursos imediatos para as prioridades das ruas.",
+        aplica: (s) => { s.moral = limita(s.moral + 15, 0, 100); s.reputacao = limita(s.reputacao + 10, 0, 100); }
+      },
+      {
+        id: "discurso_conciliador",
+        titulo: "Diálogo Aberto e Cronograma de Reformas",
+        custo: 300,
+        origemCaixa: "treasury",
+        descricao: "Conversa diretamente com a multidão e assume prazos claros de entrega.",
+        aplica: (s) => { s.moral = limita(s.moral + 8, 0, 100); }
+      },
+      {
+        id: "repressao",
+        titulo: "Dispersar a Concentração",
+        custo: 0,
+        descricao: "Usa a força pública para desobstruir a via, desgastando severamente a imagem cívica.",
+        aplica: (s) => { s.moral = Math.max(10, s.moral - 10); s.reputacao = Math.max(10, s.reputacao - 12); }
+      }
+    ]
+  },
+
+  // 4. POSITIVOS E CONQUISTAS
+  {
+    id: "superavit_recorde",
+    titulo: "Superávit Fiscal Histórico",
+    caixa: "Superávit Fiscal Histórico",
+    categoria: "positivo",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 2,
+    crise: false,
+    descricao: "Com as contas em alta e a economia local pujante, o Tesouro Municipal atingiu saldo financeiro recorde neste mês.",
+    causa: "A arrecadação contínua e a gestão equilibrada superaram com folga as despesas programadas.",
+    condicoes: (s) => (s.caixaTesouro ?? 10000) > 15000 && (s.resultadoFiscal ?? 0) > 400 && s.mes >= 3,
+    condicoesEncerramento: (s) => (s.caixaTesouro ?? 10000) < 10000,
+    escolhas: [
+      {
+        id: "fundo_soberano",
+        titulo: "Criar Fundo de Reserva Municipal",
+        custo: 3000,
+        origemCaixa: "treasury",
+        descricao: "Reserva parte do excedente para proteger o município contra futuras oscilações climáticas ou de preços.",
+        aplica: (s) => { s.reputacao = limita(s.reputacao + 6, 0, 100); s.sorte = limita(s.sorte + 0.1, 0.5, 1.25); }
+      },
+      {
+        id: "antecipar_obras",
+        titulo: "Antecipar Obras de Infraestrutura",
+        custo: 4000,
+        origemCaixa: "treasury",
+        descricao: "Acelera construções e reformas públicas para gerar novas vagas de trabalho e modernizar a cidade.",
+        aplica: (s) => { s.moral = limita(s.moral + 8, 0, 100); s.reputacao = limita(s.reputacao + 8, 0, 100); }
+      },
+      {
+        id: "alivio_tributario",
+        titulo: "Conceder Alívio Tributário Temporário",
+        custo: 1000,
+        origemCaixa: "treasury",
+        descricao: "Devolve poder de compra às famílias e estabelecimentos por meio de isenções parciais.",
+        aplica: (s) => { s.moral = limita(s.moral + 10, 0, 100); }
+      }
+    ]
+  },
+
+  {
+    id: "safra_ouro",
+    titulo: "Safra de Ouro e Reconhecimento Agrícola",
+    caixa: "Safra de Ouro e Reconhecimento Agrícola",
+    categoria: "positivo",
+    tipo: "sorteio",
+    pBase: 0.06,
+    pMax: 0.15,
+    cooldown: 12,
+    duracao: 3,
+    crise: false,
+    descricao: "A combinação de clima favorável, manejo exemplar e dedicação dos colonos rendeu grãos de café de qualidade excepcional e safra abundante.",
+    causa: "Excelente produtividade no campo acompanhada de preços firmes no mercado comprador.",
+    condicoes: (s) => (s.estacao === "outono" || s.estacao === "seca") && s.modProducao >= 0 && (s.trabalhadores ?? 10) >= 8 && s.mes >= 4,
+    severidade: { media: 1 },
+    efeito: (s) => { s.modPreco += 0.15; s.modProducao += 0.15; },
+    escolhas: [
+      {
+        id: "bonificacao_trabalhadores",
+        titulo: "Distribuir Bônus de Produtividade",
+        custo: 1200,
+        origemCaixa: "farm",
+        descricao: "Recompensa os colhedores e famílias rurais pelo esforço extraordinário na colheita.",
+        aplica: (s) => { s.moral = limita(s.moral + 12, 0, 100); s.reputacao = limita(s.reputacao + 5, 0, 100); }
+      },
+      {
+        id: "expandir_armazenagem",
+        titulo: "Reinvestir na Modernização do Silo",
+        custo: 1800,
+        origemCaixa: "farm",
+        descricao: "Aumenta a capacidade de estocagem para valorizar ainda mais os grãos no mercado.",
+        aplica: (s) => { s.reputacao = limita(s.reputacao + 6, 0, 100); }
+      },
+      {
+        id: "capitalizar",
+        titulo: "Reter Recursos em Caixa",
+        custo: 0,
+        descricao: "Preserva a liquidez conquistada pela safra nos cofres da fazenda."
+      }
+    ]
+  },
+
+  {
+    id: "pleno_emprego",
+    titulo: "Vilarejo em Pleno Emprego",
+    caixa: "Vilarejo em Pleno Emprego",
+    categoria: "positivo",
+    tipo: "limiar",
+    gravidade: "media",
+    cooldown: 8,
+    duracao: 3,
+    crise: false,
+    descricao: "Praticamente todos os adultos aptos ao trabalho no município estão ocupados em lavouras, oficinas e comércio. A praça celebra o dinamismo econômico.",
+    causa: "Taxa de desemprego caiu abaixo de 4% com forte demanda por mão de obra em todos os setores.",
+    condicoes: (s) => (s.desemprego ?? 10) < 4 && (s.pib ?? 50000) > 30000 && s.mes >= 4,
+    condicoesEncerramento: (s) => (s.desemprego ?? 10) >= 7,
+    efeito: (s) => { s.moral = limita(s.moral + 6, 0, 100); },
+    escolhas: [
+      {
+        id: "capacitacao_avancada",
+        titulo: "Incentivo a Escolas Técnicas",
+        custo: 1500,
+        origemCaixa: "treasury",
+        descricao: "Capacita a mão de obra para funções de maior valor agregado e produtividade.",
+        aplica: (s) => { s.reputacao = limita(s.reputacao + 8, 0, 100); s.qualidadeEducacao = limita((s.qualidadeEducacao || 60) + 10, 0, 100); }
+      },
+      {
+        id: "festa_trabalhador",
+        titulo: "Festa Cívica do Trabalho",
+        custo: 500,
+        origemCaixa: "treasury",
+        descricao: "Celebração comunitária em homenagem às famílias e trabalhadores do vilarejo.",
+        aplica: (s) => { s.moral = limita(s.moral + 8, 0, 100); }
+      },
+      {
+        id: "aproveitar_momento",
+        titulo: "Manter o Ciclo Espontâneo",
+        custo: 0,
+        descricao: "Deixa a economia usufruir naturalmente da alta atividade."
+      }
+    ]
+  },
+
+  {
+    id: "reconhecimento_servicos",
+    titulo: "Referência Regional em Serviços Públicos",
+    caixa: "Referência Regional em Serviços Públicos",
+    categoria: "positivo",
+    tipo: "limiar",
+    gravidade: "leve",
+    cooldown: 8,
+    duracao: 3,
+    crise: false,
+    descricao: "Autoridades de municípios vizinhos e a imprensa regional elogiam a qualidade da saúde e educação do Vilarejo, destacando a eficiência da gestão pública.",
+    causa: "Indicadores de qualidade de vida nos serviços públicos ultrapassaram 75 pontos.",
+    condicoes: (s) => ((s.qualidadeSaude ?? 60) >= 75 || (s.qualidadeEducacao ?? 60) >= 75) && s.mes >= 4,
+    condicoesEncerramento: (s) => (s.qualidadeSaude ?? 60) < 65 && (s.qualidadeEducacao ?? 60) < 65,
+    efeito: (s) => { s.reputacao = limita(s.reputacao + 6, 0, 100); s.moral = limita(s.moral + 5, 0, 100); },
+    escolhas: [
+      {
+        id: "intercambio_regional",
+        titulo: "Liderar Consórcio Intermunicipal",
+        custo: 1000,
+        origemCaixa: "treasury",
+        descricao: "Atrai repasses e cooperação regional para reforçar ainda mais a infraestrutura.",
+        aplica: (s) => { s.reputacao = limita(s.reputacao + 10, 0, 100); alterarCaixa(s, 2000, "Aporte por convênio intermunicipal", "governo", "treasury"); }
+      },
+      {
+        id: "ampliar_bolsas",
+        titulo: "Expandir Bolsas e Material Escolar",
+        custo: 600,
+        origemCaixa: "treasury",
+        descricao: "Garante materiais e uniformes de qualidade a todos os estudantes locais.",
+        aplica: (s) => { s.moral = limita(s.moral + 6, 0, 100); }
+      },
+      {
+        id: "apenas_comemorar",
+        titulo: "Registrar Marco nos Anais Municipais",
+        custo: 0,
+        descricao: "Sem despesas orçamentárias; fortalece o orgulho cívico dos munícipes."
+      }
+    ]
+  },
+
+  {
+    id: "chegada_novas_familias",
+    titulo: "Atração de Famílias Empreendedoras",
+    caixa: "Atração de Famílias Empreendedoras",
+    categoria: "positivo",
+    tipo: "sorteio",
+    pBase: 0.05,
+    pMax: 0.15,
+    cooldown: 10,
+    duracao: 2,
+    crise: false,
+    descricao: "A boa reputação da cidade, a estabilidade das contas e o ambiente de trabalho acolhedor atraíram famílias experientes em artesanato, mecânica e lavoura.",
+    causa: "Elevada reputação municipal aliada a vagas abertas na economia e qualidade de vida.",
+    condicoes: (s) => (s.reputacao ?? 50) > 65 && (s.moral ?? 50) > 60 && (s.desemprego ?? 10) < 8 && s.mes >= 4,
+    severidade: { media: 1 },
+    aoDisparar: (s) => { s.trabalhadores = (s.trabalhadores || 10) + 2; s.populacao = (s.populacao || 20) + 4; },
+    escolhas: [
+      {
+        id: "acolhimento_cidadao",
+        titulo: "Plano de Integração e Apoio à Fixação",
+        custo: 800,
+        origemCaixa: "treasury",
+        descricao: "Facilita a regularização de novos lotes e acesso aos serviços essenciais para as novas famílias.",
+        aplica: (s) => { s.moral = limita(s.moral + 6, 0, 100); s.reputacao = limita(s.reputacao + 4, 0, 100); }
+      },
+      {
+        id: "deixar_instalacao",
+        titulo: "Instalação por Conta Própria",
+        custo: 0,
+        descricao: "As novas famílias se estabelecem com seus próprios recursos e economias."
+      }
+    ]
+  }
 ];
 
 function probabilidade(ev, s) {
@@ -402,15 +1205,16 @@ function disparar(ev, s, sev = "media") {
   if (ev.sevInicial && s.mes <= ev.sevInicial) sev = "leve";
   const a = { id: ev.id, sev, mesesRestantes: ev.duracao ?? 1, fator: 1, respondido: false };
   s.ativos.push(a);
-  s.cooldowns[ev.id] = ev.cooldown;
+  s.cooldowns[ev.id] = ev.cooldown ?? 6;
   recalcularModificadores(s);
   ev.aoDisparar?.(s, sev);
   s.moral = limita(s.moral, 0, 100);
   s.reputacao = limita(s.reputacao, 0, 100);
   if (ev.crise !== false) s.criseMes = true;
-  s.log.push(`Mês ${s.mes}: ${ev.caixa} (${sev})`);
+  const rotulo = ev.titulo || ev.caixa || ev.id;
+  s.log.push(`Mês ${s.mes}: ${rotulo} (${sev})`);
   for (const c of ev.encadeia ?? []) {
-    if (!c.severidade || c.severidade.includes(sev)) agendarEvento(s, c.id, s.mes + c.emMeses, sev, "encadeado");
+    if (!c.severidade || c.severidade.includes(sev)) agendarEvento(s, c.id, s.mes + (c.emMeses || 1), c.sev || sev, "encadeado");
   }
 }
 
@@ -442,7 +1246,14 @@ function processarMes(s, limiteAtivos = 2, opcoes = {}) {
   s.mesesMoralBaixa = s.moral < 30 ? s.mesesMoralBaixa + 1 : 0;
   for (const k in s.cooldowns) if (--s.cooldowns[k] <= 0) delete s.cooldowns[k];
 
-  s.ativos = s.ativos.filter((a) => --a.mesesRestantes > 0);
+  s.ativos = s.ativos.filter((a) => {
+    const ev = achar(a.id);
+    if (ev?.condicoesEncerramento && ev.condicoesEncerramento(s)) {
+      s.log.push(`Mês ${s.mes}: ${ev.titulo || ev.caixa} encerrado antecipadamente por normalização das condições`);
+      return false;
+    }
+    return --a.mesesRestantes > 0;
+  });
   recalcularModificadores(s);
   emiteSinais(s);
 
@@ -504,9 +1315,29 @@ function responder(s, idEvento, idEscolha) {
   const ev = achar(idEvento);
   const a = s.ativos.find((x) => x.id === idEvento);
   const esc = ev?.escolhas?.find((c) => c.id === idEscolha);
-  if (!a || a.respondido || !esc || s.caixa < esc.custo) return false;
+  if (!a || a.respondido || !esc) return false;
+
+  const custo = Number(esc.custo) || 0;
+  const ehTesouro = esc.origemCaixa === "treasury";
+  const saldoDisponivel = ehTesouro ? (s.caixaTesouro ?? s.caixa) : s.caixa;
+  if (saldoDisponivel < custo) return false;
+
   a.respondido = true;
-  if (esc.custo > 0) alterarCaixa(s, -esc.custo, `Escolha "${idEscolha}" em ${ev.caixa}`, ev.categoria);
+  if (custo > 0) {
+    alterarCaixa(s, -custo, `Escolha "${esc.titulo || idEscolha}" em ${ev.titulo || ev.caixa}`, ev.categoria, ehTesouro ? "treasury" : "farm");
+  }
+
+  if (Array.isArray(esc.cancelaEncadeados)) {
+    for (const cancelId of esc.cancelaEncadeados) {
+      cancelarAgendado(s, cancelId);
+    }
+  }
+  if (Array.isArray(esc.encadeia)) {
+    for (const c of esc.encadeia) {
+      agendarEvento(s, c.id, s.mes + (c.emMeses || 1), c.sev || a.sev || "media", "encadeado");
+    }
+  }
+
   esc.aplica?.(s, a);
   s.moral = limita(s.moral, 0, 100);
   s.reputacao = limita(s.reputacao, 0, 100);
@@ -518,7 +1349,23 @@ function responder(s, idEvento, idEscolha) {
     s._ultimoFluxoValor = novoFluxo;
   }
 
-  s.log.push(`Mês ${s.mes}: escolha "${idEscolha}" em ${idEvento} (custo R$ ${esc.custo})`);
+  if (!Array.isArray(s.decisoesTomadas)) s.decisoesTomadas = [];
+  const rotuloCusto = custo > 0 ? ` (custo ${ehTesouro ? "Tesouro R$" : "R$"} ${custo})` : " (sem custo)";
+  const detalheStr = `${esc.titulo || idEscolha}${rotuloCusto}`;
+  s.decisoesTomadas.push({
+    mes: s.mes,
+    idEvento,
+    idEscolha,
+    eventoId: idEvento,
+    escolhaId: idEscolha,
+    tituloEvento: ev.titulo || ev.caixa || idEvento,
+    tituloEscolha: esc.titulo || esc.title || idEscolha,
+    custo,
+    origemCaixa: ehTesouro ? "treasury" : "farm",
+    detalhe: detalheStr
+  });
+
+  s.log.push(`Mês ${s.mes}: escolha "${esc.titulo || idEscolha}" em ${ev.titulo || ev.caixa}${rotuloCusto}`);
   return true;
 }
 
@@ -534,6 +1381,10 @@ function novoEstado(opcoes = {}) {
     mesesObrigacaoPrograma: 0, geadaNativaAtiva: false,
     modProducao: 0, modPreco: 0, modCusto: 0, mesesMoralBaixa: 0, mesesSemManutencao: 0, criseMes: false,
     _ultimoFluxoMes: -1, _ultimoFluxoValor: 0,
+    desemprego: 6, caixaTesouro: 10000, populacao: 20, capacidadeMoradia: 22, deficitHabitacional: 0,
+    precoCesta: 25, escassezMercado: 0, estoqueMercado: 30, pib: 50000, resultadoFiscal: 500,
+    arrecadacao: 3000, apoioCamara: 65, qualidadeSaude: 60, qualidadeEducacao: 60, qualidadeSeguranca: 60,
+    indiceGini: 35, empresasAtivas: 3, decisoesTomadas: [],
     ativos: [], agendados: [], cooldowns: {}, sinaisAtivos: [], log: [],
     stats: { avisosReais: 0, alarmesFalsos: 0, surpresas: 0 },
   };
@@ -544,6 +1395,7 @@ function novoEstado(opcoes = {}) {
 function salvarEstado(s) {
   return JSON.stringify(Object.assign({}, s, {
     sinaisAtivos: Array.from(s.sinaisAtivos || []),
+    decisoesTomadas: Array.isArray(s.decisoesTomadas) ? s.decisoesTomadas : [],
     onTransacao: undefined
   }));
 }
@@ -551,6 +1403,7 @@ function salvarEstado(s) {
 function carregarEstado(jsonOuObj, onTransacao = null) {
   const dados = typeof jsonOuObj === "string" ? JSON.parse(jsonOuObj) : JSON.parse(JSON.stringify(jsonOuObj));
   garantirSinaisAtivos(dados);
+  if (!Array.isArray(dados.decisoesTomadas)) dados.decisoesTomadas = [];
   if (onTransacao) dados.onTransacao = onTransacao;
   return dados;
 }
@@ -559,19 +1412,42 @@ function sincronizarComVilarejo(S, s, helpers = {}) {
   s.modoIntegrado = true;
   const contaFazenda = S.owner === "state" ? "stateFarm" : "privateFarm";
   s.caixa = helpers.balance ? helpers.balance(contaFazenda) : (S.accounts?.[contaFazenda] || 0);
+  s.caixaTesouro = helpers.balance ? helpers.balance("treasury") : (S.accounts?.treasury || 0);
   s.moral = limita(Math.round(helpers.approval ? helpers.approval() : 55), 0, 100);
+  s.reputacao = limita(Math.round(S.reputation ?? s.moral), 0, 100);
   s.trabalhadores = Math.max(1, helpers.employed ? helpers.employed() : 6);
   s.salarioRel = Number((S.wage / Math.max(1, S.externalWage || 2200)).toFixed(2));
   s.protecaoGeada = Boolean(S.weatherProtection);
   s.seguro = Boolean(S.weatherProtection);
   s.geadaNativaAtiva = Boolean(S.weatherDecisionDone || S.weatherEventDone);
   s.moradiaFornecida = S.policy?.housing === "employer" || S.policy?.housing === "state";
-  s.onTransacao = (delta, motivo, categoria) => {
+
+  const ls = typeof helpers.getLaborStats === "function" ? helpers.getLaborStats() : (typeof getLaborStats === "function" ? getLaborStats() : null);
+  s.desemprego = ls ? Number(ls.unemploymentRate) : (s.desemprego ?? 6);
+  s.populacao = typeof helpers.population === "function" ? helpers.population() : (typeof population === "function" ? population() : (s.populacao ?? 20));
+  s.capacidadeMoradia = S.housingCapacity || (s.capacidadeMoradia ?? 20);
+  s.deficitHabitacional = Math.max(0, s.populacao - s.capacidadeMoradia);
+  s.precoCesta = S.marketPrice || (s.precoCesta ?? 25);
+  s.escassezMercado = S.lastShortageUnits || 0;
+  s.estoqueMercado = S.marketStock || 0;
+  s.pib = S.lastNationalAccounts?.gdp || (s.pib ?? 50000);
+  s.resultadoFiscal = S.lastFiscalReport?.primaryResult ?? S.lastFiscalReport?.nominalResult ?? (s.resultadoFiscal ?? 500);
+  s.arrecadacao = S.lastFiscalReport?.taxRevenue ?? (s.arrecadacao ?? 3000);
+  s.apoioCamara = S.councilSupport ?? (s.apoioCamara ?? 65);
+  s.qualidadeSaude = S.healthQol ?? (s.qualidadeSaude ?? 60);
+  s.qualidadeEducacao = S.educationQol ?? (s.qualidadeEducacao ?? 60);
+  s.qualidadeSeguranca = S.securityQol ?? (s.qualidadeSeguranca ?? 60);
+  s.indiceGini = S.giniIndex ?? (s.indiceGini ?? 35);
+  s.empresasAtivas = (S.firms || []).filter(f => f.status === "active").length;
+
+  s.onTransacao = (delta, motivo, categoria, conta) => {
     if (!helpers.log) return;
-    const fAcc = S.owner === "state" ? "stateFarm" : "privateFarm";
-    if (delta > 0) helpers.log("external", fAcc, delta, `Evento (${categoria}): ${motivo}`);
-    else if (delta < 0) {
-      const destino = categoria === "governo" ? "treasury" : (categoria === "infra" ? "workshop" : "external");
+    const ehTesouro = conta === "treasury";
+    const fAcc = ehTesouro ? "treasury" : (S.owner === "state" ? "stateFarm" : "privateFarm");
+    if (delta > 0) {
+      helpers.log("external", fAcc, delta, `Evento (${categoria}): ${motivo}`);
+    } else if (delta < 0) {
+      const destino = ehTesouro ? "workshop" : (categoria === "governo" ? "treasury" : (categoria === "infra" ? "workshop" : "external"));
       helpers.log(fAcc, destino, Math.abs(delta), `Evento (${categoria}): ${motivo}`);
     }
   };
@@ -588,13 +1464,22 @@ function aplicarNoVilarejo(S, s) {
   if (s.salarioRel >= 1 && S.wage < S.externalWage && S.owner === "state") {
     S.policy.publicWage = Math.max(S.policy.publicWage, Math.round(S.externalWage));
   }
+  if (typeof s.apoioCamara === "number") {
+    S.councilSupport = limita(Math.round(s.apoioCamara), 10, 100);
+  }
+  if (typeof s.capacidadeMoradia === "number" && s.capacidadeMoradia > S.housingCapacity) {
+    S.housingCapacity = s.capacidadeMoradia;
+  }
+  if (typeof s.qualidadeSaude === "number") S.healthQol = s.qualidadeSaude;
+  if (typeof s.qualidadeEducacao === "number") S.educationQol = s.qualidadeEducacao;
+  if (typeof s.qualidadeSeguranca === "number") S.securityQol = s.qualidadeSeguranca;
   return S.eventMods;
 }
 
 const EventosV3 = {
   EVENTOS, processarMes, responder, novoEstado, usarSemente,
   recalcularModificadores, salvarEstado, carregarEstado,
-  sincronizarComVilarejo, aplicarNoVilarejo
+  sincronizarComVilarejo, aplicarNoVilarejo, agendarEvento, cancelarAgendado
 };
 
 if (typeof window !== "undefined") window.EventosV3 = EventosV3;

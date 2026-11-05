@@ -1520,6 +1520,23 @@
         if (pop >= housing) items.push(`Déficit habitacional registrado: <strong>capacidade habitacional lotada (${housing} vagas)</strong>.`);
         else items.push(`Capacidade habitacional com <strong>${housing - pop} vagas disponíveis</strong>.`);
       }
+
+      const decisions = payload?.eventEngine?.decisoesTomadas || raw?.eventEngine?.decisoesTomadas;
+      if (Array.isArray(decisions) && decisions.length > 0) {
+        const lastDec = decisions[decisions.length - 1];
+        if (lastDec && lastDec.detalhe) {
+          items.push(`🏛️ <strong>Decisão do Governo:</strong> ${escapeHtml(lastDec.detalhe)}.`);
+        }
+      }
+
+      const activeEvents = payload?.eventEngine?.ativos || raw?.eventEngine?.ativos;
+      if (Array.isArray(activeEvents) && activeEvents.length > 0) {
+        const activeItem = activeEvents[0];
+        const eventDef = window.EventosV3?.EVENTOS?.find((e) => e.id === activeItem.id);
+        const name = eventDef?.titulo || eventDef?.caixa || activeItem.id;
+        items.push(`📢 <strong>Acontecimento em andamento:</strong> ${escapeHtml(name)} (${activeItem.mesesRestantes} mês(es) restante(s)).`);
+      }
+
       if (payload?.eventEngine?.monthEvents && payload.eventEngine.monthEvents.length > 0) {
         payload.eventEngine.monthEvents.slice(-2).forEach((evt) => {
           items.push(escapeHtml(evt));
