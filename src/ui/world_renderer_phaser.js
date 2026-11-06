@@ -678,6 +678,15 @@
         });
       }
 
+      deselect() {
+        this.selected = null;
+        this.buildings.forEach(v => {
+          v.ring.setVisible(false);
+        });
+        if (this.infoTitle) this.infoTitle.setText("Edificação selecionada");
+        if (this.infoBody) this.infoBody.setText("Clique em uma construção para consultar os detalhes.");
+      }
+
       select(id) {
         const entry = this.buildings.get(id);
         if (!entry) return;
@@ -793,6 +802,23 @@
           }
         );
 
+        // Botão para fechar/recolher painel de infraestrutura e desselecionar
+        const closePanelBtn = this.button(
+          1230,
+          94,
+          32,
+          26,
+          "✕",
+          () => {
+            this.deselect();
+            this.cancelPlacement();
+            if (this.panelGroup) {
+              this.panelGroup.setVisible(false);
+              if (this.openPanelBtn) this.openPanelBtn.setVisible(true);
+            }
+          }
+        );
+
         this.hint = this.add.text(
           940,
           126,
@@ -812,6 +838,7 @@
           panel,
           heading,
           title,
+          closePanelBtn,
           this.hint
         ];
 
@@ -930,6 +957,24 @@
           )
         );
 
+        this.panelGroup = this.add.container(0, 0, controls);
+
+        // Botão flutuante para reabrir o catálogo de infraestrutura quando fechado
+        this.openPanelBtn = this.button(
+          1180,
+          40,
+          140,
+          30,
+          "🏛 Catálogo",
+          () => {
+            if (this.panelGroup) {
+              this.panelGroup.setVisible(true);
+              if (this.openPanelBtn) this.openPanelBtn.setVisible(false);
+            }
+          }
+        );
+        this.openPanelBtn.setVisible(false);
+
         this.status = this.add.text(
           75,
           710,
@@ -942,8 +987,7 @@
           }
         );
 
-        controls.push(this.status);
-        this.ui.add(controls);
+        this.ui.add([this.panelGroup, this.openPanelBtn, this.status]);
       }
 
       button(x, y, w, h, label, callback) {
@@ -978,7 +1022,7 @@
       }
 
       pointerDown(pointer) {
-        if (pointer.x > 900) return;
+        if (pointer.x > 900 && this.panelGroup && this.panelGroup.visible) return;
 
         if (this.placing) {
           const p = this.cameras.main.getWorldPoint(
