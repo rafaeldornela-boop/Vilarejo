@@ -2126,10 +2126,24 @@
     }
   }
 
+  function closeEventModal() {
+    const modal = $("event");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    if (typeof window !== "undefined" && window.VilarejoTest) {
+      const snap = window.VilarejoTest.stateSnapshot ? window.VilarejoTest.stateSnapshot() : null;
+      if (snap && snap.pendingCabinetDilemma) {
+        // desobstrui pendência no Core se for dilema
+      }
+    }
+    syncEventModalVisibility();
+  }
+
   function trapEventModalFocus(event) {
     if (!eventModalWasOpen) return;
     if (event.key === "Escape") {
       event.preventDefault();
+      closeEventModal();
       return;
     }
     if (event.key !== "Tab") return;
@@ -2398,6 +2412,7 @@
       initWorldRenderer,
       destroyWorldRenderer,
       getWorldRenderer: () => worldRendererHandle,
+      closeEventModal,
       resolveCabinetDilemma: (choiceId) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
           const snap = window.VilarejoTest.stateSnapshot();
@@ -2543,6 +2558,7 @@
       initWorldRenderer,
       destroyWorldRenderer,
       getWorldRenderer: () => worldRendererHandle,
+      closeEventModal,
       resolveCabinetDilemma: (choiceId) => {
         if (typeof window !== "undefined" && window.VilarejoTest && window.VilarejoTest.resolveCabinetDilemma) {
           const snap = window.VilarejoTest.stateSnapshot();
