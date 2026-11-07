@@ -37,6 +37,7 @@ function makeElement(id) {
     removeChild() {},
     setAttribute() {},
     getAttribute() { return null; },
+    removeAttribute() {},
     querySelector(selector) { return makeElement(`${id}:${selector}`); },
     querySelectorAll() { return []; }
   };
